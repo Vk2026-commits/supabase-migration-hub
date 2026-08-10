@@ -153,11 +153,11 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile }: Ce
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setCertifications(data || []);
+      setCertifications((data || []) as Certification[]);
       
       // Generate signed URLs for all documents
       if (data && data.length > 0) {
-        await generateSignedUrls(data);
+        await generateSignedUrls(data as Certification[]);
       }
     } catch (error: any) {
       toast.error("Failed to load certifications");

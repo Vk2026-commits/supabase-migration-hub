@@ -90,7 +90,7 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
       return;
     }
 
-    setWorkHistory(data || []);
+    setWorkHistory((data || []) as WorkHistoryEntry[]);
   };
 
   const resetForm = () => {
