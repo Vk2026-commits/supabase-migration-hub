@@ -1,0 +1,112 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "browse": "Explorar Guardias",
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "dashboard": "Panel"
+  },
+  "hero": {
+    "badge": "Mercado Profesional de Seguridad",
+    "title": "Conéctate con los Mejores",
+    "titleHighlight": "Profesionales de Seguridad",
+    "subtitle": "La plataforma principal donde los oficiales de seguridad muestran su experiencia y las empresas encuentran profesionales calificados para sus necesidades de seguridad.",
+    "freeProfessionals": "Registro gratuito para profesionales de seguridad para mostrar sus habilidades",
+    "createProfile": "Profesionales de Seguridad Creen Su Perfil",
+    "browseProfiles": "Crear Perfil de Empresa Para Empresas"
+  },
+  "roleSelection": {
+    "title": "Elige Tu Rol",
+    "description": "¿Eres un oficial de seguridad buscando trabajo, o una empresa buscando contratar?",
+    "officer": "Soy un Oficial de Seguridad",
+    "officerSubtitle": "Buscando oportunidades",
+    "company": "Soy una Empresa",
+    "companySubtitle": "Buscando contratar oficiales de seguridad"
+  },
+  "features": {
+    "title": "Todo lo que Necesitas para Tener Éxito",
+    "subtitle": "Características poderosas diseñadas para profesionales de seguridad y empresas contratantes",
+    "profiles": {
+      "title": "Perfiles Profesionales",
+      "description": "Crea perfiles completos que muestren tu experiencia, certificaciones y experiencia."
+    },
+    "video": {
+      "title": "Entrevistas en Video",
+      "description": "Destácate con entrevistas en video profesionales que muestren tu personalidad y habilidades."
+    },
+    "certifications": {
+      "title": "Certificaciones",
+      "description": "Muestra todas tus certificaciones y credenciales de seguridad en un solo lugar organizado."
+    }
+  },
+  "pricing": {
+    "title": "Planes de Acceso Flexibles",
+    "subtitle": "Elige el plan que se ajuste a tus necesidades de contratación",
+    "free": {
+      "name": "Gratis",
+      "price": "$0",
+      "description": "Navegación básica",
+      "features": {
+        "viewProfiles": "Ver perfiles de oficiales",
+        "basicInfo": "Acceso a información básica",
+        "search": "Funcionalidad de búsqueda"
+      },
+      "button": "Comenzar a Explorar"
+    },
+    "professional": {
+      "name": "Profesional",
+      "price": "$19.99",
+      "period": "por mes",
+      "trial": "Prueba gratuita de 30 días",
+      "popular": "Popular",
+      "features": {
+        "everything": "Todo en Gratis",
+        "messaging": "Mensajería directa",
+        "email": "Acceso a correo de contacto",
+        "filters": "Filtros de búsqueda avanzados"
+      },
+      "button": "Comenzar"
+    },
+    "premium": {
+      "name": "Premium",
+      "price": "$29.99",
+      "period": "por mes",
+      "features": {
+        "everything": "Todo en Profesional",
+        "certifications": "Acceso completo a certificaciones",
+        "video": "Visualización de entrevistas en video",
+        "support": "Soporte prioritario"
+      },
+      "button": "Ir a Premium"
+    }
+  },
+  "cta": {
+    "title": "¿Listo para Comenzar?",
+    "createAccount": "Crear Cuenta",
+    "exploreProfiles": "Explorar Perfiles"
+  },
+  "footer": {
+    "copyright": "© 2025 We Find Guards. Conectando profesionales de seguridad con oportunidades."
+  },
+  "jobs": {
+    "title": "Últimas Ofertas de Trabajo",
+    "subtitle": "Encuentra tu próxima oportunidad de seguridad",
+    "viewAll": "Ver Todos los Trabajos",
+    "noJobs": "No hay ofertas de trabajo activas en este momento."
+  },
+  "auth": {
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "fullName": "Nombre Completo",
+    "confirmPassword": "Confirmar Contraseña",
+    "role": "Soy un",
+    "officer": "Oficial de Seguridad",
+    "company": "Empresa",
+    "loginButton": "Iniciar Sesión",
+    "signupButton": "Registrarse",
+    "switchToSignup": "¿No tienes una cuenta? Regístrate",
+    "switchToLogin": "¿Ya tienes una cuenta? Inicia sesión"
+  }
+}

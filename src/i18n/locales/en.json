@@ -1,0 +1,112 @@
+{
+  "nav": {
+    "home": "Home",
+    "browse": "Browse Guards",
+    "login": "Log In",
+    "signup": "Sign Up",
+    "dashboard": "Dashboard"
+  },
+  "hero": {
+    "badge": "Professional Security Marketplace",
+    "title": "Connect with Top",
+    "titleHighlight": "Security Professionals",
+    "subtitle": "The premier platform where security officers showcase their expertise and companies find qualified professionals for their security needs.",
+    "freeProfessionals": "Free for security professionals to sign up and showcase their skills",
+    "createProfile": "Security Professionals Create Your Profile",
+    "browseProfiles": "Create Your Company Profile For Companies"
+  },
+  "roleSelection": {
+    "title": "Choose Your Role",
+    "description": "Are you a security officer looking for work, or a company looking to hire?",
+    "officer": "I am a Security Officer",
+    "officerSubtitle": "Looking for opportunities",
+    "company": "I am a Company",
+    "companySubtitle": "Looking to hire security officers"
+  },
+  "features": {
+    "title": "Everything You Need to Succeed",
+    "subtitle": "Powerful features designed for security professionals and hiring companies",
+    "profiles": {
+      "title": "Professional Profiles",
+      "description": "Create comprehensive profiles showcasing your experience, certifications, and expertise."
+    },
+    "video": {
+      "title": "Video Interviews",
+      "description": "Stand out with professional video interviews that showcase your personality and skills."
+    },
+    "certifications": {
+      "title": "Certifications",
+      "description": "Display all your security certifications and credentials in one organized place."
+    }
+  },
+  "pricing": {
+    "title": "Flexible Access Plans",
+    "subtitle": "Choose the plan that fits your hiring needs",
+    "free": {
+      "name": "Free",
+      "price": "$0",
+      "description": "Basic browsing",
+      "features": {
+        "viewProfiles": "View officer profiles",
+        "basicInfo": "Basic information access",
+        "search": "Search functionality"
+      },
+      "button": "Start Browsing"
+    },
+    "professional": {
+      "name": "Professional",
+      "price": "$19.99",
+      "period": "per month",
+      "trial": "30-day free trial",
+      "popular": "Popular",
+      "features": {
+        "everything": "Everything in Free",
+        "messaging": "Direct messaging",
+        "email": "Email contact access",
+        "filters": "Advanced search filters"
+      },
+      "button": "Get Started"
+    },
+    "premium": {
+      "name": "Premium",
+      "price": "$29.99",
+      "period": "per month",
+      "features": {
+        "everything": "Everything in Professional",
+        "certifications": "Full certification access",
+        "video": "Video interview viewing",
+        "support": "Priority support"
+      },
+      "button": "Go Premium"
+    }
+  },
+  "cta": {
+    "title": "Ready to Get Started?",
+    "createAccount": "Create Account",
+    "exploreProfiles": "Explore Profiles"
+  },
+  "footer": {
+    "copyright": "© 2025 We Find Guards. Connecting security professionals with opportunity."
+  },
+  "jobs": {
+    "title": "Latest Job Openings",
+    "subtitle": "Find your next security opportunity",
+    "viewAll": "View All Jobs",
+    "noJobs": "No active job postings at the moment."
+  },
+  "auth": {
+    "login": "Log In",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "fullName": "Full Name",
+    "confirmPassword": "Confirm Password",
+    "role": "I am a",
+    "officer": "Security Officer",
+    "company": "Company",
+    "loginButton": "Log In",
+    "signupButton": "Sign Up",
+    "switchToSignup": "Don't have an account? Sign up",
+    "switchToLogin": "Already have an account? Log in"
+  }
+}
