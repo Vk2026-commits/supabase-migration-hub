@@ -20,7 +20,9 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
 
   useEffect(() => {
     loadConversations();
-    subscribeToMessages();
+    const unsubscribe = subscribeToMessages();
+
+    return unsubscribe;
   }, [officerId]);
 
   const loadConversations = async () => {
@@ -63,7 +65,7 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
 
   const subscribeToMessages = () => {
     const channel = supabase
-      .channel("officer-chat-panel")
+      .channel(`officer-chat-panel:${officerId}`)
       .on(
         "postgres_changes",
         {
