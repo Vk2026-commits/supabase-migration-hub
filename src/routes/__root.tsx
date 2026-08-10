@@ -116,7 +116,7 @@ function RootComponent() {
   return (
     <I18nextProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="light" forcedTheme="light" enableSystem={false}>
           <TooltipProvider>
             <Toaster />
             <Sonner />
