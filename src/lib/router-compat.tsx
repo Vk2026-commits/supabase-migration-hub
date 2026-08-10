@@ -17,7 +17,7 @@ export const Link = forwardRef<HTMLAnchorElement, LinkProps>(function Link(
   ref,
 ) {
   const Any = TSLink as unknown as React.ComponentType<Record<string, unknown>>;
-  return <Any ref={ref} href={to} replace={replace} {...rest} />;
+  return <Any ref={ref} to={to} replace={replace} {...rest} />;
 });
 
 type NavLinkProps = Omit<LinkProps, "className" | "children"> & {
