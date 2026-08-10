@@ -1,0 +1,37 @@
+project_id = "yatawyeamsaxemjctggp"
+
+[functions.express-interest]
+verify_jwt = true
+
+[functions.send-evaluation-reminder]
+verify_jwt = true
+
+[functions.upgrade-subscription]
+verify_jwt = true
+
+[functions.reset-user-password]
+verify_jwt = true
+
+[functions.invite-admin-user]
+verify_jwt = true
+
+[functions.create-admin-user]
+verify_jwt = true
+
+[functions.update-user-password]
+verify_jwt = true
+
+[functions.delete-user]
+verify_jwt = true
+
+[functions.pause-user-account]
+verify_jwt = true
+
+[functions.ensure-officer-profile]
+verify_jwt = true
+
+[functions.manage-sensitive-data]
+verify_jwt = true
+
+[functions.send-profile-reminder]
+verify_jwt = true
