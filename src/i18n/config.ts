@@ -11,6 +11,10 @@ if (!i18n.isInitialized) {
     i18n.use(LanguageDetector);
   }
   i18n.use(initReactI18next).init({
+    // Resources are bundled with the app, so initialize synchronously. Without
+    // this, the first production render can happen before i18next is ready and
+    // permanently display raw keys such as `nav.browse`.
+    initAsync: false,
     resources: {
       en: { translation: en },
       es: { translation: es },
