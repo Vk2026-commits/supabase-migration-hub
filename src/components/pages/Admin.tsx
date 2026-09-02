@@ -1264,10 +1264,26 @@ const Admin = () => {
                     <CardDescription>View and edit officer information</CardDescription>
                   </div>
                   {selectedOfficer && (
-                    <Button variant="outline" size="sm" onClick={() => setViewAsOfficer(selectedOfficer)}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      View as officer
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setViewAsOfficer(selectedOfficer)}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Quick preview
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setPreviewAs({
+                            userId: selectedOfficer.user_id,
+                            name: selectedOfficer.profiles?.full_name || "Officer",
+                            role: "officer",
+                          });
+                          navigate("/dashboard");
+                        }}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Browse site as officer
+                      </Button>
+                    </div>
                   )}
                 </CardHeader>
 
