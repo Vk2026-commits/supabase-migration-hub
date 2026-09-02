@@ -30,7 +30,7 @@ export function setPreviewAs(value: PreviewAs | null) {
 }
 
 export function usePreviewAs(): PreviewAs | null {
-  const [value, setValue] = useState<PreviewAs | null>(null);
+  const [value, setValue] = useState<PreviewAs | null>(() => getPreviewAs());
 
   useEffect(() => {
     const sync = () => setValue(getPreviewAs());
