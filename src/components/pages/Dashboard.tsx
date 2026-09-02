@@ -116,13 +116,25 @@ const Dashboard = () => {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <Skeleton className="h-12 w-64 mb-8" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
+  }
+
   const handleUpgradeComplete = async () => {
     setShowExpiredTrialDialog(false);
     // Reload the profile data
     const { data: companyData } = await supabase
       .from("company_profiles")
       .select("*")
-      .eq("user_id", user!.id)
+      .eq("user_id", user.id)
       .single();
     
     if (companyData) {
@@ -135,7 +147,7 @@ const Dashboard = () => {
       <Navbar />
       <div className="container mx-auto px-4 py-8">
         {profile?.role === "officer" ? (
-          <OfficerDashboard userId={user!.id} />
+          <OfficerDashboard userId={user.id} />
         ) : (
           <>
             {showExpiredTrialDialog && companyProfile && (
@@ -149,7 +161,7 @@ const Dashboard = () => {
             )}
             <div className="-mx-4 -my-8">
               <CompanyDashboard 
-                userId={user!.id} 
+                userId={user.id} 
                 userName={profile?.full_name || user?.email || ""}
               />
             </div>
