@@ -8,9 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 import CompanyDashboard from "@/components/dashboard/CompanyDashboard";
 import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
+import { usePreviewAs } from "@/lib/preview-as";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const preview = usePreviewAs();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
