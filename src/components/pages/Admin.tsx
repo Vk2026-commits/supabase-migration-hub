@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 
 interface Analytics {
   totalOfficers: number;
@@ -72,6 +73,7 @@ const Admin = () => {
   
   // Edit states for Browse and Company Profiles tabs
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
+  const [viewAsOfficer, setViewAsOfficer] = useState<any>(null);
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [editingOfficer, setEditingOfficer] = useState<any>(null);
   const [editingCompany, setEditingCompany] = useState<any>(null);
@@ -2632,6 +2634,22 @@ const Admin = () => {
           </DialogContent>
         </Dialog>
         </Tabs>
+
+        <Dialog open={!!viewAsOfficer} onOpenChange={(open) => !open && setViewAsOfficer(null)}>
+          <DialogContent className="max-w-[95vw] w-[95vw] h-[92vh] overflow-y-auto p-0">
+            <DialogHeader className="px-6 pt-6">
+              <DialogTitle>
+                Viewing as {viewAsOfficer?.profiles?.full_name || "Officer"}
+              </DialogTitle>
+              <DialogDescription>
+                Read-only preview of the officer's own dashboard experience.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="px-4 pb-6">
+              {viewAsOfficer?.user_id && <OfficerDashboard userId={viewAsOfficer.user_id} />}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
