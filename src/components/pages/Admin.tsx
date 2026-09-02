@@ -1601,9 +1601,27 @@ const Admin = () => {
 
               {/* Company Edit Form */}
               <Card className="md:col-span-2">
-                <CardHeader>
-                  <CardTitle>Company Profile</CardTitle>
-                  <CardDescription>View and edit company information</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Company Profile</CardTitle>
+                    <CardDescription>View and edit company information</CardDescription>
+                  </div>
+                  {selectedCompany && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setPreviewAs({
+                          userId: selectedCompany.user_id,
+                          name: selectedCompany.company_name || "Company",
+                          role: "company",
+                        });
+                        navigate("/dashboard");
+                      }}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Browse site as company
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
                   {!selectedCompany ? (
