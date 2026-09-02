@@ -20,6 +20,11 @@ const Dashboard = () => {
   const [companyProfile, setCompanyProfile] = useState<any>(null);
 
   useEffect(() => {
+    if (preview) {
+      setLoading(false);
+      return;
+    }
+
     const getProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       
