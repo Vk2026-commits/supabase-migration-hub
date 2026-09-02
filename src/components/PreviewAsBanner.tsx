@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePreviewAs, setPreviewAs } from "@/lib/preview-as";
@@ -6,8 +7,11 @@ import { useNavigate } from "@/lib/router-compat";
 const PreviewAsBanner = () => {
   const preview = usePreviewAs();
   const navigate = useNavigate();
+  const [mounted, setMounted] = useState(false);
 
-  if (!preview) return null;
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted || !preview) return null;
 
   return (
     <div className="sticky top-0 z-[60] w-full bg-primary text-primary-foreground">
