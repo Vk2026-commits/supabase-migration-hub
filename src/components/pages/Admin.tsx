@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
+import { setPreviewAs } from "@/lib/preview-as";
 
 interface Analytics {
   totalOfficers: number;
@@ -1264,10 +1265,26 @@ const Admin = () => {
                     <CardDescription>View and edit officer information</CardDescription>
                   </div>
                   {selectedOfficer && (
-                    <Button variant="outline" size="sm" onClick={() => setViewAsOfficer(selectedOfficer)}>
-                      <Eye className="h-4 w-4 mr-2" />
-                      View as officer
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setViewAsOfficer(selectedOfficer)}>
+                        <Eye className="h-4 w-4 mr-2" />
+                        Quick preview
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setPreviewAs({
+                            userId: selectedOfficer.user_id,
+                            name: selectedOfficer.profiles?.full_name || "Officer",
+                            role: "officer",
+                          });
+                          navigate("/dashboard");
+                        }}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Browse site as officer
+                      </Button>
+                    </div>
                   )}
                 </CardHeader>
 
@@ -1584,9 +1601,27 @@ const Admin = () => {
 
               {/* Company Edit Form */}
               <Card className="md:col-span-2">
-                <CardHeader>
-                  <CardTitle>Company Profile</CardTitle>
-                  <CardDescription>View and edit company information</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Company Profile</CardTitle>
+                    <CardDescription>View and edit company information</CardDescription>
+                  </div>
+                  {selectedCompany && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setPreviewAs({
+                          userId: selectedCompany.user_id,
+                          name: selectedCompany.company_name || "Company",
+                          role: "company",
+                        });
+                        navigate("/dashboard");
+                      }}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Browse site as company
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
                   {!selectedCompany ? (

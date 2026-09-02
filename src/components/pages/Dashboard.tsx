@@ -8,9 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 import CompanyDashboard from "@/components/dashboard/CompanyDashboard";
 import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
+import { usePreviewAs } from "@/lib/preview-as";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const preview = usePreviewAs();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -18,6 +20,11 @@ const Dashboard = () => {
   const [companyProfile, setCompanyProfile] = useState<any>(null);
 
   useEffect(() => {
+    if (preview) {
+      setLoading(false);
+      return;
+    }
+
     const getProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -74,7 +81,25 @@ const Dashboard = () => {
     };
 
     getProfile();
-  }, [navigate]);
+  }, [navigate, preview]);
+
+  if (preview) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          {preview.role === "officer" ? (
+            <OfficerDashboard userId={preview.userId} />
+          ) : (
+            <div className="-mx-4 -my-8">
+              <CompanyDashboard userId={preview.userId} userName={preview.name} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
 
   if (loading) {
     return (
