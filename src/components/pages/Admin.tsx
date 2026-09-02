@@ -1256,10 +1256,19 @@ const Admin = () => {
 
               {/* Officer Edit Form */}
               <Card className="md:col-span-2">
-                <CardHeader>
-                  <CardTitle>Officer Profile</CardTitle>
-                  <CardDescription>View and edit officer information</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Officer Profile</CardTitle>
+                    <CardDescription>View and edit officer information</CardDescription>
+                  </div>
+                  {selectedOfficer && (
+                    <Button variant="outline" size="sm" onClick={() => setViewAsOfficer(selectedOfficer)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View as officer
+                    </Button>
+                  )}
                 </CardHeader>
+
                 <CardContent>
                   {!selectedOfficer ? (
                     <div className="text-center py-12 text-muted-foreground">
