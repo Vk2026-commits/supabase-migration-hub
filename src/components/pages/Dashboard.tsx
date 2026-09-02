@@ -81,7 +81,25 @@ const Dashboard = () => {
     };
 
     getProfile();
-  }, [navigate]);
+  }, [navigate, preview]);
+
+  if (preview) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          {preview.role === "officer" ? (
+            <OfficerDashboard userId={preview.userId} />
+          ) : (
+            <div className="-mx-4 -my-8">
+              <CompanyDashboard userId={preview.userId} userName={preview.name} />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
 
   if (loading) {
     return (
