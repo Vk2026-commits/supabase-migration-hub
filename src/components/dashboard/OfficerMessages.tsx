@@ -63,7 +63,7 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
 
   const subscribeToMessages = () => {
     const channel = supabase
-      .channel(`officer-messages-${officerId}-${crypto.randomUUID()}`)
+      .channel(`officer-messages-${officerId}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {

@@ -17,7 +17,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import NotFoundPage from "@/components/pages/NotFound";
-import PreviewAsBanner from "@/components/PreviewAsBanner";
 import i18n from "@/i18n/config";
 import "../App.css";
 
@@ -121,7 +120,6 @@ function RootComponent() {
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <PreviewAsBanner />
             {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
             <Outlet />
           </TooltipProvider>

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { brokeredPreviewStorage } from "./previewAuthStorage";
 
 // Environment variables can override the production We Find Guards project.
 // The fallback values let the Lovable project work immediately after syncing.
@@ -11,7 +12,7 @@ const SUPABASE_PUBLISHABLE_KEY =
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: typeof window !== "undefined" ? window.localStorage : undefined,
+    storage: brokeredPreviewStorage(),
     persistSession: true,
     autoRefreshToken: true,
   },

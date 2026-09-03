@@ -1,7 +1,6 @@
 import { Link, useNavigate } from "@/lib/router-compat";
-import { usePreviewAs } from "@/lib/preview-as";
 import { Button } from "@/components/ui/button";
-import { Eye, Shield, Languages } from "lucide-react";
+import { Shield, Languages } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
@@ -16,16 +15,9 @@ import {
 const Navbar = () => {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
-  const preview = usePreviewAs();
   const [user, setUser] = useState<User | null>(null);
-  const [isAdminUser, setIsAdminUser] = useState(false);
-  const [realUserRole, setRealUserRole] = useState<string | null>(null);
-
-  // While previewing as another user, the navbar must look exactly like theirs.
-  const isAdmin = preview ? false : isAdminUser;
-  const userRole = preview ? preview.role : realUserRole;
-  const setIsAdmin = setIsAdminUser;
-  const setUserRole = setRealUserRole;
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -119,25 +111,27 @@ const Navbar = () => {
                 <Link to="/dashboard">{t('nav.dashboard')}</Link>
               </Button>
               {isAdmin && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="gap-2">
-                      <Eye className="h-4 w-4" />
-                      View as
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
-                      Security Officer
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=company")}>
-                      Company
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/admin")}>
-                      Admin
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <>
+                  <Button variant="ghost" asChild>
+                    <Link to="/admin">Admin</Link>
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">View as</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
+                        Security Officer
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=company")}>
+                        Company
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/admin")}>
+                        Admin
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
               )}
               {userRole !== "officer" && (
                 <Button variant="ghost" asChild>

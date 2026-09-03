@@ -34,6 +34,8 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   const [uploadingResume, setUploadingResume] = useState(false);
   const [certCount, setCertCount] = useState(0);
   const [trainingCount, setTrainingCount] = useState(0);
+  const expiringItems = useExpiringCredentials(userId, "officer");
+  const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
   const [photoCount, setPhotoCount] = useState(0);
   const [workHistoryCount, setWorkHistoryCount] = useState(0);
   const [formData, setFormData] = useState({
@@ -56,8 +58,6 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   });
   const [quickSetStart, setQuickSetStart] = useState("");
   const [quickSetEnd, setQuickSetEnd] = useState("");
-  const { credentials: expiringCredentials } = useExpiringCredentials(userId, "officer");
-  const hasUrgentCredentials = expiringCredentials.some((credential) => credential.daysLeft <= 30);
 
   useEffect(() => {
     loadProfile();
@@ -278,7 +278,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
                      officerProfile?.shift_preference?.length &&
                      Object.keys(formData.availability_schedule).length > 0),
     photos: photoCount > 0,
-    certifications: certCount + trainingCount > 0,
+    certifications: certCount > 0,
     workHistory: workHistoryCount > 0,
   };
 
@@ -316,7 +316,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
         <Card>
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Profile</CardTitle>
-            <User className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <User className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="whitespace-nowrap text-xl font-bold">
@@ -331,7 +331,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
         <Card>
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Certifications and Certificates</CardTitle>
-            <Award className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Award className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{certCount}</div>
@@ -342,39 +342,40 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
         <Card>
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Trainings</CardTitle>
-            <GraduationCap className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <GraduationCap className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">{trainingCount}</div>
-            <p className="text-xs text-muted-foreground">Track completed training</p>
+            <p className="text-xs text-muted-foreground">Add your training certificates</p>
           </CardContent>
         </Card>
 
         <Card
-          role="button"
-          tabIndex={0}
+          className={`cursor-pointer transition-colors hover:bg-accent/50 ${urgentExpiring ? "border-destructive/50" : ""}`}
           onClick={() => setActiveTab("certifications")}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") setActiveTab("certifications");
-          }}
-          className={`cursor-pointer transition-colors hover:bg-accent/50 ${hasUrgentCredentials ? "border-destructive/50" : ""}`}
         >
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Expiring Skills</CardTitle>
-            <AlertTriangle className={`h-4 w-4 shrink-0 ${hasUrgentCredentials ? "text-destructive" : "text-muted-foreground"}`} />
+            <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`} />
           </CardHeader>
           <CardContent>
-            <div className={`text-xl font-bold ${hasUrgentCredentials ? "text-destructive" : ""}`}>
-              {expiringCredentials.length}
+            <div className={`text-xl font-bold ${urgentExpiring ? "text-destructive" : ""}`}>
+              {expiringItems.length}
             </div>
-            <p className="text-xs text-muted-foreground">Expiring within 90 days</p>
+            <p className={`text-xs ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`}>
+              {expiringItems.length === 0
+                ? "No credentials expiring soon"
+                : urgentExpiring
+                  ? "Expiring within 30 days"
+                  : "Expiring within 90 days"}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Video Interviews</CardTitle>
-            <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Video className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold">0</div>

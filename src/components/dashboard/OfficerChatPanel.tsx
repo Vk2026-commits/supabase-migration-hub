@@ -65,7 +65,7 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
 
   const subscribeToMessages = () => {
     const channel = supabase
-      .channel(`officer-chat-panel-${officerId}-${crypto.randomUUID()}`)
+      .channel(`officer-chat-panel-${officerId}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {

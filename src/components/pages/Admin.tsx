@@ -16,7 +16,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
-import { setPreviewAs } from "@/lib/preview-as";
 
 interface Analytics {
   totalOfficers: number;
@@ -1257,31 +1256,10 @@ const Admin = () => {
 
               {/* Officer Edit Form */}
               <Card className="md:col-span-2">
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Officer Profile</CardTitle>
-                    <CardDescription>View and edit officer information</CardDescription>
-                  </div>
-                  {selectedOfficer && (
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setPreviewAs({
-                            userId: selectedOfficer.user_id,
-                            name: selectedOfficer.profiles?.full_name || "Officer",
-                            role: "officer",
-                          });
-                          navigate("/dashboard?view=officer");
-                        }}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Open officer portal
-                      </Button>
-                    </div>
-                  )}
+                <CardHeader>
+                  <CardTitle>Officer Profile</CardTitle>
+                  <CardDescription>View and edit officer information</CardDescription>
                 </CardHeader>
-
                 <CardContent>
                   {!selectedOfficer ? (
                     <div className="text-center py-12 text-muted-foreground">
@@ -1595,27 +1573,9 @@ const Admin = () => {
 
               {/* Company Edit Form */}
               <Card className="md:col-span-2">
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Company Profile</CardTitle>
-                    <CardDescription>View and edit company information</CardDescription>
-                  </div>
-                  {selectedCompany && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setPreviewAs({
-                          userId: selectedCompany.user_id,
-                          name: selectedCompany.company_name || "Company",
-                          role: "company",
-                        });
-                        navigate("/dashboard");
-                      }}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Browse site as company
-                    </Button>
-                  )}
+                <CardHeader>
+                  <CardTitle>Company Profile</CardTitle>
+                  <CardDescription>View and edit company information</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {!selectedCompany ? (

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "@/lib/router-compat";
-import { getPreviewAs } from "@/lib/preview-as";
 import Navbar from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,34 +49,6 @@ const Browse = () => {
   }, []);
 
   const checkAccess = async () => {
-    // Admin previewing the site as another user sees exactly what that user sees.
-    const preview = getPreviewAs();
-    if (preview) {
-      if (preview.role === "officer") {
-        toast.error("Officers cannot browse other officers' profiles");
-        navigate("/dashboard");
-        return;
-      }
-
-      const { data: previewCompany } = await supabase
-        .from("company_profiles")
-        .select("*")
-        .eq("user_id", preview.userId)
-        .maybeSingle();
-
-      if (!previewCompany) {
-        toast.error("Please complete your company profile to browse security professionals");
-        navigate("/dashboard");
-        return;
-      }
-
-      setCurrentUser({ id: preview.userId });
-      setCompanyProfile(previewCompany);
-      await loadOfficers();
-      await loadOfficerInterests(previewCompany.id);
-      return;
-    }
-
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) {

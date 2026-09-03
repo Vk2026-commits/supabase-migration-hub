@@ -61,7 +61,7 @@ export function ChatDialog({
 
   const subscribeToMessages = () => {
     const channel = supabase
-      .channel(`chat-${companyId}-${officerId}-${crypto.randomUUID()}`)
+      .channel(`chat-${companyId}-${officerId}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {
