@@ -33,10 +33,10 @@ export function ChatDialog({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) {
-      loadMessages();
-      subscribeToMessages();
-    }
+    if (!open) return undefined;
+
+    loadMessages();
+    return subscribeToMessages();
   }, [open, companyId, officerId]);
 
   useEffect(() => {
@@ -61,7 +61,7 @@ export function ChatDialog({
 
   const subscribeToMessages = () => {
     const channel = supabase
-      .channel(`chat-${companyId}-${officerId}`)
+      .channel(`chat-${companyId}-${officerId}-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {

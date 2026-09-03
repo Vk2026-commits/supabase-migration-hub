@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@/lib/router-compat";
 import { usePreviewAs } from "@/lib/preview-as";
 import { Button } from "@/components/ui/button";
-import { Shield, Languages } from "lucide-react";
+import { Eye, Shield, Languages } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
@@ -119,9 +119,25 @@ const Navbar = () => {
                 <Link to="/dashboard">{t('nav.dashboard')}</Link>
               </Button>
               {isAdmin && (
-                <Button variant="ghost" asChild>
-                  <Link to="/admin">Admin</Link>
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="gap-2">
+                      <Eye className="h-4 w-4" />
+                      View as
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
+                      Security Officer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=company")}>
+                      Company
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/admin")}>
+                      Admin
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               {userRole !== "officer" && (
                 <Button variant="ghost" asChild>

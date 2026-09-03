@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Award, Video, User, Briefcase, Clock, Upload, FileText, Info } from "lucide-react";
+import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { PhotoUpload } from "./PhotoUpload";
@@ -20,6 +20,7 @@ import { InterestedJobsPanel } from "./InterestedJobsPanel";
 import JobSearch from "./JobSearch";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { OfficerSidebar } from "./OfficerSidebar";
+import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -32,6 +33,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   const [loading, setLoading] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
   const [certCount, setCertCount] = useState(0);
+  const [trainingCount, setTrainingCount] = useState(0);
   const [photoCount, setPhotoCount] = useState(0);
   const [workHistoryCount, setWorkHistoryCount] = useState(0);
   const [formData, setFormData] = useState({
@@ -54,6 +56,8 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   });
   const [quickSetStart, setQuickSetStart] = useState("");
   const [quickSetEnd, setQuickSetEnd] = useState("");
+  const { credentials: expiringCredentials } = useExpiringCredentials(userId, "officer");
+  const hasUrgentCredentials = expiringCredentials.some((credential) => credential.daysLeft <= 30);
 
   useEffect(() => {
     loadProfile();
@@ -129,12 +133,14 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, workResult] = await Promise.all([
-          supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id),
+        const [certsResult, trainingsResult, workResult] = await Promise.all([
+          supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
+          supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id)
         ]);
         
         setCertCount(certsResult.count || 0);
+        setTrainingCount(trainingsResult.count || 0);
         setWorkHistoryCount(workResult.count || 0);
         // Photos count is based on avatar_url presence
         setPhotoCount(data.avatar_url ? 1 : 0);
@@ -272,7 +278,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
                      officerProfile?.shift_preference?.length &&
                      Object.keys(formData.availability_schedule).length > 0),
     photos: photoCount > 0,
-    certifications: certCount > 0,
+    certifications: certCount + trainingCount > 0,
     workHistory: workHistoryCount > 0,
   };
 
@@ -306,14 +312,14 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
           <div className="space-y-6">
             {activeTab !== "find-jobs" && (
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-5 gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profile</CardTitle>
-            <User className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
+            <CardTitle className="text-sm font-medium leading-tight">Profile</CardTitle>
+            <User className="h-4 w-4 shrink-0 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="whitespace-nowrap text-xl font-bold">
               {officerProfile ? "Complete" : "Incomplete"}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -323,23 +329,55 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Certifications and Certificates</CardTitle>
-            <Award className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
+            <CardTitle className="text-sm font-medium leading-tight">Certifications and Certificates</CardTitle>
+            <Award className="h-4 w-4 shrink-0 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{certCount}</div>
+            <div className="text-xl font-bold">{certCount}</div>
             <p className="text-xs text-muted-foreground">Add your certifications and certificates</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Video Interviews</CardTitle>
-            <Video className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
+            <CardTitle className="text-sm font-medium leading-tight">Trainings</CardTitle>
+            <GraduationCap className="h-4 w-4 shrink-0 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-xl font-bold">{trainingCount}</div>
+            <p className="text-xs text-muted-foreground">Track completed training</p>
+          </CardContent>
+        </Card>
+
+        <Card
+          role="button"
+          tabIndex={0}
+          onClick={() => setActiveTab("certifications")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") setActiveTab("certifications");
+          }}
+          className={`cursor-pointer transition-colors hover:bg-accent/50 ${hasUrgentCredentials ? "border-destructive/50" : ""}`}
+        >
+          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
+            <CardTitle className="text-sm font-medium leading-tight">Expiring Skills</CardTitle>
+            <AlertTriangle className={`h-4 w-4 shrink-0 ${hasUrgentCredentials ? "text-destructive" : "text-muted-foreground"}`} />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-xl font-bold ${hasUrgentCredentials ? "text-destructive" : ""}`}>
+              {expiringCredentials.length}
+            </div>
+            <p className="text-xs text-muted-foreground">Expiring within 90 days</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
+            <CardTitle className="text-sm font-medium leading-tight">Video Interviews</CardTitle>
+            <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">0</div>
             <p className="text-xs text-muted-foreground">Upload your interview</p>
           </CardContent>
         </Card>

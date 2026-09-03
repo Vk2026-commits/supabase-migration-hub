@@ -60,11 +60,11 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
                     onClick={() => onTabChange(item.value)}
                     className={getNavCls(item.value)}
                   >
-                    <div className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
-                      {open && <span>{item.title}</span>}
+                    <div className="flex w-full items-center gap-2">
+                      <item.icon className="h-4 w-4 shrink-0" />
+                      {open && <span className="flex-1 text-center leading-tight">{item.title}</span>}
                       {isTabComplete(item.value) && open && item.value !== 'messages' && item.value !== 'find-jobs' && (
-                        <Check className="h-3 w-3 ml-auto text-blue-600" />
+                        <Check className="h-3 w-3 shrink-0 text-blue-600" />
                       )}
                     </div>
                   </SidebarMenuButton>

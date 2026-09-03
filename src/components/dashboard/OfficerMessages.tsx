@@ -19,7 +19,7 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
 
   useEffect(() => {
     loadConversations();
-    subscribeToMessages();
+    return subscribeToMessages();
   }, [officerId]);
 
   const loadConversations = async () => {
@@ -63,7 +63,7 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
 
   const subscribeToMessages = () => {
     const channel = supabase
-      .channel("officer-messages")
+      .channel(`officer-messages-${officerId}-${crypto.randomUUID()}`)
       .on(
         "postgres_changes",
         {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@/lib/router-compat";
+import { useNavigate, useSearchParams } from "@/lib/router-compat";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 import Navbar from "@/components/Navbar";
@@ -12,7 +12,10 @@ import { usePreviewAs } from "@/lib/preview-as";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const preview = usePreviewAs();
+  const viewAs = searchParams.get("viewAs");
+  const previewRole = viewAs === "officer" || viewAs === "company" ? viewAs : null;
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -43,7 +46,7 @@ const Dashboard = () => {
         .eq("role", "admin")
         .maybeSingle();
 
-      if (roles) {
+      if (roles && !previewRole) {
         navigate("/admin");
         return;
       }
@@ -54,10 +57,10 @@ const Dashboard = () => {
         .eq("id", session.user.id)
         .single();
 
-      setProfile(profileData);
+      setProfile(roles && previewRole ? { ...profileData, role: previewRole } : profileData);
 
       // Check if this is a company with expired trial
-      if (profileData?.role === "company") {
+      if (!previewRole && profileData?.role === "company") {
         const { data: companyData } = await supabase
           .from("company_profiles")
           .select("*")
@@ -81,7 +84,7 @@ const Dashboard = () => {
     };
 
     getProfile();
-  }, [navigate, preview]);
+  }, [navigate, preview, previewRole]);
 
   if (preview) {
     return (

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Building2, Crown, Users, Upload } from "lucide-react";
+import { AlertTriangle, Building2, Crown, Users, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
@@ -18,6 +18,7 @@ import JobApplicants from "./JobApplicants";
 import JobApplicationsList from "./JobApplicationsList";
 import SubscriptionManager from "./SubscriptionManager";
 import { useSearchParams } from "@/lib/router-compat";
+import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 
 interface CompanyDashboardProps {
   userId: string;
@@ -54,6 +55,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const { credentials: expiringCredentials } = useExpiringCredentials(userId, "company");
 
   useEffect(() => {
     loadProfile();
@@ -200,7 +202,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
           <div className="p-6 space-y-6 w-full overflow-auto">
             {activeTab === "profile" && (
               <>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-3 gap-4">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Subscription</CardTitle>
@@ -237,6 +239,35 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                       <p className="text-xs text-muted-foreground">
                         {companyProfile ? "Profile is set up" : "Complete your company profile"}
                       </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className={expiringCredentials.some((credential) => credential.daysLeft <= 30) ? "border-destructive/50" : ""}>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Expiring Officer Skills</CardTitle>
+                      <AlertTriangle className={`h-4 w-4 ${expiringCredentials.some((credential) => credential.daysLeft <= 30) ? "text-destructive" : "text-muted-foreground"}`} />
+                    </CardHeader>
+                    <CardContent>
+                      <div className={`text-2xl font-bold ${expiringCredentials.some((credential) => credential.daysLeft <= 30) ? "text-destructive" : ""}`}>
+                        {expiringCredentials.length}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Credentials expiring within 90 days</p>
+                      {expiringCredentials.length > 0 && (
+                        <div className="mt-3 space-y-2 border-t pt-3">
+                          {expiringCredentials.slice(0, 3).map((credential) => (
+                            <div key={credential.id} className={credential.daysLeft <= 30 ? "text-destructive" : ""}>
+                              <p className="truncate text-xs font-medium">{credential.officerName}</p>
+                              <p className="truncate text-xs">
+                                {credential.credentialName} · {credential.daysLeft < 0
+                                  ? `${Math.abs(credential.daysLeft)} days expired`
+                                  : credential.daysLeft === 0
+                                    ? "Expires today"
+                                    : `${credential.daysLeft} days remaining`}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
