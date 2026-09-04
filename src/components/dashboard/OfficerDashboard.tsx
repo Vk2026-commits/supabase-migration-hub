@@ -23,9 +23,11 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { OfficerSidebar } from "./OfficerSidebar";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import { GuardHiringApplication } from "./GuardHiringApplication";
 
 interface OfficerDashboardProps {
   userId: string;
+  initialTab?: string;
 }
 
 const getPrivateFilePath = (value: string | null | undefined, bucket: string) => {
@@ -38,8 +40,8 @@ const getPrivateFilePath = (value: string | null | undefined, bucket: string) =>
   return decodeURIComponent(path.split("?")[0]);
 };
 
-const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
-  const [activeTab, setActiveTab] = useState("profile");
+const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardProps) => {
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -871,6 +873,10 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
                 userId={userId}
                 onChanged={loadProfile}
               />
+            )}
+
+            {activeTab === "hiring-application" && (
+              <GuardHiringApplication userId={userId} officerId={officerProfile?.id || null} />
             )}
 
             {activeTab === "find-jobs" && (

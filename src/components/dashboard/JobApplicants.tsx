@@ -4,8 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Lock, User, MessageCircle } from "lucide-react";
+import { Download, Lock, User, MessageCircle } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
+import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -35,13 +36,14 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   };
 
   const loadApplications = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("job_applications")
       .select(`
         *,
         job_posting:job_postings(title),
         officer:officer_profiles(id, user_id),
-        profile:officer_profiles(user_id)
+        profile:officer_profiles(user_id),
+        hiring_application:guard_hiring_applications(application_data,status,submitted_at)
       `)
       .eq("job_posting.company_id", companyId)
       .order("created_at", { ascending: false });
@@ -159,6 +161,16 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       <MessageCircle className="h-3 w-3 mr-2" />
                       Chat
                     </Button>
+                    {app.hiring_application?.[0]?.application_data && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => generateGuardApplicationPDF(app.hiring_application[0].application_data as GuardApplicationData)}
+                      >
+                        <Download className="h-3 w-3 mr-2" />
+                        Application PDF
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" disabled className="mt-3">
