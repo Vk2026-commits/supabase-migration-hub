@@ -8,8 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Trash2, Upload, FileText, X, Download } from "lucide-react";
+import { CalendarDays, Plus, Trash2, Upload, FileText, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format, isValid, parseISO } from "date-fns";
 
 export interface Certification {
   id: string;
@@ -55,6 +59,84 @@ const TRAINING_CERTIFICATIONS = [
   "Access Control",
   "CCTV Operations",
 ];
+
+const firstCalendarMonth = new Date(1950, 0, 1);
+const lastCalendarMonth = new Date(new Date().getFullYear() + 30, 11, 31);
+
+function parseStoredDate(value?: string) {
+  if (!value) return undefined;
+  const date = parseISO(value);
+  return isValid(date) ? date : undefined;
+}
+
+function validateCertificationDates(issueDate: string, expiryDate: string) {
+  const issue = parseStoredDate(issueDate);
+  const expiry = parseStoredDate(expiryDate);
+
+  if (issueDate && !issue) return "Select a valid certification date.";
+  if (expiryDate && !expiry) return "Select a valid expiration date.";
+  if (issue && expiry && expiry < issue) {
+    return "The expiration date must be after the certification date.";
+  }
+  return null;
+}
+
+function CertificationDatePicker({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const selectedDate = parseStoredDate(value);
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            className={cn(
+              "h-12 w-full justify-start text-left text-base font-normal",
+              !selectedDate && "text-muted-foreground",
+            )}
+          >
+            <CalendarDays className="mr-2 h-4 w-4 shrink-0" />
+            {selectedDate ? format(selectedDate, "MMM d, yyyy") : placeholder}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            defaultMonth={selectedDate || new Date()}
+            onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
+            captionLayout="dropdown"
+            startMonth={firstCalendarMonth}
+            endMonth={lastCalendarMonth}
+            className="[--cell-size:2.5rem]"
+          />
+          {value && (
+            <div className="border-t p-2">
+              <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => onChange("")}>
+                Clear date
+              </Button>
+            </div>
+          )}
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 export function CertificationsManager({ officerId, userId, onEnsureProfile, onChanged }: CertificationsManagerProps) {
   const [certifications, setCertifications] = useState<Certification[]>([]);
@@ -345,6 +427,12 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         return;
       }
 
+      const dateError = validateCertificationDates(formData.issue_date, formData.expiry_date);
+      if (dateError) {
+        toast.error(dateError);
+        return;
+      }
+
       const id = await ensureOfficerId();
       if (!id) {
         toast.error("Please create your profile first");
@@ -392,7 +480,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         setPendingUploads({});
         loadCertifications();
       } catch (error: any) {
-        toast.error("Failed to save license");
+        toast.error(error?.message ? `Failed to save license: ${error.message}` : "Failed to save license");
       }
     };
 
@@ -416,26 +504,21 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor={`${licenseLevel}-issue`}>Certification Date</Label>
-                <Input
-                  id={`${licenseLevel}-issue`}
-                  type="date"
-                  value={formData.issue_date}
-                  onChange={(e) => setFormData({ ...formData, issue_date: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={`${licenseLevel}-expiry`}>Expiration Date</Label>
-                <Input
-                  id={`${licenseLevel}-expiry`}
-                  type="date"
-                  value={formData.expiry_date}
-                  onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                />
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CertificationDatePicker
+                id={`${licenseLevel}-issue`}
+                label="Certification Date"
+                value={formData.issue_date}
+                onChange={(issue_date) => setFormData({ ...formData, issue_date })}
+                placeholder="Choose certification date"
+              />
+              <CertificationDatePicker
+                id={`${licenseLevel}-expiry`}
+                label="Expiration Date"
+                value={formData.expiry_date}
+                onChange={(expiry_date) => setFormData({ ...formData, expiry_date })}
+                placeholder="Choose expiration date"
+              />
             </div>
 
             {/* Upload section - always visible */}
@@ -569,6 +652,12 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         return;
       }
 
+      const dateError = validateCertificationDates(newTraining.issue_date, newTraining.expiry_date);
+      if (dateError) {
+        toast.error(dateError);
+        return;
+      }
+
       const id = await ensureOfficerId();
       if (!id) {
         toast.error("Please create your profile first");
@@ -600,7 +689,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         });
         loadCertifications();
       } catch (error: any) {
-        toast.error("Failed to add training");
+        toast.error(error?.message ? `Failed to add training: ${error.message}` : "Failed to add training");
       }
     };
 
@@ -669,30 +758,21 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="training-issue">Issue Date</Label>
-                <Input
-                  id="training-issue"
-                  type="date"
-                  value={newTraining.issue_date}
-                  onChange={(e) =>
-                    setNewTraining({ ...newTraining, issue_date: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="training-expiry">Expiration Date</Label>
-                <Input
-                  id="training-expiry"
-                  type="date"
-                  value={newTraining.expiry_date}
-                  onChange={(e) =>
-                    setNewTraining({ ...newTraining, expiry_date: e.target.value })
-                  }
-                />
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CertificationDatePicker
+                id="training-issue"
+                label="Issue Date"
+                value={newTraining.issue_date}
+                onChange={(issue_date) => setNewTraining({ ...newTraining, issue_date })}
+                placeholder="Choose issue date"
+              />
+              <CertificationDatePicker
+                id="training-expiry"
+                label="Expiration Date"
+                value={newTraining.expiry_date}
+                onChange={(expiry_date) => setNewTraining({ ...newTraining, expiry_date })}
+                placeholder="Choose expiration date"
+              />
             </div>
 
             <div className="space-y-2">
