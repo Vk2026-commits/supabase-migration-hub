@@ -13,6 +13,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const viewAs = searchParams.get("viewAs");
+  const onboarding = searchParams.get("onboarding");
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +139,10 @@ const Dashboard = () => {
       <Navbar />
       <div className="container mx-auto px-4 py-8">
         {profile?.role === "officer" ? (
-          <OfficerDashboard userId={user.id} />
+          <OfficerDashboard
+            userId={user.id}
+            initialTab={onboarding === "application" ? "hiring-application" : "profile"}
+          />
         ) : (
           <>
             {showExpiredTrialDialog && companyProfile && (

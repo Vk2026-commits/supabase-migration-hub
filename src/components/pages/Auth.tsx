@@ -112,8 +112,8 @@ const Auth = () => {
 
         if (error) throw error;
         
-        toast.success("Account created successfully! Redirecting...");
-        setTimeout(() => navigate("/dashboard"), 1000);
+        toast.success(role === "officer" ? "Account created! Complete your hiring application next." : "Account created successfully! Redirecting...");
+        setTimeout(() => navigate(role === "officer" ? "/dashboard?onboarding=application" : "/dashboard"), 1000);
       } else {
         // Sign in - check if input is email or username
         const isEmail = emailOrUsername.includes('@');
