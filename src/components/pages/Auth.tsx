@@ -220,7 +220,9 @@ const Auth = () => {
               We sent a confirmation link to <span className="font-medium text-foreground">{confirmationEmail}</span>. Open that email and select the confirmation link.
             </p>
             <div className="rounded-lg border bg-muted/40 p-4 text-sm">
-              After you confirm, you will be signed in automatically and taken directly to the We Find Guards hiring application.
+              {role === "officer"
+                ? "After you confirm, you will be signed in automatically and taken directly to the We Find Guards hiring application."
+                : "After you confirm, you will be signed in automatically so you can complete your company profile and begin hiring security officers."}
             </div>
           </CardContent>
         </Card>
