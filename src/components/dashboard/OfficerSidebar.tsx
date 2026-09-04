@@ -18,12 +18,12 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
   const { open } = useSidebar();
 
   const items = [
+    { title: "Hiring Application", value: "hiring-application", icon: ClipboardList },
     { title: "Profile", value: "profile", icon: User },
     { title: "Availability", value: "availability", icon: Clock },
     { title: "Photos", value: "photos", icon: Images },
     { title: "Certifications and Certificates", value: "certifications", icon: Award },
     { title: "Work History", value: "work-history", icon: Briefcase },
-    { title: "Hiring Application", value: "hiring-application", icon: ClipboardList },
     { title: "Video Interviews", value: "videos", icon: Video },
     { title: "Find a Job", value: "find-jobs", icon: Search },
     { title: "Messages", value: "messages", icon: MessageCircle },
@@ -31,7 +31,10 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
 
   const getNavCls = (value: string) => {
     // Messages and Find a Job tabs don't need completion status
-    if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'hiring-application') {
+    if (value === 'hiring-application') {
+      return activeTab === value ? "font-semibold bg-primary text-primary-foreground hover:bg-primary/90" : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
+    }
+    if (value === 'messages' || value === 'find-jobs' || value === 'videos') {
       return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
     }
     
@@ -64,7 +67,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
                   >
                     <div className="flex w-full items-center gap-2">
                       <item.icon className="h-4 w-4 shrink-0" />
-                      {open && <span className="flex-1 text-center leading-tight">{item.title}</span>}
+                      {open && <span className="flex-1 text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide group-data-[active=true]:bg-white/15">Start here</span>}</span>}
                       {isTabComplete(item.value) && open && item.value !== 'messages' && item.value !== 'find-jobs' && (
                         <Check className="h-3 w-3 shrink-0 text-blue-600" />
                       )}

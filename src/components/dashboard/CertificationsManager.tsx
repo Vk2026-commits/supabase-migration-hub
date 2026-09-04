@@ -875,7 +875,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
   }
 
   return (
-    <Tabs defaultValue="level-ii" className="w-full">
+    <Tabs defaultValue="level-ii" className="w-full rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
       <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
         <TabsTrigger className="min-h-11 whitespace-normal" value="level-ii">Non-Commission</TabsTrigger>
         <TabsTrigger className="min-h-11 whitespace-normal" value="level-iii">Commission</TabsTrigger>

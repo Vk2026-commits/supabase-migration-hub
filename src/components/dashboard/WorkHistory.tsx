@@ -359,7 +359,7 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="sticky bottom-0 z-20 -mx-6 flex gap-2 border-t bg-background/95 px-6 py-4 backdrop-blur">
             <Button className="h-12 flex-1 text-base"
               onClick={handleSave} 
               disabled={loading}

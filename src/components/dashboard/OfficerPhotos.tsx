@@ -125,15 +125,15 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
 
   const content = (
     <>
-      {!embedded && <CardHeader>
-        <CardTitle>Professional Photos</CardTitle>
-        <CardDescription>Upload professional photos to showcase yourself to potential employers</CardDescription>
+      {!embedded && <CardHeader className="border-b px-5 py-6 sm:px-8">
+        <CardTitle className="text-2xl">Photo checklist</CardTitle>
+        <CardDescription className="text-base">Complete the required photos first, then add optional action shots if you want.</CardDescription>
       </CardHeader>}
-      <CardContent className={embedded ? "px-0" : undefined}>
+      <CardContent className={embedded ? "px-0" : "px-5 py-7 sm:px-8 sm:py-9"}>
         {embedded && <p className="mb-5 text-sm text-muted-foreground">Your headshot and full-body photo are required. Action photos are optional.</p>}
         <div className="grid gap-6 md:grid-cols-2">
           {PHOTO_TYPES.map((photoType) => (
-            <div key={photoType.id} className="space-y-3 rounded-xl border p-4">
+            <div key={photoType.id} className={`space-y-3 rounded-2xl border p-5 transition-shadow hover:shadow-sm ${photos[photoType.id] ? "border-green-500/40 bg-green-500/5" : "bg-card"}`}>
               <div>
                 <Label className="text-base">{photoType.label}{photoType.id === "headshot" || photoType.id === "full-body" ? " *" : " (optional)"}</Label>
                 <p className="text-sm text-muted-foreground">{photoType.description}</p>
@@ -161,5 +161,5 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
     </>
   );
 
-  return embedded ? <div>{content}</div> : <Card className="rounded-2xl">{content}</Card>;
+  return embedded ? <div>{content}</div> : <Card className="overflow-hidden rounded-2xl shadow-sm">{content}</Card>;
 }

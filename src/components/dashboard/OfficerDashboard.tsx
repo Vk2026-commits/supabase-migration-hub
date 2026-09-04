@@ -29,6 +29,25 @@ interface OfficerDashboardProps {
   initialTab?: string;
 }
 
+const guidedSections: Record<string, { title: string; description: string; step: number }> = {
+  profile: { title: "Your professional profile", description: "Keep your contact details and professional introduction current.", step: 2 },
+  availability: { title: "Your availability", description: "Choose the work types, shifts, and weekly hours employers can rely on.", step: 3 },
+  photos: { title: "Your professional photos", description: "Manage the same private photos included with your hiring application.", step: 4 },
+  certifications: { title: "Licenses and certifications", description: "Manage the same secure documents included with your hiring application.", step: 5 },
+  "work-history": { title: "Your work history", description: "Review or update the experience saved from your hiring application.", step: 6 },
+};
+
+function GuidedSectionHeader({ section, completed }: { section: { title: string; description: string; step: number }; completed: boolean }) {
+  return <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
+    <div className="flex items-center gap-4 px-5 py-5 sm:px-8 sm:py-7">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-lg font-bold text-primary-foreground">{section.step}</div>
+      <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Officer onboarding record</p><h1 className="text-2xl font-bold sm:text-3xl">{section.title}</h1><p className="mt-1 text-sm text-muted-foreground sm:text-base">{section.description}</p></div>
+      <span className={`hidden rounded-full px-3 py-1 text-xs font-semibold sm:block ${completed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"}`}>{completed ? "Complete" : "Needs attention"}</span>
+    </div>
+    <div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((section.step / 6) * 100)}%` }} /></div>
+  </div>;
+}
+
 const getPrivateFilePath = (value: string | null | undefined, bucket: string) => {
   if (!value) return null;
 
@@ -344,9 +363,11 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             <div className="mb-4">
               <SidebarTrigger />
             </div>
-            <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" ? "sr-only" : ""}`}>
+            <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" || guidedSections[activeTab] ? "sr-only" : ""}`}>
               Welcome, {profile?.full_name || profile?.email}
             </h1>
+
+            {guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
             {!onboardingComplete && activeTab !== "hiring-application" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">
@@ -366,7 +387,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               </Alert>
             )}
 
-          <div className="space-y-6">
+          <div className="mx-auto max-w-6xl space-y-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12">
             {activeTab === "profile" && (
               <div className="grid md:grid-cols-5 gap-4">
         <Card>
@@ -617,9 +638,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
                   />
                 </div>
 
-                <Button type="submit" className="h-12 w-full text-base sm:w-auto" disabled={loading}>
-                  {loading ? "Saving..." : "Save Profile"}
-                </Button>
+                <div className="sticky bottom-0 z-20 -mx-6 flex justify-end border-t bg-background/95 px-6 py-4 backdrop-blur"><Button type="submit" className="h-12 w-full text-base sm:w-auto" disabled={loading}>{loading ? "Saving..." : "Save Profile"}</Button></div>
                 </form>
               </CardContent>
             </Card>
@@ -846,9 +865,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
                     </Button>
                   </div>
                 ))}
-                  <Button className="h-12 w-full text-base sm:w-auto" onClick={handleSubmit} disabled={loading}>
-                    {loading ? "Saving..." : "Save Availability"}
-                  </Button>
+                  <div className="sticky bottom-0 z-20 -mx-6 flex justify-end border-t bg-background/95 px-6 py-4 backdrop-blur"><Button className="h-12 w-full text-base sm:w-auto" onClick={handleSubmit} disabled={loading}>{loading ? "Saving..." : "Save Availability"}</Button></div>
                 </div>
                 </div>
               </CardContent>
