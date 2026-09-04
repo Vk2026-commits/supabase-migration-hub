@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,6 @@ interface OfficerDashboardProps {
 
 const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   const [activeTab, setActiveTab] = useState("profile");
-  const activeContentRef = useRef<HTMLDivElement>(null);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -283,24 +282,12 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
     workHistory: workHistoryCount > 0,
   };
 
-  const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
-
-    // Wait for React to replace the active panel, then bring that panel into
-    // view. This also works when the user selects the already-active item.
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        activeContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    });
-  };
-
   return (
     <SidebarProvider>
       <div className="flex w-full min-h-screen">
         <OfficerSidebar 
           activeTab={activeTab} 
-          onTabChange={handleTabChange}
+          onTabChange={setActiveTab}
           completionStatus={completionStatus}
         />
         <div className="flex-1 flex">
@@ -365,7 +352,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
         <Card
           className={`cursor-pointer transition-colors hover:bg-accent/50 ${urgentExpiring ? "border-destructive/50" : ""}`}
-          onClick={() => handleTabChange("certifications")}
+          onClick={() => setActiveTab("certifications")}
         >
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Expiring Skills</CardTitle>
@@ -397,9 +384,6 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
         </Card>
       </div>
             )}
-
-            <div ref={activeContentRef} className="scroll-mt-24" />
-
 
             {activeTab === "profile" && (
           <Card>
