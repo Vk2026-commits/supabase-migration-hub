@@ -43,6 +43,45 @@ async function load(path: string) {
   return PDFDocument.load(await response.arrayBuffer(), { ignoreEncryption: true });
 }
 
+async function trimSignature(dataUrl: string) {
+  if (!dataUrl || typeof document === "undefined") return dataUrl;
+  return new Promise<string>((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const source = document.createElement("canvas");
+      source.width = image.naturalWidth;
+      source.height = image.naturalHeight;
+      const sourceContext = source.getContext("2d", { willReadFrequently: true });
+      if (!sourceContext) { resolve(dataUrl); return; }
+      sourceContext.drawImage(image, 0, 0);
+      const pixels = sourceContext.getImageData(0, 0, source.width, source.height).data;
+      let left = source.width; let right = -1; let top = source.height; let bottom = -1;
+      for (let y = 0; y < source.height; y += 1) {
+        for (let x = 0; x < source.width; x += 1) {
+          const offset = (y * source.width + x) * 4;
+          if (pixels[offset + 3] > 20 && (pixels[offset] < 235 || pixels[offset + 1] < 235 || pixels[offset + 2] < 235)) {
+            left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y);
+          }
+        }
+      }
+      if (right < left || bottom < top) { resolve(dataUrl); return; }
+      const padding = 12;
+      left = Math.max(0, left - padding); top = Math.max(0, top - padding);
+      right = Math.min(source.width - 1, right + padding); bottom = Math.min(source.height - 1, bottom + padding);
+      const trimmed = document.createElement("canvas");
+      trimmed.width = right - left + 1; trimmed.height = bottom - top + 1;
+      const trimmedContext = trimmed.getContext("2d");
+      if (!trimmedContext) { resolve(dataUrl); return; }
+      trimmedContext.fillStyle = "#ffffff";
+      trimmedContext.fillRect(0, 0, trimmed.width, trimmed.height);
+      trimmedContext.drawImage(source, left, top, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+      resolve(trimmed.toDataURL("image/png"));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
+  });
+}
+
 const setText = (form: ReturnType<PDFDocument["getForm"]>, values: Record<string, string>) => {
   Object.entries(values).forEach(([name, value]) => {
     if (!value) return;
@@ -91,7 +130,7 @@ export async function buildI9(values: OfficialOnboardingValues, ssn: string) {
     try {
       const signature = form.getField("Signature of Employee") as any;
       const font = values.signatureImage ? null : await document.embedFont(StandardFonts.TimesRomanItalic);
-      const signatureImage = values.signatureImage ? await document.embedPng(values.signatureImage) : null;
+      const signatureImage = values.signatureImage ? await document.embedPng(await trimSignature(values.signatureImage)) : null;
       for (const widget of signature.acroField.getWidgets()) {
         const rect = widget.getRectangle();
         const pageRef = widget.P();
@@ -139,9 +178,9 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
   });
   const page = document.getPages()[0];
   if (values.signatureImage) {
-    const signature = await document.embedPng(values.signatureImage);
-    const scale = Math.min(240 / signature.width, 30 / signature.height);
-    page.drawImage(signature, { x: 130, y: 137, width: signature.width * scale, height: signature.height * scale });
+    const signature = await document.embedPng(await trimSignature(values.signatureImage));
+    const scale = Math.min(270 / signature.width, 36 / signature.height);
+    page.drawImage(signature, { x: 130, y: 134, width: signature.width * scale, height: signature.height * scale });
   } else if (values.signatureName) {
     const font = await document.embedFont(StandardFonts.TimesRomanItalic);
     page.drawText(values.signatureName, { x: 130, y: 142, size: 14, font, color: rgb(0, 0, 0) });
