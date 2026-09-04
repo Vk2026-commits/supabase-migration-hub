@@ -1,4 +1,10 @@
-import { forwardRef, type AnchorHTMLAttributes, type ReactNode } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useMemo,
+  type AnchorHTMLAttributes,
+  type ReactNode,
+} from "react";
 import {
   Link as TSLink,
   useRouter,
@@ -42,13 +48,16 @@ export function NavLink({ to, className, children, end, ...rest }: NavLinkProps)
 
 export function useNavigate() {
   const router = useRouter();
-  return (to: string | number, options?: { replace?: boolean }) => {
-    if (typeof to === "number") {
-      router.history.go(to);
-      return;
-    }
-    void router.navigate({ href: to, replace: options?.replace });
-  };
+  return useCallback(
+    (to: string | number, options?: { replace?: boolean }) => {
+      if (typeof to === "number") {
+        router.history.go(to);
+        return;
+      }
+      void router.navigate({ href: to, replace: options?.replace });
+    },
+    [router],
+  );
 }
 
 export function useLocation() {
@@ -62,14 +71,17 @@ export function useSearchParams(): [
   const router = useRouter();
   const searchStr = useRouterState({ select: (s) => s.location.searchStr });
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const params = new URLSearchParams(searchStr);
-  const setParams = (
-    next: URLSearchParams | Record<string, string>,
-    options?: { replace?: boolean },
-  ) => {
-    const sp = next instanceof URLSearchParams ? next : new URLSearchParams(next);
-    const qs = sp.toString();
-    void router.navigate({ href: qs ? `${pathname}?${qs}` : pathname, replace: options?.replace });
-  };
+  const params = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
+  const setParams = useCallback(
+    (
+      next: URLSearchParams | Record<string, string>,
+      options?: { replace?: boolean },
+    ) => {
+      const sp = next instanceof URLSearchParams ? next : new URLSearchParams(next);
+      const qs = sp.toString();
+      void router.navigate({ href: qs ? `${pathname}?${qs}` : pathname, replace: options?.replace });
+    },
+    [pathname, router],
+  );
   return [params, setParams];
 }
