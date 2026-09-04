@@ -212,11 +212,11 @@ function Field({ label, value, onChange, type = "text", required = false, placeh
   );
 }
 
-function Choice({ label, value, onChange, options, optionLabels = {} }: { label: string; value: string; onChange: (value: string) => void; options: string[]; optionLabels?: Record<string, string> }) {
+function Choice({ label, value, onChange, options, optionLabels = {}, stacked = false }: { label: string; value: string; onChange: (value: string) => void; options: string[]; optionLabels?: Record<string, string>; stacked?: boolean }) {
   return (
     <div className="space-y-3">
       <Label>{label} *</Label>
-      <RadioGroup value={value} onValueChange={onChange} className="grid min-w-0 gap-3 sm:grid-cols-2">
+      <RadioGroup value={value} onValueChange={onChange} className={`grid min-w-0 gap-3 ${stacked ? "grid-cols-1" : "sm:grid-cols-2"}`}>
         {options.map((option) => (
           <label key={option} className="flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border p-4">
             <RadioGroupItem value={option} className="shrink-0" />
@@ -783,7 +783,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       {bankMasked && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">Bank account saved securely as {bankMasked}. Enter new numbers only to replace it.</p>}
                       <div className="grid gap-5 md:grid-cols-2">
                         <Field label="Bank name" value={data.bankName} onChange={(v) => update("bankName", v)} required={!bankMasked} />
-                        <Choice label="Account type" value={data.bankAccountType} onChange={(v) => update("bankAccountType", v)} options={["checking", "savings"]} />
+                        <Choice
+                          label="Account type"
+                          value={data.bankAccountType}
+                          onChange={(v) => update("bankAccountType", v)}
+                          options={["checking", "savings"]}
+                          optionLabels={{ checking: "Checking", savings: "Savings" }}
+                          stacked
+                        />
                         <Field label="9-digit routing number" value={routingNumber} onChange={setRoutingNumber} required={!bankMasked} />
                         <Field label="Account number" value={accountNumber} onChange={setAccountNumber} required={!bankMasked} />
                       </div>
