@@ -213,6 +213,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submittingI9, setSubmittingI9] = useState(false);
+  const [i9SubmittedAt, setI9SubmittedAt] = useState<string | null>(null);
   const [ssn, setSsn] = useState("");
   const [ssnMasked, setSsnMasked] = useState("");
   const [showSsn, setShowSsn] = useState(false);
@@ -284,6 +286,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       setPacketId(existing.data?.id || null);
       setCurrentStep(Math.min(Number(existing.data?.current_step || 0), 7));
       setStatus(existing.data?.status === "submitted" ? "submitted" : "draft");
+      setI9SubmittedAt(existing.data?.i9_submitted_at || null);
       setSsnMasked(maskedResult.data?.data?.ssn_last_four || "");
       setBankMasked(maskedResult.data?.data?.bank_account_last_four || "");
       setLoaded(true);
@@ -416,6 +419,36 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       return;
     }
     await go(currentStep + 1);
+  };
+
+  const submitI9 = async () => {
+    if (!completeStep(1)) {
+      toast.error("Complete every required I-9 field and signature before submitting");
+      return;
+    }
+    if (!isValidSsn(ssn)) {
+      toast.error("Re-enter your full Social Security number before submitting Form I-9");
+      return;
+    }
+    setSubmittingI9(true);
+    try {
+      await saveSensitiveForStep(1);
+      if (!(await saveDraft(1)) || !packetIdRef.current) throw new Error("The I-9 draft could not be saved");
+      const i9Bytes = await buildI9(data, formatSsn(ssn));
+      const i9Path = `${userId}/${packetIdRef.current}/form-i9.pdf`;
+      const upload = await supabase.storage.from("onboarding-documents").upload(i9Path, new Blob([i9Bytes as unknown as BlobPart], { type: "application/pdf" }), { upsert: true, contentType: "application/pdf" });
+      if (upload.error) throw upload.error;
+      const submittedAt = new Date().toISOString();
+      const { error } = await (supabase as any).from("officer_onboarding_packets").update({ i9_document_path: i9Path, i9_submitted_at: submittedAt, form_data: data, signature_name: data.signatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" "), signature_date: data.signatureDate, updated_at: submittedAt }).eq("id", packetIdRef.current);
+      if (error) throw error;
+      setI9SubmittedAt(submittedAt);
+      toast.success(`Signed Form I-9 sent securely to ${data.employerName}`);
+      onChanged?.();
+    } catch (error: any) {
+      toast.error(error.message || "Form I-9 could not be submitted");
+    } finally {
+      setSubmittingI9(false);
+    }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -605,6 +638,15 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <p className="mt-1 text-sm text-muted-foreground">Sign with your finger, mouse, or stylus. Your signature is placed on the official I-9 and carried into your onboarding packet. You can review or redraw it before final submission.</p>
                     </div>
                     <SignaturePad value={data.signatureImage} suggestedName={[data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("signatureImage", value)} />
+                  </div>
+                  <div className={`rounded-2xl border p-5 ${i9SubmittedAt ? "border-green-200 bg-green-50" : "border-primary/30 bg-card"}`}>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-semibold">{i9SubmittedAt ? "Form I-9 submitted" : `Send Form I-9 to ${data.employerName}`}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{i9SubmittedAt ? `Securely sent ${new Date(i9SubmittedAt).toLocaleString()}. You can update and resubmit it if needed.` : "This submits only your signed I-9. You can continue the remaining onboarding steps afterward."}</p>
+                      </div>
+                      <Button type="button" size="lg" onClick={submitI9} disabled={submittingI9 || saving} className="shrink-0"><FileCheck2 className="mr-2 h-5 w-5" />{submittingI9 ? "Submitting I-9…" : i9SubmittedAt ? "Update submitted I-9" : "Submit Form I-9"}</Button>
+                    </div>
                   </div>
                 </div>
               )}

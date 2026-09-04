@@ -21,6 +21,7 @@ type ReviewData = {
   workHistory: any[];
   photos: Array<{ name: string; label: string; url: string }>;
   documentUrls: Record<string, string>;
+  onboardingDocuments: Array<{ label: string; url: string; submittedAt: string }>;
 };
 
 const photoLabels: Record<string, string> = {
@@ -42,7 +43,7 @@ const formatTime = (item: string) => {
 export function ApplicantReviewDialog({ open, onOpenChange, application }: ApplicantReviewDialogProps) {
   const [loading, setLoading] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string } | null>(null);
-  const [review, setReview] = useState<ReviewData>({ snapshot: null, officer: null, certifications: [], workHistory: [], photos: [], documentUrls: {} });
+  const [review, setReview] = useState<ReviewData>({ snapshot: null, officer: null, certifications: [], workHistory: [], photos: [], documentUrls: {}, onboardingDocuments: [] });
 
   useEffect(() => {
     if (!open || !application?.id || !application?.officer?.id) return;
@@ -53,7 +54,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
         const officerId = application.officer.id;
         const officerUserId = application.officer.user_id;
         const [snapshotResult, officerResult, certificationsResult, workResult, photoFilesResult] = await Promise.all([
-          (supabase as any).from("guard_hiring_applications").select("application_data,status,submitted_at").eq("job_application_id", application.id).eq("application_type", "employer_copy").maybeSingle(),
+          (supabase as any).from("guard_hiring_applications").select("id,application_data,status,submitted_at").eq("job_application_id", application.id).eq("application_type", "employer_copy").maybeSingle(),
           supabase.from("officer_profiles").select("*").eq("id", officerId).maybeSingle(),
           supabase.from("certifications").select("*").eq("officer_id", officerId).order("created_at", { ascending: false }),
           supabase.from("work_history").select("*").eq("officer_id", officerId).order("start_date", { ascending: false }),
@@ -82,6 +83,16 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           }
         }
 
+        const onboardingDocuments: ReviewData["onboardingDocuments"] = [];
+        if (snapshotResult.data?.id) {
+          const onboardingResult = await (supabase as any).from("officer_onboarding_packets").select("i9_document_path,i9_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle();
+          if (onboardingResult.error) throw onboardingResult.error;
+          if (onboardingResult.data?.i9_document_path && onboardingResult.data?.i9_submitted_at) {
+            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.i9_document_path, 3600);
+            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form I-9", url: signed.data.signedUrl, submittedAt: onboardingResult.data.i9_submitted_at });
+          }
+        }
+
         if (active) setReview({
           snapshot: snapshotResult.data?.application_data || application.hiring_application?.[0]?.application_data || null,
           officer: officerResult.data,
@@ -89,6 +100,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           workHistory: workResult.data || [],
           photos,
           documentUrls,
+          onboardingDocuments,
         });
       } catch (error: any) {
         console.error("Applicant review failed", error);
@@ -170,6 +182,10 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
             {review.photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{review.photos.map(photo => <a key={photo.url} href={photo.url} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border bg-card"><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /><p className="p-3 text-sm font-semibold">{photo.label}</p></a>)}</div> : <Empty text="No applicant photos are available" />}
           </Section>
 
+          {review.onboardingDocuments.length > 0 && <Section title="Submitted employee documents" icon={FileText}>
+            <div className="grid gap-3 md:grid-cols-2">{review.onboardingDocuments.map(document => <div key={document.label} className="flex flex-col gap-3 rounded-xl border bg-green-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{document.label}</p><p className="text-sm text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</p></div><div className="flex gap-2"><Button type="button" size="sm" onClick={() => setPreviewDocument({ label: document.label, url: document.url })}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={document.url} download target="_blank" rel="noreferrer" aria-label={`Download ${document.label}`}><Download className="h-4 w-4" /></a></Button></div></div>)}</div>
+          </Section>}
+
           <Section title="Licenses and certifications" icon={FileText}>
             {review.certifications.length ? <div className="grid gap-4 md:grid-cols-2">{review.certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.name || pretty(cert.license_level || "Certification")}</p><p className="text-sm text-muted-foreground">{cert.certification_number || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.certification_type || "certificate")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.issue_date} /><Info label="Expires" content={cert.expiry_date} /></div><div className="space-y-2">{(["front", "back"] as const).map(side => {
               const documentUrl = review.documentUrls[`${cert.id}-${side}`];
@@ -195,7 +211,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <DialogTitle className="truncate">{previewDocument?.label}</DialogTitle>
-                <DialogDescription>View the uploaded certificate without leaving the applicant review.</DialogDescription>
+                <DialogDescription>View the submitted document without leaving the applicant review.</DialogDescription>
               </div>
               {previewDocument && <Button asChild size="sm" variant="outline"><a href={previewDocument.url} download target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />Download</a></Button>}
             </div>
