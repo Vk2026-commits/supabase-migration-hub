@@ -785,6 +785,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
     setActivePolicyKey(null);
     toast.success("Document verified, saved, and marked complete");
+    const currentIndex = policyItems.findIndex(([k]) => k === key);
+    const nextItem = policyItems[currentIndex + 1];
+    if (nextItem) {
+      const nextKey = nextItem[0];
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.getElementById(`policy-${nextKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+    }
   };
   if (!loaded)
     return (
@@ -1096,7 +1106,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     const viewed = Boolean(acknowledgement?.viewedAt);
                     const completed = Boolean(data.policies[key] && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
-                      <div key={key} className={`overflow-hidden rounded-2xl border-2 transition-colors ${completed ? "border-green-500 bg-green-50 shadow-sm" : expanded ? "border-primary/40 bg-background" : "border-border bg-background"}`}>
+                      <div key={key} id={`policy-${key}`} className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 transition-colors ${completed ? "border-green-500 bg-green-50 shadow-sm" : expanded ? "border-primary/40 bg-background" : "border-border bg-background"}`}>
                         <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : index + 1}</div>
                           <div className="min-w-0 flex-1">
