@@ -237,10 +237,49 @@ serve(async (req) => {
         );
       }
 
+      case "save_bank": {
+        const { bank_name, routing_number, account_number, account_type } = data;
+        if (!bank_name || !/^\d{9}$/.test(routing_number || "") || !/^\d{4,17}$/.test(account_number || "")) {
+          return new Response(
+            JSON.stringify({ error: "Enter a bank name, a 9-digit routing number, and a valid account number" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const routingEncrypted = await encrypt(routing_number);
+        const accountEncrypted = await encrypt(account_number);
+        if (!routingEncrypted || !accountEncrypted) {
+          return new Response(
+            JSON.stringify({ error: "Encryption service unavailable" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const { error: upsertError } = await supabase.from("officer_sensitive_data").upsert({
+          officer_id: officerId,
+          bank_name,
+          bank_routing_encrypted: routingEncrypted,
+          bank_routing_last_four: `*****${routing_number.slice(-4)}`,
+          bank_account_encrypted: accountEncrypted,
+          bank_account_last_four: `****${account_number.slice(-4)}`,
+          bank_account_type: account_type || "checking",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "officer_id" });
+        if (upsertError) {
+          console.error("Bank data upsert error:", upsertError);
+          return new Response(JSON.stringify({ error: "Failed to save bank information" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          bank_routing_last_four: `*****${routing_number.slice(-4)}`,
+          bank_account_last_four: `****${account_number.slice(-4)}`
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       case "get_masked_data": {
         const { data: sensitiveData, error: fetchError } = await supabase
           .from("officer_sensitive_data")
-          .select("ssn_last_four, drivers_license_state, drivers_license_expiry, ssn_verified, drivers_license_verified")
+          .select("ssn_last_four, drivers_license_state, drivers_license_expiry, ssn_verified, drivers_license_verified, bank_name, bank_routing_last_four, bank_account_last_four, bank_account_type")
           .eq("officer_id", officerId)
           .single();
 
