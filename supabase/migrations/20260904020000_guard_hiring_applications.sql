@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.guard_hiring_applications (
 
 ALTER TABLE public.guard_hiring_applications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Officers manage their own hiring applications" ON public.guard_hiring_applications;
 CREATE POLICY "Officers manage their own hiring applications"
 ON public.guard_hiring_applications FOR ALL TO authenticated
 USING (
@@ -33,6 +34,7 @@ WITH CHECK (
   )
 );
 
+DROP POLICY IF EXISTS "Companies view hiring applications for their jobs" ON public.guard_hiring_applications;
 CREATE POLICY "Companies view hiring applications for their jobs"
 ON public.guard_hiring_applications FOR SELECT TO authenticated
 USING (
@@ -46,6 +48,7 @@ USING (
   )
 );
 
+DROP POLICY IF EXISTS "Administrators view hiring applications" ON public.guard_hiring_applications;
 CREATE POLICY "Administrators view hiring applications"
 ON public.guard_hiring_applications FOR SELECT TO authenticated
 USING (
