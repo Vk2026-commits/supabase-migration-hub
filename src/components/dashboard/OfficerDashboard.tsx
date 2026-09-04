@@ -22,6 +22,7 @@ import JobSearch from "./JobSearch";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { OfficerSidebar } from "./OfficerSidebar";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -514,55 +515,23 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
                     />
                   </div>
 
-                  <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="address_street">Home Address</Label>
-                    <Input
-                      id="address_street"
-                      placeholder="Street Address"
-                      value={formData.address_street}
-                      onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address_unit">Apt/Unit</Label>
-                    <Input
-                      id="address_unit"
-                      placeholder="Apt, Unit, etc."
-                      value={formData.address_unit}
-                      onChange={(e) => setFormData({ ...formData, address_unit: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address_city">City</Label>
-                    <Input
-                      id="address_city"
-                      placeholder="City"
-                      value={formData.address_city}
-                      onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address_state">State</Label>
-                    <Input
-                      id="address_state"
-                      placeholder="State"
-                      value={formData.address_state}
-                      onChange={(e) => setFormData({ ...formData, address_state: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address_zip">ZIP Code</Label>
-                    <Input
-                      id="address_zip"
-                      placeholder="ZIP Code"
-                      value={formData.address_zip}
-                      onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
-                    />
-                  </div>
+                  <AddressAutocomplete
+                    value={{
+                      street: formData.address_street,
+                      unit: formData.address_unit,
+                      city: formData.address_city,
+                      state: formData.address_state,
+                      zip: formData.address_zip,
+                    }}
+                    onChange={(address) => setFormData({
+                      ...formData,
+                      address_street: address.street,
+                      address_unit: address.unit,
+                      address_city: address.city,
+                      address_state: address.state,
+                      address_zip: address.zip,
+                    })}
+                  />
 
                   <div className="space-y-2">
                     <Label htmlFor="desired_salary">Desired Annual Salary ($)</Label>
