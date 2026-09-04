@@ -7,6 +7,8 @@ export type GuardApplicationData = {
   state: string;
   zip: string;
   companyName: string;
+  companyCity: string;
+  companyState: string;
   position: string;
   employmentType: string;
   startDate: string;
@@ -100,7 +102,8 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData) {
   y += 10;
 
   section("Application Details");
-  row("Applying to", data.companyName, "Position", data.position);
+  row("Hiring company", data.companyName, "Position", data.position);
+  row("Job city", data.companyCity, "Job state", data.companyState);
   row("Employment type", data.employmentType, "Available start date", data.startDate);
   field("Security license level(s)", data.licenseLevels.join(", "));
 
