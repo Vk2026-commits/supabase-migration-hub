@@ -431,20 +431,21 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     };
   }, [userId, officerId]);
 
-  const saveDraft = async (step = currentStep) => {
+  const saveDraft = async (step = currentStep, dataOverride?: OnboardingData) => {
     if (!loaded || !activeOfficerId) return false;
     setSaving(true);
     try {
+      const draftData = dataOverride || data;
       const payload: any = {
         user_id: userId,
         officer_id: activeOfficerId,
         hiring_application_id: hiringApplicationId,
-        company_name: data.employerName,
+        company_name: draftData.employerName,
         status,
         current_step: step,
-        form_data: data,
-        signature_name: data.signatureName || null,
-        signature_date: data.signatureDate || null,
+        form_data: draftData,
+        signature_name: draftData.signatureName || null,
+        signature_date: draftData.signatureDate || null,
         updated_at: new Date().toISOString(),
       };
       const currentId = packetIdRef.current;
@@ -760,7 +761,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       },
     }));
   };
-  const savePolicyAcknowledgement = (key: string) => {
+  const savePolicyAcknowledgement = async (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
     if (!acknowledgement?.viewedAt) {
       toast.error("Open and review the document before signing and saving it");
@@ -774,8 +775,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       toast.error("Wait for the updated PDF preview to finish, then save the document");
       return;
     }
-    setData((current) => ({ ...current, policies: { ...current.policies, [key]: true } }));
-    toast.success("Signed document saved to your onboarding packet");
+    const nextData = { ...data, policies: { ...data.policies, [key]: true } };
+    setData(nextData);
+    const saved = await saveDraft(currentStep, nextData);
+    if (!saved) {
+      setData((current) => ({ ...current, policies: { ...current.policies, [key]: false } }));
+      toast.error("The document could not be saved. Please try again.");
+      return;
+    }
+    setActivePolicyKey(null);
+    toast.success("Document verified, saved, and marked complete");
   };
   if (!loaded)
     return (
@@ -1087,11 +1096,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     const viewed = Boolean(acknowledgement?.viewedAt);
                     const completed = Boolean(data.policies[key] && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
-                      <div key={key} className={`overflow-hidden rounded-2xl border transition-colors ${completed ? "border-green-300 bg-green-50/50" : expanded ? "border-primary/40" : ""}`}>
+                      <div key={key} className={`overflow-hidden rounded-2xl border-2 transition-colors ${completed ? "border-green-500 bg-green-50 shadow-sm" : expanded ? "border-primary/40 bg-background" : "border-border bg-background"}`}>
                         <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : index + 1}</div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{label}</p>{completed && <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Complete</span>}</div>
+                            <div className="flex flex-wrap items-center gap-2"><p className={`font-semibold ${completed ? "text-green-900" : ""}`}>{label}</p>{completed && <span className="rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">Completed</span>}</div>
                             <p className="text-sm text-muted-foreground">{completed ? "Verified, signed, and saved." : expanded ? "Complete the fields and preview directly below." : "Fill out, preview, sign, and save this document."}</p>
                           </div>
                           <Button type="button" variant={completed || expanded ? "outline" : "default"} size="sm" onClick={() => openPolicy(key)}>
