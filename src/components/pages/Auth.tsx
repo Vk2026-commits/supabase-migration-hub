@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Shield } from "lucide-react";
+import { Mail, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "@/lib/router-compat";
@@ -39,6 +39,7 @@ const Auth = () => {
   );
   const [loading, setLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
 
   useEffect(() => {
     // Check if user is already logged in
@@ -97,11 +98,15 @@ const Auth = () => {
           return;
         }
 
-        const { error } = await supabase.auth.signUp({
+        const postConfirmationPath = role === "officer"
+          ? "/dashboard?onboarding=application"
+          : "/dashboard";
+
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email: emailOrUsername,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: `${window.location.origin}${postConfirmationPath}`,
             data: {
               full_name: fullName,
               username: username,
@@ -111,9 +116,13 @@ const Auth = () => {
         });
 
         if (error) throw error;
-        
-        toast.success(role === "officer" ? "Account created! Complete your hiring application next." : "Account created successfully! Redirecting...");
-        setTimeout(() => navigate(role === "officer" ? "/dashboard?onboarding=application" : "/dashboard"), 1000);
+
+        if (signUpData.session) {
+          toast.success(role === "officer" ? "Account created! Complete your hiring application next." : "Account created successfully!");
+          navigate(postConfirmationPath);
+        } else {
+          setConfirmationEmail(emailOrUsername);
+        }
       } else {
         // Sign in - check if input is email or username
         const isEmail = emailOrUsername.includes('@');
@@ -184,6 +193,48 @@ const Auth = () => {
       setLoading(false);
     }
   };
+
+  if (confirmationEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/30 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-3 text-center">
+            <div className="flex items-center justify-center">
+              <Link to="/" className="flex items-center gap-2">
+                <Shield className="h-8 w-8 text-primary" />
+                <span className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+                  We Find Guards
+                </span>
+              </Link>
+            </div>
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <Mail className="h-7 w-7 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Check your email</CardTitle>
+            <CardDescription className="text-base">
+              We sent a confirmation link to <span className="font-medium text-foreground">{confirmationEmail}</span>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              Confirm your email to activate your account. Security officers will then open directly to the We Find Guards hiring application.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setConfirmationEmail("");
+                setMode("signin");
+              }}
+            >
+              Back to sign in
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/30 p-4">
