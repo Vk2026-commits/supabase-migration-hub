@@ -324,12 +324,12 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           onTabChange={setActiveTab}
           completionStatus={completionStatus}
         />
-        <div className="flex-1 flex">
-          <div className="flex-1 p-8">
+        <div className="flex min-w-0 flex-1">
+          <div className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
             <div className="mb-4">
               <SidebarTrigger />
             </div>
-            <h1 className="text-3xl font-bold mb-4">
+            <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" ? "sr-only" : ""}`}>
               Welcome, {profile?.full_name || profile?.email}
             </h1>
 
@@ -894,7 +894,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           
           {/* Right Side Chat Panel and Interested Jobs */}
           {officerProfile?.id && (
-            <div className="w-96 border-l bg-muted/20 p-4 overflow-y-auto space-y-4">
+            <div className="hidden w-96 shrink-0 border-l bg-muted/20 p-4 overflow-y-auto space-y-4 xl:block">
               <div className="h-[250px]">
                 <OfficerChatPanel 
                   officerId={officerProfile.id} 
