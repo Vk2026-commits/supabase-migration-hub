@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert";
 import HireButton from "@/components/dashboard/HireButton";
 import { toast } from "sonner";
+import { ApplicantReviewDialog } from "@/components/dashboard/ApplicantReviewDialog";
 
 const Browse = () => {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ const Browse = () => {
   const [shiftFilter, setShiftFilter] = useState<string>("all");
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>("all");
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -218,6 +220,29 @@ const Browse = () => {
   ];
 
   const handleViewProfile = async (officer: any) => {
+    if (companyProfile && ['professional', 'premium'].includes(companyProfile.subscription_tier)) {
+      const { data: applicantRecord, error: applicantError } = await (supabase as any)
+        .from("job_applications")
+        .select(`
+          *,
+          job_posting:job_postings!inner(title,company_id),
+          officer:officer_profiles(id,user_id),
+          hiring_application:guard_hiring_applications(application_data,status,submitted_at)
+        `)
+        .eq("officer_id", officer.id)
+        .eq("job_posting.company_id", companyProfile.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!applicantError && applicantRecord) {
+        setSelectedApplication({
+          ...applicantRecord,
+          officerName: officer.profiles?.full_name || "Applicant",
+        });
+        return;
+      }
+    }
     setSelectedOfficer(officer);
     
     // Load officer certifications
@@ -777,6 +802,12 @@ const Browse = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ApplicantReviewDialog
+        open={Boolean(selectedApplication)}
+        onOpenChange={(open) => !open && setSelectedApplication(null)}
+        application={selectedApplication}
+      />
 
       {/* Chat Dialog */}
       {selectedOfficer && companyProfile && chatOpen && (
