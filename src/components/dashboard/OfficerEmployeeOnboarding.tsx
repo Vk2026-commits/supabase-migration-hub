@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, FileCheck2, LockKeyhole, Maximize2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Maximize2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -167,6 +167,10 @@ const formatSsn = (value: string) => {
 };
 
 const isValidSsn = (value: string) => /^\d{9}$/.test(value.replace(/\D/g, ""));
+const maskSsn = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length <= 5 ? formatSsn(digits) : `XXX-XX-${digits.slice(5)}`;
+};
 
 function Field({ label, value, onChange, type = "text", required = false, placeholder = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
   const id = `employee-onboarding-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -211,6 +215,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [submitting, setSubmitting] = useState(false);
   const [ssn, setSsn] = useState("");
   const [ssnMasked, setSsnMasked] = useState("");
+  const [showSsn, setShowSsn] = useState(false);
   const [routingNumber, setRoutingNumber] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
   const [bankMasked, setBankMasked] = useState("");
@@ -221,6 +226,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const packetIdRef = useRef<string | null>(null);
 
   const update = <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => setData((current) => ({ ...current, [key]: value }));
+  const handleSsnChange = (nextValue: string) => {
+    if (showSsn || !/[xX]/.test(nextValue)) { setSsn(formatSsn(nextValue)); return; }
+    const currentDigits = ssn.replace(/\D/g, "");
+    const visibleDigits = nextValue.replace(/\D/g, "");
+    const nextLength = (nextValue.match(/[xX]/g) || []).length + visibleDigits.length;
+    if (nextLength < currentDigits.length) setSsn(formatSsn(currentDigits.slice(0, nextLength)));
+    else if (nextLength > currentDigits.length && visibleDigits) setSsn(formatSsn(`${currentDigits}${visibleDigits.slice(-1)}`));
+  };
 
   useEffect(() => {
     if (officerId) setActiveOfficerId(officerId);
@@ -566,7 +579,13 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <Field label="Phone" type="tel" value={data.phone} onChange={(v) => update("phone", v)} required />
                   </div>
                   <div className="rounded-xl border p-4">
-                    <Field label={ssnMasked ? `Social Security number (encrypted copy saved as ${ssnMasked})` : "Social Security number"} value={ssn} onChange={(value) => setSsn(formatSsn(value))} placeholder="XXX-XX-XXXX" required />
+                    <div className="space-y-2">
+                      <Label htmlFor="employee-onboarding-ssn">{ssnMasked ? `Social Security number (encrypted copy saved as ${ssnMasked})` : "Social Security number"} *</Label>
+                      <div className="relative">
+                        <Input id="employee-onboarding-ssn" className="h-12 pr-12 font-mono text-base tracking-wider" inputMode="numeric" autoComplete="off" maxLength={11} value={showSsn ? formatSsn(ssn) : maskSsn(ssn)} onChange={(event) => handleSsnChange(event.target.value)} placeholder="XXX-XX-XXXX" />
+                        <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1 h-10 w-10" onClick={() => setShowSsn((visible) => !visible)} aria-label={showSsn ? "Hide Social Security number" : "Show Social Security number"}>{showSsn ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</Button>
+                      </div>
+                    </div>
                     <p className="mt-2 text-xs text-muted-foreground">Your full number stays only in this active form session and is separately encrypted when saved.</p>
                   </div>
                   <Choice label="Citizenship or immigration status" value={data.citizenshipStatus} onChange={(v) => update("citizenshipStatus", v)} options={["U.S. citizen", "Noncitizen national", "Lawful permanent resident", "Authorized to work until a specified date"]} />

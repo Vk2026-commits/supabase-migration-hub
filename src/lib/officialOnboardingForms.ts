@@ -75,6 +75,11 @@ async function trimSignature(dataUrl: string) {
       trimmedContext.fillStyle = "#ffffff";
       trimmedContext.fillRect(0, 0, trimmed.width, trimmed.height);
       trimmedContext.drawImage(source, left, top, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
+      const croppedPixels = trimmedContext.getImageData(0, 0, trimmed.width, trimmed.height);
+      for (let offset = 0; offset < croppedPixels.data.length; offset += 4) {
+        if (croppedPixels.data[offset] > 245 && croppedPixels.data[offset + 1] > 245 && croppedPixels.data[offset + 2] > 245) croppedPixels.data[offset + 3] = 0;
+      }
+      trimmedContext.putImageData(croppedPixels, 0, 0);
       resolve(trimmed.toDataURL("image/png"));
     };
     image.onerror = () => resolve(dataUrl);
@@ -136,9 +141,9 @@ export async function buildI9(values: OfficialOnboardingValues, ssn: string) {
         const pageRef = widget.P();
         const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
         if (signatureImage) {
-          const scale = Math.min((rect.width - 6) / signatureImage.width, (rect.height - 4) / signatureImage.height);
+          const scale = Math.min((rect.width - 2) / signatureImage.width, 22 / signatureImage.height);
           const width = signatureImage.width * scale; const height = signatureImage.height * scale;
-          page.drawImage(signatureImage, { x: rect.x + 3, y: rect.y + (rect.height - height) / 2, width, height });
+          page.drawImage(signatureImage, { x: rect.x + 1, y: rect.y + (rect.height - height) / 2, width, height });
         } else if (font) {
           let size = Math.min(14, Math.max(7, rect.height - 3));
           while (size > 5 && font.widthOfTextAtSize(values.signatureName, size) > rect.width - 6) size -= 0.5;
@@ -179,8 +184,8 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
   const page = document.getPages()[0];
   if (values.signatureImage) {
     const signature = await document.embedPng(await trimSignature(values.signatureImage));
-    const scale = Math.min(270 / signature.width, 36 / signature.height);
-    page.drawImage(signature, { x: 130, y: 134, width: signature.width * scale, height: signature.height * scale });
+    const scale = Math.min(285 / signature.width, 44 / signature.height);
+    page.drawImage(signature, { x: 125, y: 130, width: signature.width * scale, height: signature.height * scale });
   } else if (values.signatureName) {
     const font = await document.embedFont(StandardFonts.TimesRomanItalic);
     page.drawText(values.signatureName, { x: 130, y: 142, size: 14, font, color: rgb(0, 0, 0) });
