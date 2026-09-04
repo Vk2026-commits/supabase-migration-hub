@@ -27,6 +27,7 @@ type OnboardingData = {
   legalLastName: string;
   otherLastNames: string;
   address: string;
+  apartmentNumber: string;
   city: string;
   state: string;
   zip: string;
@@ -43,9 +44,11 @@ type OnboardingData = {
   multipleJobs: boolean;
   qualifyingChildren: string;
   otherDependents: string;
+  otherCredits: string;
   otherIncome: string;
   deductions: string;
   extraWithholding: string;
+  exemptFromWithholding: boolean;
   paymentMethod: string;
   bankName: string;
   bankAccountType: string;
@@ -71,6 +74,9 @@ type OnboardingData = {
   signatureName: string;
   signatureDate: string;
   signatureImage: string;
+  w4SignatureName: string;
+  w4SignatureDate: string;
+  w4SignatureImage: string;
 };
 
 const policyItems = [
@@ -113,6 +119,7 @@ const initialData: OnboardingData = {
   legalLastName: "",
   otherLastNames: "",
   address: "",
+  apartmentNumber: "",
   city: "",
   state: "",
   zip: "",
@@ -129,9 +136,11 @@ const initialData: OnboardingData = {
   multipleJobs: false,
   qualifyingChildren: "",
   otherDependents: "",
+  otherCredits: "",
   otherIncome: "",
   deductions: "",
   extraWithholding: "",
+  exemptFromWithholding: false,
   paymentMethod: "direct_deposit",
   bankName: "",
   bankAccountType: "checking",
@@ -151,6 +160,9 @@ const initialData: OnboardingData = {
   signatureName: "",
   signatureDate: new Date().toISOString().slice(0, 10),
   signatureImage: "",
+  w4SignatureName: "",
+  w4SignatureDate: new Date().toISOString().slice(0, 10),
+  w4SignatureImage: "",
   offeredPosition: "Security Officer",
   hourlyRate: "",
   employeeIdNumber: "",
@@ -215,6 +227,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [submitting, setSubmitting] = useState(false);
   const [submittingI9, setSubmittingI9] = useState(false);
   const [i9SubmittedAt, setI9SubmittedAt] = useState<string | null>(null);
+  const [submittingW4, setSubmittingW4] = useState(false);
+  const [w4SubmittedAt, setW4SubmittedAt] = useState<string | null>(null);
   const [ssn, setSsn] = useState("");
   const [ssnMasked, setSsnMasked] = useState("");
   const [showSsn, setShowSsn] = useState(false);
@@ -287,6 +301,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       setCurrentStep(Math.min(Number(existing.data?.current_step || 0), 7));
       setStatus(existing.data?.status === "submitted" ? "submitted" : "draft");
       setI9SubmittedAt(existing.data?.i9_submitted_at || null);
+      setW4SubmittedAt(existing.data?.w4_submitted_at || null);
       setSsnMasked(maskedResult.data?.data?.ssn_last_four || "");
       setBankMasked(maskedResult.data?.data?.bank_account_last_four || "");
       setLoaded(true);
@@ -368,7 +383,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   }, [data, ssn, currentStep]);
 
   const policiesComplete = policyItems.every(([key]) => data.policies[key]);
-  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && (data.citizenshipStatus !== "Authorized to work until a specified date" || data.workAuthorizationExpiration)) : step === 2 ? Boolean(data.filingStatus) : step === 3 ? data.paymentMethod === "paper_check" || Boolean((bankMasked || accountNumber) && (data.bankName || bankMasked)) : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
+  const i9AuthorizationComplete = data.citizenshipStatus !== "Authorized to work until a specified date" || Boolean(data.workAuthorizationExpiration && (data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)));
+  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || Boolean((bankMasked || accountNumber) && (data.bankName || bankMasked)) : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
   const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, accountNumber, bankMasked, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
@@ -413,7 +429,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const next = async () => {
     if (!completeStep(currentStep)) {
       if (currentStep === 1) {
-        const missing = [["legal first name", data.legalFirstName], ["legal last name", data.legalLastName], ["street address", data.address], ["city", data.city], ["state", data.state], ["ZIP code", data.zip], ["date of birth", data.dateOfBirth], ["email", data.email], ["phone", data.phone], ["citizenship or immigration status", data.citizenshipStatus], ["Social Security number", ssnMasked || isValidSsn(ssn)], ["drawn I-9 signature", data.signatureImage], ...(data.citizenshipStatus === "Lawful permanent resident" ? [["USCIS or A-Number", data.alienNumber]] : []), ...(data.citizenshipStatus === "Authorized to work until a specified date" ? [["work authorization expiration date", data.workAuthorizationExpiration]] : [])].filter(([, value]) => !value).map(([label]) => label);
+        const missing = [["legal first name", data.legalFirstName], ["legal last name", data.legalLastName], ["street address", data.address], ["city", data.city], ["state", data.state], ["ZIP code", data.zip], ["date of birth", data.dateOfBirth], ["email", data.email], ["phone", data.phone], ["citizenship or immigration status", data.citizenshipStatus], ["Social Security number", ssnMasked || isValidSsn(ssn)], ["drawn I-9 signature", data.signatureImage], ...(data.citizenshipStatus === "Lawful permanent resident" ? [["USCIS or A-Number", data.alienNumber]] : []), ...(data.citizenshipStatus === "Authorized to work until a specified date" ? [["work authorization expiration date", data.workAuthorizationExpiration], ["USCIS/A-Number, I-94 number, or foreign passport details", data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)]] : [])].filter(([, value]) => !value).map(([label]) => label);
         toast.error(missing.length === 1 ? `Add your ${missing[0]} before continuing` : `Complete: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}`);
       } else toast.error("Complete the required fields before continuing");
       return;
@@ -451,6 +467,36 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
   };
 
+  const submitW4 = async () => {
+    if (!completeStep(2)) {
+      toast.error("Choose a filing status, sign Form W-4, and add the signature date before submitting");
+      return;
+    }
+    if (!isValidSsn(ssn)) {
+      toast.error("Re-enter your full Social Security number on the I-9 step before submitting Form W-4");
+      return;
+    }
+    setSubmittingW4(true);
+    try {
+      await saveSensitiveForStep(1);
+      if (!(await saveDraft(2)) || !packetIdRef.current) throw new Error("The W-4 draft could not be saved");
+      const w4Bytes = await buildW4(data, formatSsn(ssn));
+      const w4Path = `${userId}/${packetIdRef.current}/form-w4.pdf`;
+      const upload = await supabase.storage.from("onboarding-documents").upload(w4Path, new Blob([w4Bytes as unknown as BlobPart], { type: "application/pdf" }), { upsert: true, contentType: "application/pdf" });
+      if (upload.error) throw upload.error;
+      const submittedAt = new Date().toISOString();
+      const { error } = await (supabase as any).from("officer_onboarding_packets").update({ w4_document_path: w4Path, w4_submitted_at: submittedAt, form_data: data, updated_at: submittedAt }).eq("id", packetIdRef.current);
+      if (error) throw error;
+      setW4SubmittedAt(submittedAt);
+      toast.success(`Signed Form W-4 sent securely to ${data.employerName}`);
+      onChanged?.();
+    } catch (error: any) {
+      toast.error(error.message || "Form W-4 could not be submitted");
+    } finally {
+      setSubmittingW4(false);
+    }
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!allComplete || !packetIdRef.current) {
@@ -482,6 +528,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       ]);
       if (i9Upload.error) throw i9Upload.error;
       if (w4Upload.error) throw w4Upload.error;
+      const submittedAt = new Date().toISOString();
       const { error } = await (supabase as any)
         .from("officer_onboarding_packets")
         .update({
@@ -492,8 +539,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           signature_date: data.signatureDate,
           i9_document_path: i9Path,
           w4_document_path: w4Path,
-          submitted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          i9_submitted_at: i9SubmittedAt || submittedAt,
+          w4_submitted_at: w4SubmittedAt || submittedAt,
+          submitted_at: submittedAt,
+          updated_at: submittedAt,
         })
         .eq("id", packetIdRef.current);
       if (error) throw error;
@@ -601,9 +650,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="md:col-span-3">
                       <Field label="Other last names used" value={data.otherLastNames} onChange={(v) => update("otherLastNames", v)} />
                     </div>
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <Field label="Street address" value={data.address} onChange={(v) => update("address", v)} required />
                     </div>
+                    <Field label="Apartment number" value={data.apartmentNumber} onChange={(v) => update("apartmentNumber", v)} />
                     <Field label="City" value={data.city} onChange={(v) => update("city", v)} required />
                     <Field label="State" value={data.state} onChange={(v) => update("state", v)} required />
                     <Field label="ZIP code" value={data.zip} onChange={(v) => update("zip", v)} required />
@@ -667,9 +717,34 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field label="Qualifying children under 17" type="number" value={data.qualifyingChildren} onChange={(v) => update("qualifyingChildren", v)} />
                     <Field label="Other dependents" type="number" value={data.otherDependents} onChange={(v) => update("otherDependents", v)} />
+                    <Field label="Other credits" type="number" value={data.otherCredits} onChange={(v) => update("otherCredits", v)} />
                     <Field label="Other income" type="number" value={data.otherIncome} onChange={(v) => update("otherIncome", v)} />
                     <Field label="Deductions" type="number" value={data.deductions} onChange={(v) => update("deductions", v)} />
                     <Field label="Extra withholding each pay period" type="number" value={data.extraWithholding} onChange={(v) => update("extraWithholding", v)} />
+                  </div>
+                  <label className="flex items-start gap-3 rounded-xl border p-4">
+                    <Checkbox checked={data.exemptFromWithholding} onCheckedChange={(value) => update("exemptFromWithholding", Boolean(value))} />
+                    <span><span className="block font-medium">I claim exemption from withholding for 2026</span><span className="text-sm text-muted-foreground">Select this only if you meet both IRS exemption conditions described in the official instructions.</span></span>
+                  </label>
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-6">
+                    <div className="mb-5">
+                      <h3 className="font-semibold">Employee signature for Form W-4</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">Sign this W-4 separately. Your signature and date are placed on the official Step 5 signature lines.</p>
+                    </div>
+                    <div className="mb-5 grid gap-5 md:grid-cols-2">
+                      <Field label="W-4 full legal name" value={data.w4SignatureName} onChange={(v) => update("w4SignatureName", v)} required />
+                      <Field label="W-4 signature date" type="date" value={data.w4SignatureDate} onChange={(v) => update("w4SignatureDate", v)} required />
+                    </div>
+                    <SignaturePad value={data.w4SignatureImage} suggestedName={data.w4SignatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("w4SignatureImage", value)} />
+                  </div>
+                  <div className={`rounded-2xl border p-5 ${w4SubmittedAt ? "border-green-200 bg-green-50" : "border-primary/30 bg-card"}`}>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-semibold">{w4SubmittedAt ? "Form W-4 submitted" : `Send Form W-4 to ${data.employerName}`}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{w4SubmittedAt ? `Securely sent ${new Date(w4SubmittedAt).toLocaleString()}. You can update and resubmit it if needed.` : "This submits only your signed W-4. You can continue the remaining onboarding steps afterward."}</p>
+                      </div>
+                      <Button type="button" size="lg" onClick={submitW4} disabled={submittingW4 || saving} className="shrink-0"><FileCheck2 className="mr-2 h-5 w-5" />{submittingW4 ? "Submitting W-4…" : w4SubmittedAt ? "Update submitted W-4" : "Submit Form W-4"}</Button>
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">We Find Guards does not provide tax advice. If you are unsure what to enter, consult the official IRS instructions or a tax professional.</p>
                 </div>

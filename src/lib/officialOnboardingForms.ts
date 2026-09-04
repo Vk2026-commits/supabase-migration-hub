@@ -6,6 +6,7 @@ export type OfficialOnboardingValues = {
   legalLastName: string;
   otherLastNames: string;
   address: string;
+  apartmentNumber: string;
   city: string;
   state: string;
   zip: string;
@@ -22,14 +23,19 @@ export type OfficialOnboardingValues = {
   multipleJobs: boolean;
   qualifyingChildren: string;
   otherDependents: string;
+  otherCredits: string;
   otherIncome: string;
   deductions: string;
   extraWithholding: string;
+  exemptFromWithholding: boolean;
   employerName: string;
   startDate: string;
   signatureName: string;
   signatureDate: string;
   signatureImage: string;
+  w4SignatureName: string;
+  w4SignatureDate: string;
+  w4SignatureImage: string;
 };
 
 const date = (value: string) => {
@@ -111,6 +117,7 @@ export async function buildI9(values: OfficialOnboardingValues, ssn: string) {
     "Employee Middle Initial (if any)": values.middleInitial.slice(0, 1),
     "Employee Other Last Names Used (if any)": values.otherLastNames,
     "Address Street Number and Name": values.address,
+    "Apt Number (if any)": values.apartmentNumber,
     "City or Town": values.city,
     State: values.state.toUpperCase(),
     "ZIP Code": values.zip,
@@ -161,37 +168,39 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
   const document = await load("/forms/W-4_Form_2026.pdf");
   const form = document.getForm();
   const p1 = "topmostSubform[0].Page1[0]";
+  const dependentCredits = values.exemptFromWithholding ? 0 : (Number(values.qualifyingChildren || 0) * 2200) + (Number(values.otherDependents || 0) * 500) + Number(values.otherCredits || 0);
   setText(form, {
     [`${p1}.Step1a[0].f1_01[0]`]: [values.legalFirstName, values.middleInitial].filter(Boolean).join(" "),
     [`${p1}.Step1a[0].f1_02[0]`]: values.legalLastName,
     [`${p1}.Step1a[0].f1_03[0]`]: values.address,
     [`${p1}.Step1a[0].f1_04[0]`]: `${values.city}, ${values.state} ${values.zip}`,
     [`${p1}.f1_05[0]`]: ssn,
-    [`${p1}.Step3_ReadOrder[0].f1_06[0]`]: String((Number(values.qualifyingChildren || 0) * 2200) || ""),
-    [`${p1}.Step3_ReadOrder[0].f1_07[0]`]: String((Number(values.otherDependents || 0) * 500) || ""),
-    [`${p1}.f1_09[0]`]: String((Number(values.qualifyingChildren || 0) * 2200) + (Number(values.otherDependents || 0) * 500) || ""),
-    [`${p1}.f1_10[0]`]: values.otherIncome,
-    [`${p1}.f1_11[0]`]: values.deductions,
-    [`${p1}.f1_12[0]`]: values.extraWithholding,
-    [`${p1}.f1_13[0]`]: values.employerName,
-    [`${p1}.f1_14[0]`]: date(values.startDate),
+    [`${p1}.Step3_ReadOrder[0].f1_06[0]`]: values.exemptFromWithholding ? "" : String((Number(values.qualifyingChildren || 0) * 2200) || ""),
+    [`${p1}.Step3_ReadOrder[0].f1_07[0]`]: values.exemptFromWithholding ? "" : String((Number(values.otherDependents || 0) * 500) || ""),
+    [`${p1}.f1_08[0]`]: String(dependentCredits || ""),
+    [`${p1}.f1_09[0]`]: values.exemptFromWithholding ? "" : values.otherIncome,
+    [`${p1}.f1_10[0]`]: values.exemptFromWithholding ? "" : values.deductions,
+    [`${p1}.f1_11[0]`]: values.exemptFromWithholding ? "" : values.extraWithholding,
   });
   setChecks(form, {
     [`${p1}.c1_1[0]`]: values.filingStatus === "Single or Married filing separately",
     [`${p1}.c1_1[1]`]: values.filingStatus === "Married filing jointly or Qualifying surviving spouse",
     [`${p1}.c1_1[2]`]: values.filingStatus === "Head of household",
-    [`${p1}.c1_2[0]`]: values.multipleJobs,
+    [`${p1}.c1_2[0]`]: !values.exemptFromWithholding && values.multipleJobs,
+    [`${p1}.c1_3[0]`]: values.exemptFromWithholding,
   });
   const page = document.getPages()[0];
-  if (values.signatureImage) {
-    const signature = await document.embedPng(await trimSignature(values.signatureImage));
-    const scale = Math.min(285 / signature.width, 44 / signature.height);
-    page.drawImage(signature, { x: 125, y: 130, width: signature.width * scale, height: signature.height * scale });
-  } else if (values.signatureName) {
+  if (values.w4SignatureImage) {
+    const signature = await document.embedPng(await trimSignature(values.w4SignatureImage));
+    const scale = Math.min(325 / signature.width, 28 / signature.height);
+    const width = signature.width * scale;
+    const height = signature.height * scale;
+    page.drawImage(signature, { x: 105 + (325 - width) / 2, y: 92 + (28 - height) / 2, width, height });
+  } else if (values.w4SignatureName) {
     const font = await document.embedFont(StandardFonts.TimesRomanItalic);
-    page.drawText(values.signatureName, { x: 130, y: 142, size: 14, font, color: rgb(0, 0, 0) });
+    page.drawText(values.w4SignatureName, { x: 110, y: 98, size: 14, font, color: rgb(0, 0, 0) });
   }
-  if (values.signatureDate) page.drawText(date(values.signatureDate), { x: 500, y: 142, size: 10, color: rgb(0, 0, 0) });
+  if (values.w4SignatureDate) page.drawText(date(values.w4SignatureDate), { x: 470, y: 98, size: 10, color: rgb(0, 0, 0) });
   try { form.updateFieldAppearances(await document.embedFont(StandardFonts.Helvetica)); } catch { /* viewer regenerates */ }
   return document.save();
 }

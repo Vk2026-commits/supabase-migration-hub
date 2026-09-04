@@ -85,11 +85,15 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
 
         const onboardingDocuments: ReviewData["onboardingDocuments"] = [];
         if (snapshotResult.data?.id) {
-          const onboardingResult = await (supabase as any).from("officer_onboarding_packets").select("i9_document_path,i9_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle();
+          const onboardingResult = await (supabase as any).from("officer_onboarding_packets").select("i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle();
           if (onboardingResult.error) throw onboardingResult.error;
           if (onboardingResult.data?.i9_document_path && onboardingResult.data?.i9_submitted_at) {
             const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.i9_document_path, 3600);
             if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form I-9", url: signed.data.signedUrl, submittedAt: onboardingResult.data.i9_submitted_at });
+          }
+          if (onboardingResult.data?.w4_document_path && onboardingResult.data?.w4_submitted_at) {
+            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.w4_document_path, 3600);
+            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form W-4", url: signed.data.signedUrl, submittedAt: onboardingResult.data.w4_submitted_at });
           }
         }
 
