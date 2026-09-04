@@ -33,6 +33,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "profile");
   const [formData, setFormData] = useState<CompanyProfileForm>({
     company_name: "",
+    company_address: "",
+    company_address_unit: "",
+    company_city: "",
+    company_state: "",
+    company_zip: "",
     industry: "",
     company_size: "",
     website_url: "",
@@ -78,6 +83,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       setCompanyProfile(data);
       setFormData({
         company_name: data.company_name || "",
+        company_address: data.company_address || "",
+        company_address_unit: data.company_address_unit || "",
+        company_city: data.company_city || "",
+        company_state: data.company_state || "",
+        company_zip: data.company_zip || "",
         industry: data.industry || "",
         company_size: data.company_size || "",
         website_url: data.website_url || "",

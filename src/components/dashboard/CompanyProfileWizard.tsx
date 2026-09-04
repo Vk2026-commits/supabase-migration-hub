@@ -7,9 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { AddressAutocomplete } from "./AddressAutocomplete";
 
 export type CompanyProfileForm = {
   company_name: string;
+  company_address: string;
+  company_address_unit: string;
+  company_city: string;
+  company_state: string;
+  company_zip: string;
   industry: string;
   company_size: string;
   website_url: string;
@@ -62,7 +68,7 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
   const [currentStep, setCurrentStep] = useState(0);
   const update = <K extends keyof CompanyProfileForm>(key: K, value: CompanyProfileForm[K]) => setFormData((current) => ({ ...current, [key]: value }));
   const stepComplete = (step: number) => step === 0
-    ? Boolean(formData.company_name.trim())
+    ? Boolean(formData.company_name.trim() && formData.company_address.trim() && formData.company_city.trim() && formData.company_state.trim() && formData.company_zip.trim())
     : step === 1
       ? Boolean(formData.logo_url || logoFile || formData.website_url.trim())
       : step === 2
@@ -79,7 +85,7 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
   };
   const next = async () => {
     if (!canContinue) {
-      toast.error(currentStep === 0 ? "Enter your company name before continuing" : "Enter the hiring contact name and email before continuing");
+      toast.error(currentStep === 0 ? "Enter the company name and complete address before continuing" : "Enter the hiring contact name and email before continuing");
       return;
     }
     if (await onSave()) go(currentStep + 1);
@@ -129,6 +135,13 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
                 <div className="space-y-2"><Label>Company size</Label><Select value={formData.company_size} onValueChange={(value) => update("company_size", value)}><SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select company size" /></SelectTrigger><SelectContent>{["1-50", "50-100", "100-200", "200-300", "300-400", "400+"].map((value) => <SelectItem key={value} value={value}>{value} employees</SelectItem>)}</SelectContent></Select></div>
                 <div className="space-y-2"><Label>Years in business</Label><Select value={formData.years_in_business} onValueChange={(value) => update("years_in_business", value)}><SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select years in business" /></SelectTrigger><SelectContent><SelectItem value="0-1">Less than 1 year</SelectItem><SelectItem value="1-3">1-3 years</SelectItem><SelectItem value="3-5">3-5 years</SelectItem><SelectItem value="5-10">5-10 years</SelectItem><SelectItem value="10-20">10-20 years</SelectItem><SelectItem value="20+">20+ years</SelectItem></SelectContent></Select></div>
                 <Field label="Year founded" value={formData.year_founded} onChange={(value) => update("year_founded", value)} type="number" placeholder="2005" />
+                <AddressAutocomplete
+                  idPrefix="company_address"
+                  streetLabel="Company street address *"
+                  unitLabel="Suite/Unit"
+                  value={{ street: formData.company_address, unit: formData.company_address_unit, city: formData.company_city, state: formData.company_state, zip: formData.company_zip }}
+                  onChange={(address) => setFormData((current) => ({ ...current, company_address: address.street, company_address_unit: address.unit, company_city: address.city, company_state: address.state, company_zip: address.zip }))}
+                />
               </div>}
 
               {currentStep === 1 && <div className="space-y-7">
@@ -140,7 +153,7 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
 
               {currentStep === 3 && <div className="space-y-7"><div className="grid gap-5 md:grid-cols-2"><Field label="Company license number" value={formData.license_number} onChange={(value) => update("license_number", value)} placeholder="A12345" /><div className="space-y-2"><Label>Licensed states</Label><Input className="h-12 text-base" value={formData.licensed_states.join(", ")} placeholder="TX, CA, FL" onChange={(event) => update("licensed_states", event.target.value.split(",").map((state) => state.trim().toUpperCase()).filter(Boolean))} /><p className="text-xs text-muted-foreground">Enter state abbreviations separated by commas.</p></div></div><div className="space-y-3"><Label className="text-base">Texas security license type(s)</Label>{[["Class A", "Private Investigation Company"], ["Class B", "Security Contractor Company"], ["Class C", "Investigations and Security Contractor Company"]].map(([value, description]) => <label key={value} className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 hover:bg-muted/40"><Checkbox checked={formData.license_types.includes(value)} onCheckedChange={(checked) => update("license_types", checked ? [...formData.license_types, value] : formData.license_types.filter((item) => item !== value))} /><span><span className="block font-semibold">{value}</span><span className="text-sm text-muted-foreground">{description}</span></span></label>)}</div></div>}
 
-              {currentStep === 4 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company profile</p><h3 className="mt-2 text-2xl font-bold">{formData.company_name || "Company name not entered"}</h3><p className="mt-1 text-muted-foreground">{formData.industry || "Security services"}{formData.licensed_states.length ? ` · Licensed in ${formData.licensed_states.join(", ")}` : ""}</p></div><div className="grid gap-4 sm:grid-cols-2"><Review label="Hiring contact" value={formData.contact_person_name || "Not entered"} /><Review label="Contact email" value={formData.contact_email || "Not entered"} /><Review label="Company phone" value={formData.company_phone || "Not entered"} /><Review label="License number" value={formData.license_number || "Not entered"} /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Profile progress</p><p className="mt-1 text-muted-foreground">{completedCount} of {steps.length} sections ready. You can return anytime to update these details.</p></div></div>}
+              {currentStep === 4 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company profile</p><h3 className="mt-2 text-2xl font-bold">{formData.company_name || "Company name not entered"}</h3><p className="mt-1 text-muted-foreground">{formData.industry || "Security services"}{formData.licensed_states.length ? ` · Licensed in ${formData.licensed_states.join(", ")}` : ""}</p></div><div className="grid gap-4 sm:grid-cols-2"><Review label="Company address" value={[formData.company_address, formData.company_address_unit, formData.company_city, formData.company_state, formData.company_zip].filter(Boolean).join(", ") || "Not entered"} /><Review label="Hiring contact" value={formData.contact_person_name || "Not entered"} /><Review label="Contact email" value={formData.contact_email || "Not entered"} /><Review label="Company phone" value={formData.company_phone || "Not entered"} /><Review label="License number" value={formData.license_number || "Not entered"} /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Profile progress</p><p className="mt-1 text-muted-foreground">{completedCount} of {steps.length} sections ready. You can return anytime to update these details.</p></div></div>}
             </CardContent>
           </Card>
 

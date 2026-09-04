@@ -42,6 +42,9 @@ type PhotonFeature = {
 interface AddressAutocompleteProps {
   value: AddressValue;
   onChange: (nextValue: AddressValue) => void;
+  streetLabel?: string;
+  unitLabel?: string;
+  idPrefix?: string;
 }
 
 const US_STATES = [
@@ -78,7 +81,7 @@ const buildSuggestion = (feature: PhotonFeature, index: number): AddressSuggesti
   };
 };
 
-export const AddressAutocomplete = ({ value, onChange }: AddressAutocompleteProps) => {
+export const AddressAutocomplete = ({ value, onChange, streetLabel = "Home Address", unitLabel = "Apt/Unit", idPrefix = "address" }: AddressAutocompleteProps) => {
   const [activeField, setActiveField] = useState<"street" | "city" | "state" | null>(null);
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -197,9 +200,9 @@ export const AddressAutocomplete = ({ value, onChange }: AddressAutocompleteProp
   return (
     <div ref={containerRef} className="contents">
       <div className="relative space-y-2 md:col-span-2">
-        <Label htmlFor="address_street">Home Address</Label>
+        <Label htmlFor={`${idPrefix}_street`}>{streetLabel}</Label>
         <Input
-          id="address_street"
+          id={`${idPrefix}_street`}
           autoComplete="street-address"
           placeholder="Start typing your street address"
           value={value.street}
@@ -214,9 +217,9 @@ export const AddressAutocomplete = ({ value, onChange }: AddressAutocompleteProp
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="address_unit">Apt/Unit</Label>
+        <Label htmlFor={`${idPrefix}_unit`}>{unitLabel}</Label>
         <Input
-          id="address_unit"
+          id={`${idPrefix}_unit`}
           autoComplete="address-line2"
           placeholder="Apt, Unit, etc."
           value={value.unit}
@@ -225,9 +228,9 @@ export const AddressAutocomplete = ({ value, onChange }: AddressAutocompleteProp
       </div>
 
       <div className="relative space-y-2">
-        <Label htmlFor="address_city">City</Label>
+        <Label htmlFor={`${idPrefix}_city`}>City</Label>
         <Input
-          id="address_city"
+          id={`${idPrefix}_city`}
           autoComplete="address-level2"
           placeholder="Start typing a city"
           value={value.city}
@@ -241,9 +244,9 @@ export const AddressAutocomplete = ({ value, onChange }: AddressAutocompleteProp
       </div>
 
       <div className="relative space-y-2">
-        <Label htmlFor="address_state">State</Label>
+        <Label htmlFor={`${idPrefix}_state`}>State</Label>
         <Input
-          id="address_state"
+          id={`${idPrefix}_state`}
           autoComplete="address-level1"
           placeholder="Start typing a state"
           value={value.state}
@@ -257,9 +260,9 @@ export const AddressAutocomplete = ({ value, onChange }: AddressAutocompleteProp
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="address_zip">ZIP Code</Label>
+        <Label htmlFor={`${idPrefix}_zip`}>ZIP Code</Label>
         <Input
-          id="address_zip"
+          id={`${idPrefix}_zip`}
           autoComplete="postal-code"
           inputMode="numeric"
           placeholder="ZIP Code"
