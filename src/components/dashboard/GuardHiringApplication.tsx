@@ -168,9 +168,17 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
           masterIdRef.current = data.id;
           setMasterId(data.id);
         }
-        await syncShared(syncManagementRecords);
         setSaveError(null);
         setSavedAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+        // The master application is the durable source for an in-progress draft.
+        // Keep the convenience sync to the management tabs best-effort so an
+        // unrelated profile or work-history error cannot trap the applicant on
+        // the current step after their draft has already been saved.
+        try {
+          await syncShared(syncManagementRecords);
+        } catch (syncError) {
+          console.warn("Draft saved, but management record sync will be retried", syncError);
+        }
         return true;
       } catch (error: any) {
         console.error("Draft save failed", error);
