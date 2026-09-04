@@ -388,9 +388,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       toast.success(`${side === "front" ? "Front" : "Back"} document selected. Save the license to upload.`);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-
+    const handleSubmit = async () => {
       if (!formData.certification_number) {
         toast.error("License number is required");
         return;
@@ -438,11 +436,19 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         // Upload pending documents after saving
         if (pendingUploads.front) {
           const frontUrl = await uploadDocument(pendingUploads.front, certId, "front");
-          await supabase.from("certifications").update({ document_front_url: frontUrl }).eq("id", certId);
+          const { error: frontUpdateError } = await supabase
+            .from("certifications")
+            .update({ document_front_url: frontUrl })
+            .eq("id", certId);
+          if (frontUpdateError) throw frontUpdateError;
         }
         if (pendingUploads.back) {
           const backUrl = await uploadDocument(pendingUploads.back, certId, "back");
-          await supabase.from("certifications").update({ document_back_url: backUrl }).eq("id", certId);
+          const { error: backUpdateError } = await supabase
+            .from("certifications")
+            .update({ document_back_url: backUrl })
+            .eq("id", certId);
+          if (backUpdateError) throw backUpdateError;
         }
 
         toast.success("License saved successfully");
@@ -460,7 +466,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
           <CardDescription>Enter license details and upload license document</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor={`${licenseLevel}-number`}>License Number *</Label>
               <Input
@@ -594,10 +600,10 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               </div>
             </div>
 
-            <Button type="submit" className="w-full">
+            <Button type="button" className="w-full" onClick={handleSubmit}>
               {existingLicense ? "Update License" : "Save License"}
             </Button>
-          </form>
+          </div>
         </CardContent>
       </Card>
     );
@@ -757,7 +763,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               />
             </div>
 
-            <Button onClick={addTraining} className="w-full">
+            <Button type="button" onClick={addTraining} className="w-full">
               <Plus className="mr-2 h-4 w-4" />
               Add Training
             </Button>
@@ -816,6 +822,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                         </div>
                       </div>
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
                         onClick={() => deleteCertification(training.id)}
@@ -852,6 +859,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                                   />
                                   <div className="absolute top-2 right-2 flex gap-1">
                                     <Button
+                                      type="button"
                                       variant="secondary"
                                       size="icon"
                                       onClick={() => handleDownload(displayUrl, `${training.name}-${side}.${hasDocument.split('.').pop()}`)}
@@ -859,6 +867,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                                       <Download className="h-4 w-4" />
                                     </Button>
                                     <Button
+                                      type="button"
                                       variant="destructive"
                                       size="icon"
                                       onClick={() =>
@@ -895,6 +904,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                                 className="hidden"
                               />
                               <Button
+                                type="button"
                                 variant="outline"
                                 size="sm"
                                 className="w-full"
