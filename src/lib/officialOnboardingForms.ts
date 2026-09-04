@@ -29,6 +29,7 @@ export type OfficialOnboardingValues = {
   startDate: string;
   signatureName: string;
   signatureDate: string;
+  signatureImage: string;
 };
 
 const date = (value: string) => {
@@ -86,17 +87,24 @@ export async function buildI9(values: OfficialOnboardingValues, ssn: string) {
     CB_3: status === "Lawful permanent resident",
     CB_4: status === "Authorized to work until a specified date",
   });
-  if (values.signatureName) {
+  if (values.signatureImage || values.signatureName) {
     try {
       const signature = form.getField("Signature of Employee") as any;
-      const font = await document.embedFont(StandardFonts.TimesRomanItalic);
+      const font = values.signatureImage ? null : await document.embedFont(StandardFonts.TimesRomanItalic);
+      const signatureImage = values.signatureImage ? await document.embedPng(values.signatureImage) : null;
       for (const widget of signature.acroField.getWidgets()) {
         const rect = widget.getRectangle();
         const pageRef = widget.P();
         const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
-        let size = Math.min(14, Math.max(7, rect.height - 3));
-        while (size > 5 && font.widthOfTextAtSize(values.signatureName, size) > rect.width - 6) size -= 0.5;
-        page.drawText(values.signatureName, { x: rect.x + 3, y: rect.y + Math.max(2, (rect.height - size) / 2), size, font, color: rgb(0, 0, 0) });
+        if (signatureImage) {
+          const scale = Math.min((rect.width - 6) / signatureImage.width, (rect.height - 4) / signatureImage.height);
+          const width = signatureImage.width * scale; const height = signatureImage.height * scale;
+          page.drawImage(signatureImage, { x: rect.x + 3, y: rect.y + (rect.height - height) / 2, width, height });
+        } else if (font) {
+          let size = Math.min(14, Math.max(7, rect.height - 3));
+          while (size > 5 && font.widthOfTextAtSize(values.signatureName, size) > rect.width - 6) size -= 0.5;
+          page.drawText(values.signatureName, { x: rect.x + 3, y: rect.y + Math.max(2, (rect.height - size) / 2), size, font, color: rgb(0, 0, 0) });
+        }
       }
     } catch { /* signature widget differs between editions */ }
   }
@@ -130,8 +138,14 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
     [`${p1}.c1_2[0]`]: values.multipleJobs,
   });
   const page = document.getPages()[0];
-  const font = await document.embedFont(StandardFonts.TimesRomanItalic);
-  if (values.signatureName) page.drawText(values.signatureName, { x: 130, y: 142, size: 14, font, color: rgb(0, 0, 0) });
+  if (values.signatureImage) {
+    const signature = await document.embedPng(values.signatureImage);
+    const scale = Math.min(240 / signature.width, 30 / signature.height);
+    page.drawImage(signature, { x: 130, y: 137, width: signature.width * scale, height: signature.height * scale });
+  } else if (values.signatureName) {
+    const font = await document.embedFont(StandardFonts.TimesRomanItalic);
+    page.drawText(values.signatureName, { x: 130, y: 142, size: 14, font, color: rgb(0, 0, 0) });
+  }
   if (values.signatureDate) page.drawText(date(values.signatureDate), { x: 500, y: 142, size: 10, color: rgb(0, 0, 0) });
   try { form.updateFieldAppearances(await document.embedFont(StandardFonts.Helvetica)); } catch { /* viewer regenerates */ }
   return document.save();
