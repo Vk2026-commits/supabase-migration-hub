@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@/lib/router-compat";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Lock, User, MessageCircle } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
+import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -15,11 +15,11 @@ interface JobApplicantsProps {
 }
 
 const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions }: JobApplicantsProps) => {
-  const navigate = useNavigate();
   const [applications, setApplications] = useState<any[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
   const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [reviewApplication, setReviewApplication] = useState<any>(null);
 
   useEffect(() => {
     loadApplications();
@@ -140,12 +140,9 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                   <div className="flex gap-2 mt-3">
                     <Button 
                       size="sm"
-                      onClick={() => {
-                        // Navigate to browse page to view the officer's profile
-                        navigate(`/browse?officer=${app.officer.id}`);
-                      }}
+                      onClick={() => setReviewApplication(app)}
                     >
-                      View Profile
+                      Review Full Application
                     </Button>
                     <Button 
                       size="sm" 
@@ -194,6 +191,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           currentUserType="company"
         />
       )}
+      <ApplicantReviewDialog open={Boolean(reviewApplication)} onOpenChange={(open) => !open && setReviewApplication(null)} application={reviewApplication} />
     </Card>
   );
 };
