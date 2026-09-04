@@ -86,6 +86,7 @@ type OnboardingData = {
 };
 
 type PolicyAcknowledgement = {
+  viewedAt: string;
   printedName: string;
   employeeTitle: string;
   signatureDate: string;
@@ -500,6 +501,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     if (!item) return;
     const [key, title, path] = item;
     const acknowledgement = data.policyAcknowledgements[key] || {
+      viewedAt: "",
       printedName: [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" "),
       employeeTitle: data.offeredPosition || "Security Officer",
       signatureDate: new Date().toISOString().slice(0, 10),
@@ -524,7 +526,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
 
   const policiesComplete = policyItems.every(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
-    return Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+    return Boolean(data.policies[key] && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   });
   const i9AuthorizationComplete = data.citizenshipStatus !== "Authorized to work until a specified date" || Boolean(data.workAuthorizationExpiration && (data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)));
   const bankAccountsComplete = savedBankAccounts.length > 0 || (bankAccounts.length > 0 && bankAccounts.every((account, index) => Boolean(
@@ -700,7 +702,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const progress = Math.round(((currentStep + 1) / steps.length) * 100);
   const completedPolicyCount = policyItems.filter(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
-    return Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+    return Boolean(data.policies[key] && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   }).length;
   const openPolicy = (key: string) => {
     setActivePolicyKey((current) => current === key ? null : key);
@@ -709,6 +711,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       policyAcknowledgements: {
         ...current.policyAcknowledgements,
         [key]: {
+          viewedAt: "",
           printedName: [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
           employeeTitle: current.offeredPosition || "Security Officer",
           signatureDate: new Date().toISOString().slice(0, 10),
@@ -736,6 +739,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   };
   const savePolicyAcknowledgement = (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
+    if (!acknowledgement?.viewedAt) {
+      toast.error("Open and review the document before signing and saving it");
+      return;
+    }
     if (!acknowledgement?.accepted || !acknowledgement.printedName || !acknowledgement.signatureDate || !acknowledgement.signatureImage) {
       toast.error("Accept the document, add your name and date, and sign before saving");
       return;
@@ -1054,7 +1061,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   {policyItems.map(([key, label, document], index) => {
                     const acknowledgement = data.policyAcknowledgements[key];
                     const expanded = activePolicyKey === key;
-                    const completed = Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+                    const viewed = Boolean(acknowledgement?.viewedAt);
+                    const completed = Boolean(data.policies[key] && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
                       <div key={key} className={`overflow-hidden rounded-2xl border transition-colors ${completed ? "border-green-300 bg-green-50/50" : expanded ? "border-primary/40" : ""}`}>
                         <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
@@ -1069,23 +1077,32 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                         </div>
                         {expanded && acknowledgement && (
                           <div className="space-y-6 border-t bg-background p-4 sm:p-6">
-                            <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Fill and verify this document here.</strong> Existing profile information is added automatically, and the preview refreshes inside this same card.</div>
-                            <div className="grid gap-5 md:grid-cols-2">
-                              <Field label="Employee legal name" value={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { printedName: value })} required />
-                              <Field label="Position or title" value={acknowledgement.employeeTitle} onChange={(value) => updatePolicyAcknowledgement(key, { employeeTitle: value })} required />
-                              <Field label="Date signed" type="date" value={acknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(key, { signatureDate: value })} required />
-                              <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
+                            <div className={`rounded-xl border p-4 text-sm ${viewed ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                              <strong>{viewed ? "Document viewed." : "Step 1: View the document."}</strong> {viewed ? "You may now complete the acknowledgment and signature below." : "Open the document preview before the acknowledgment and signature are unlocked."}
                             </div>
-                            <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
-                              <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
-                              <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
-                            </label>
-                            <SignaturePad value={acknowledgement.signatureImage} suggestedName={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { signatureImage: value })} />
-                            <div className={`rounded-xl border p-4 text-sm ${policyPreview?.key === key ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                              <strong>{policyPreview?.key === key ? "Preview verified:" : "Updating preview:"}</strong> {policyPreview?.key === key ? "the PDF below contains your latest information and signature." : "wait a moment for your latest changes to appear before saving."}
-                            </div>
-                            <OfficialDocument title={label} url={policyPreview?.key === key ? policyPreview.url : document} autoFilled initialPage={policyPreview?.key === key ? policyPreview.page : 1} />
-                            <Button type="button" size="lg" className="w-full" disabled={policyPreview?.key !== key} onClick={() => savePolicyAcknowledgement(key)}><FileCheck2 className="mr-2 h-5 w-5" />{completed ? "Update saved document" : "Verify and save document"}</Button>
+                            <OfficialDocument title={label} url={policyPreview?.key === key ? policyPreview.url : document} autoFilled initialPage={policyPreview?.key === key ? policyPreview.page : 1} viewed={viewed} onViewed={() => {
+                              if (!acknowledgement.viewedAt) updatePolicyAcknowledgement(key, { viewedAt: new Date().toISOString() });
+                            }} />
+                            {viewed && (
+                              <div className="space-y-6">
+                                <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Step 2: Complete and sign.</strong> Existing profile information is added automatically, and the preview refreshes inside this same card.</div>
+                                <div className="grid gap-5 md:grid-cols-2">
+                                  <Field label="Employee legal name" value={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { printedName: value })} required />
+                                  <Field label="Position or title" value={acknowledgement.employeeTitle} onChange={(value) => updatePolicyAcknowledgement(key, { employeeTitle: value })} required />
+                                  <Field label="Date signed" type="date" value={acknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(key, { signatureDate: value })} required />
+                                  <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
+                                </div>
+                                <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
+                                  <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
+                                  <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
+                                </label>
+                                <SignaturePad value={acknowledgement.signatureImage} suggestedName={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { signatureImage: value })} />
+                                <div className={`rounded-xl border p-4 text-sm ${policyPreview?.key === key ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                                  <strong>{policyPreview?.key === key ? "Preview verified:" : "Updating preview:"}</strong> {policyPreview?.key === key ? "the PDF contains your latest information and signature." : "wait a moment for your latest changes to appear before saving."}
+                                </div>
+                                <Button type="button" size="lg" className="w-full" disabled={policyPreview?.key !== key} onClick={() => savePolicyAcknowledgement(key)}><FileCheck2 className="mr-2 h-5 w-5" />{completed ? "Update saved document" : "Verify and save document"}</Button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1286,7 +1303,7 @@ function SignaturePad({ value, suggestedName, onChange }: { value: string; sugge
   );
 }
 
-function OfficialDocument({ title, url, autoFilled = false, initialPage = 1 }: { title: string; url: string; autoFilled?: boolean; initialPage?: number }) {
+function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, viewed = false, onViewed }: { title: string; url: string; autoFilled?: boolean; initialPage?: number; viewed?: boolean; onViewed?: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const updatesFromAnswers = autoFilled || title.startsWith("Official Form");
   const helpText = updatesFromAnswers ? "Your answers automatically update this official PDF. You can preview it at any time." : "Review this document here without leaving your onboarding application.";
@@ -1308,12 +1325,15 @@ function OfficialDocument({ title, url, autoFilled = false, initialPage = 1 }: {
           </div>
         </div>
         <div className="hidden shrink-0 md:block">
-          <Button type="button" variant="outline" onClick={() => setExpanded((value) => !value)}>
+          <Button type="button" variant="outline" onClick={() => setExpanded((value) => {
+            if (!value) onViewed?.();
+            return !value;
+          })}>
             {expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
             {expanded ? "Hide document" : "Preview document"}
           </Button>
         </div>
-        <Dialog>
+        <Dialog onOpenChange={(open) => { if (open) onViewed?.(); }}>
           <DialogTrigger asChild>
             <Button type="button" className="w-full md:hidden">
               <Maximize2 className="mr-2 h-4 w-4" />
@@ -1329,6 +1349,7 @@ function OfficialDocument({ title, url, autoFilled = false, initialPage = 1 }: {
           </DialogContent>
         </Dialog>
       </div>
+      {onViewed && <div className={`border-t px-4 py-2 text-xs font-semibold ${viewed ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"}`}>{viewed ? "Viewed — acknowledgment unlocked" : "Open this document to unlock the acknowledgment"}</div>}
       {expanded && (
         <div className="hidden border-t md:block">
           <iframe key={url} title={title} src={previewUrl} className="h-[min(760px,75vh)] w-full bg-white" />
