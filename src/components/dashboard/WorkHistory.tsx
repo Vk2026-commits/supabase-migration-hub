@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Briefcase, Plus, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface WorkHistoryProps {
   officerId: string;
@@ -231,25 +232,9 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="start_date">Start Date</Label>
-              <Input
-                id="start_date"
-                type="date"
-                value={currentEntry.start_date}
-                onChange={(e) => setCurrentEntry({ ...currentEntry, start_date: e.target.value })}
-              />
-            </div>
+            <DatePicker id="start_date" label="Start Date" value={currentEntry.start_date} onChange={(start_date) => setCurrentEntry({ ...currentEntry, start_date })} />
 
-            <div className="space-y-2">
-              <Label htmlFor="end_date">End Date</Label>
-              <Input
-                id="end_date"
-                type="date"
-                value={currentEntry.end_date}
-                onChange={(e) => setCurrentEntry({ ...currentEntry, end_date: e.target.value })}
-              />
-            </div>
+            <DatePicker id="end_date" label="End Date" value={currentEntry.end_date} onChange={(end_date) => setCurrentEntry({ ...currentEntry, end_date })} />
 
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="company_address">Company Address</Label>

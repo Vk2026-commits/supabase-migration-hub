@@ -8,12 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { CalendarDays, Plus, Trash2, Upload, FileText, X, Download } from "lucide-react";
+import { Plus, Trash2, Upload, FileText, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
-import { format, isValid, parseISO } from "date-fns";
+import { DatePicker, parseDateValue } from "@/components/ui/date-picker";
 
 export interface Certification {
   id: string;
@@ -68,18 +65,9 @@ const TRAINING_CERTIFICATIONS = [
   "CCTV Operations",
 ];
 
-const firstCalendarMonth = new Date(1950, 0, 1);
-const lastCalendarMonth = new Date(new Date().getFullYear() + 30, 11, 31);
-
-function parseStoredDate(value?: string) {
-  if (!value) return undefined;
-  const date = parseISO(value);
-  return isValid(date) ? date : undefined;
-}
-
 function validateCertificationDates(issueDate: string, expiryDate: string) {
-  const issue = parseStoredDate(issueDate);
-  const expiry = parseStoredDate(expiryDate);
+  const issue = parseDateValue(issueDate);
+  const expiry = parseDateValue(expiryDate);
 
   if (issueDate && !issue) return "Select a valid certification date.";
   if (expiryDate && !expiry) return "Select a valid expiration date.";
@@ -87,63 +75,6 @@ function validateCertificationDates(issueDate: string, expiryDate: string) {
     return "The expiration date must be after the certification date.";
   }
   return null;
-}
-
-function CertificationDatePicker({
-  id,
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  const selectedDate = parseStoredDate(value);
-
-  return (
-    <div className="min-w-0 space-y-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            type="button"
-            variant="outline"
-            className={cn(
-              "h-12 min-w-0 w-full justify-start overflow-hidden text-left text-base font-normal",
-              !selectedDate && "text-muted-foreground",
-            )}
-          >
-            <CalendarDays className="mr-2 h-4 w-4 shrink-0" />
-            <span className="min-w-0 truncate">{selectedDate ? format(selectedDate, "MMM d, yyyy") : placeholder}</span>
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
-          <Calendar
-            mode="single"
-            selected={selectedDate}
-            defaultMonth={selectedDate || new Date()}
-            onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
-            captionLayout="dropdown"
-            startMonth={firstCalendarMonth}
-            endMonth={lastCalendarMonth}
-            className="[--cell-size:2.5rem]"
-          />
-          {value && (
-            <div className="border-t p-2">
-              <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => onChange("")}>
-                Clear date
-              </Button>
-            </div>
-          )}
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
 }
 
 export function CertificationsManager({ officerId, userId, onEnsureProfile, onChanged }: CertificationsManagerProps) {
@@ -154,6 +85,21 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [licenseForms, setLicenseForms] = useState<Record<string, LicenseFormData>>({});
   const [pendingLicenseUploads, setPendingLicenseUploads] = useState<Record<string, PendingLicenseUploads>>({});
+  const licenseDraftKey = `wfg-license-drafts:${userId}:${currentOfficerId || officerId || "pending"}`;
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(licenseDraftKey);
+      if (stored) setLicenseForms(JSON.parse(stored));
+    } catch (error) {
+      console.warn("Could not restore license drafts", error);
+    }
+  }, [licenseDraftKey]);
+
+  useEffect(() => {
+    if (!Object.keys(licenseForms).length) return;
+    window.localStorage.setItem(licenseDraftKey, JSON.stringify(licenseForms));
+  }, [licenseDraftKey, licenseForms]);
 
   useEffect(() => {
     if (officerId) {
@@ -247,6 +193,20 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
 
       if (error) throw error;
       setCertifications((data || []) as Certification[]);
+      setLicenseForms((current) => {
+        const next = { ...current };
+        for (const certification of (data || []) as Certification[]) {
+          if (certification.certification_type !== "license" || !certification.license_level) continue;
+          if (!next[certification.license_level]) {
+            next[certification.license_level] = {
+              certification_number: certification.certification_number || "",
+              issue_date: certification.issue_date || "",
+              expiry_date: certification.expiry_date || "",
+            };
+          }
+        }
+        return next;
+      });
       onChanged?.((data || []) as Certification[]);
       
       // Generate signed URLs for all documents
@@ -394,7 +354,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
     }
   };
 
-  const LicenseForm = ({ licenseLevel, label }: { licenseLevel: string; label: string }) => {
+  const renderLicenseForm = (licenseLevel: string, label: string) => {
     const existingLicense = certifications.find(
       (c) => c.license_level === licenseLevel && c.certification_type === "license"
     );
@@ -514,14 +474,14 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
             </div>
 
             <div className="grid min-w-0 gap-4">
-              <CertificationDatePicker
+              <DatePicker
                 id={`${licenseLevel}-issue`}
                 label="Certification Date"
                 value={formData.issue_date}
                 onChange={(issue_date) => setFormData({ ...formData, issue_date })}
                 placeholder="Choose certification date"
               />
-              <CertificationDatePicker
+              <DatePicker
                 id={`${licenseLevel}-expiry`}
                 label="Expiration Date"
                 value={formData.expiry_date}
@@ -768,14 +728,14 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <CertificationDatePicker
+              <DatePicker
                 id="training-issue"
                 label="Issue Date"
                 value={newTraining.issue_date}
                 onChange={(issue_date) => setNewTraining({ ...newTraining, issue_date })}
                 placeholder="Choose issue date"
               />
-              <CertificationDatePicker
+              <DatePicker
                 id="training-expiry"
                 label="Expiration Date"
                 value={newTraining.expiry_date}
@@ -973,21 +933,15 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       </TabsList>
 
       <TabsContent value="level-ii" className="space-y-4">
-        <LicenseForm
-          licenseLevel="level-ii"
-          label="Non-Commission Certificate or License"
-        />
+        {renderLicenseForm("level-ii", "Non-Commission Certificate or License")}
       </TabsContent>
 
       <TabsContent value="level-iii" className="space-y-4">
-        <LicenseForm
-          licenseLevel="level-iii"
-          label="Commission Certificate or License"
-        />
+        {renderLicenseForm("level-iii", "Commission Certificate or License")}
       </TabsContent>
 
       <TabsContent value="level-iv" className="space-y-4">
-        <LicenseForm licenseLevel="level-iv" label="Personal Protection Officer (Bodyguard)" />
+        {renderLicenseForm("level-iv", "Personal Protection Officer (Bodyguard)")}
       </TabsContent>
 
       <TabsContent value="training" className="space-y-4">

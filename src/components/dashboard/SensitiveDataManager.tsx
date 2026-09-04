@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Shield, Lock, CheckCircle, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const US_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -293,15 +294,7 @@ export default function SensitiveDataManager() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="license-expiry">Expiration Date (Optional)</Label>
-                <Input
-                  id="license-expiry"
-                  type="date"
-                  value={licenseExpiry}
-                  onChange={(e) => setLicenseExpiry(e.target.value)}
-                />
-              </div>
+              <DatePicker id="license-expiry" label="Expiration Date (Optional)" value={licenseExpiry} onChange={setLicenseExpiry} />
               <Button onClick={saveDriversLicense} disabled={loading || !licenseNumber || !licenseState}>
                 Save Driver's License Securely
               </Button>

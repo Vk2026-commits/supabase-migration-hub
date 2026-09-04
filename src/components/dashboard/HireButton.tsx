@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Briefcase } from "lucide-react";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface HireButtonProps {
   officerId: string;
@@ -74,15 +75,7 @@ const HireButton = ({ officerId, officerName, companyId }: HireButtonProps) => {
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="hire-date">Hire Date</Label>
-            <Input
-              id="hire-date"
-              type="date"
-              value={hireDate}
-              onChange={(e) => setHireDate(e.target.value)}
-            />
-          </div>
+          <DatePicker id="hire-date" label="Hire Date" value={hireDate} onChange={setHireDate} />
           <div className="space-y-2">
             <Label htmlFor="position">Position Title</Label>
             <Input

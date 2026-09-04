@@ -13,6 +13,7 @@ import { AddressAutocomplete } from "./AddressAutocomplete";
 import { OfficerPhotos } from "./OfficerPhotos";
 import { CertificationsManager, type Certification } from "./CertificationsManager";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface Props {
   userId: string;
@@ -51,7 +52,13 @@ const initialForm: GuardApplicationData = {
   signature: "", signatureDate: new Date().toISOString().slice(0, 10),
 };
 
-const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => <div className="space-y-2"><Label>{label}{required ? " *" : ""}</Label><Input className="h-12 text-base" type={type} value={value} onChange={e => onChange(e.target.value)} /></div>;
+const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => {
+  const id = `application-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  if (type === "date") {
+    return <DatePicker id={id} label={label} value={value} onChange={onChange} required={required} />;
+  }
+  return <div className="space-y-2"><Label htmlFor={id}>{label}{required ? " *" : ""}</Label><Input id={id} className="h-12 text-base" type={type} value={value} onChange={e => onChange(e.target.value)} /></div>;
+};
 const YesNo = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <div className="space-y-3"><Label>{label} *</Label><RadioGroup value={value} onValueChange={onChange} className="flex gap-8">{["Yes", "No"].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`${label}-${v}`} /><Label htmlFor={`${label}-${v}`}>{v}</Label></div>)}</RadioGroup></div>;
 
 export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureProfile }: Props) {
@@ -219,7 +226,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setCurrentStep(nextStep);
     requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
   };
-  const next = async () => { if (!stepComplete(currentStep)) { toast.error(currentStep === 7 ? "Upload your headshot and full-body photo" : currentStep === 8 ? "Add a license or certification and upload its front document" : "Complete the required fields before continuing"); return; } await go(currentStep + 1); };
+  const next = async () => {
+    // Photo and certification uploads are required before final submission, but
+    // applicants may continue and return to those steps later.
+    if (![7, 8].includes(currentStep) && !stepComplete(currentStep)) {
+      toast.error("Complete the required fields before continuing");
+      return;
+    }
+    await go(currentStep + 1);
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); if (!complete || !activeOfficerId) { toast.error("Complete every required onboarding item before submitting"); return; }
