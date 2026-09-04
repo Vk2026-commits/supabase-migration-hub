@@ -23,6 +23,7 @@ import { OfficerSidebar } from "./OfficerSidebar";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { GuardHiringApplication } from "./GuardHiringApplication";
+import { OfficerEmployeeOnboarding } from "./OfficerEmployeeOnboarding";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -73,6 +74,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [workHistoryCount, setWorkHistoryCount] = useState(0);
   const [videoInterviewCount, setVideoInterviewCount] = useState(0);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
+  const [employeeOnboardingSubmitted, setEmployeeOnboardingSubmitted] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
   const choseInitialExperience = useRef(false);
@@ -193,13 +195,14 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
           supabase.from("video_interviews").select("id", { count: 'exact', head: true }).eq("officer_id", data.id),
           (supabase as any).from("guard_hiring_applications").select("status").eq("officer_id", data.id).eq("application_type", "master").maybeSingle(),
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
+          (supabase as any).from("officer_onboarding_packets").select("status").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
         
         setCertCount(certsResult.count || 0);
@@ -208,6 +211,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setVideoInterviewCount(videosResult.count || 0);
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
         setApplicationSubmitted(applicationResult.data?.status === "submitted");
+        setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
         setPhotoCount(photoNames.length);
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
@@ -354,10 +358,12 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
     photos: requiredPhotosComplete,
     certifications: certificationDocumentComplete,
     workHistory: workHistoryCount > 0,
+    employeeOnboarding: employeeOnboardingSubmitted,
   };
 
   const onboardingItems = [
     { label: "Submit hiring application", complete: applicationSubmitted, tab: "hiring-application" },
+    { label: "Complete employee onboarding after hire", complete: employeeOnboardingSubmitted, tab: "employee-onboarding" },
     { label: "Set availability", complete: completionStatus.availability, tab: "availability" },
     { label: "Add headshot and full-body photo", complete: requiredPhotosComplete, tab: "photos" },
     { label: "Upload a certification front document", complete: certificationDocumentComplete, tab: "certifications" },
@@ -385,7 +391,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             <div className="mb-4">
               <SidebarTrigger />
             </div>
-            <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" || guidedSections[activeTab] ? "sr-only" : ""}`}>
+            <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" || activeTab === "employee-onboarding" || guidedSections[activeTab] ? "sr-only" : ""}`}>
               Welcome, {profile?.full_name || profile?.email}
             </h1>
 
@@ -925,6 +931,15 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
             {activeTab === "hiring-application" && (
               <GuardHiringApplication
+                userId={userId}
+                officerId={officerProfile?.id || null}
+                onEnsureProfile={ensureOfficerProfile}
+                onChanged={loadProfile}
+              />
+            )}
+
+            {activeTab === "employee-onboarding" && (
+              <OfficerEmployeeOnboarding
                 userId={userId}
                 officerId={officerProfile?.id || null}
                 onEnsureProfile={ensureOfficerProfile}

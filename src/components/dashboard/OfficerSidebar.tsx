@@ -1,5 +1,5 @@
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList } from "lucide-react";
+import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck } from "lucide-react";
 
 interface OfficerSidebarProps {
   activeTab: string;
@@ -10,6 +10,7 @@ interface OfficerSidebarProps {
     photos: boolean;
     certifications: boolean;
     workHistory: boolean;
+    employeeOnboarding?: boolean;
     messages?: boolean;
   };
 }
@@ -19,6 +20,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
 
   const items = [
     { title: "Hiring Application", value: "hiring-application", icon: ClipboardList },
+    { title: "Employee Onboarding", value: "employee-onboarding", icon: ClipboardCheck },
     { title: "Profile", value: "profile", icon: User },
     { title: "Availability", value: "availability", icon: Clock },
     { title: "Photos", value: "photos", icon: Images },
@@ -34,11 +36,12 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
     if (value === 'hiring-application') {
       return activeTab === value ? "font-semibold bg-primary text-primary-foreground hover:bg-primary/90" : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
     }
-    if (value === 'messages' || value === 'find-jobs' || value === 'videos') {
+    if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'employee-onboarding') {
       return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
     }
     
-    const isComplete = completionStatus?.[value as keyof typeof completionStatus];
+    const completionKey = value === "employee-onboarding" ? "employeeOnboarding" : value;
+    const isComplete = completionStatus?.[completionKey as keyof typeof completionStatus];
     const baseClasses = activeTab === value ? "font-medium" : "hover:bg-muted/50";
     const statusColor = isComplete ? "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20" : "bg-red-500/10 text-red-600 hover:bg-red-500/20";
     return `${baseClasses} ${statusColor}`;
@@ -46,7 +49,8 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
 
   const isTabComplete = (value: string) => {
     if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'hiring-application') return false;
-    return completionStatus?.[value as keyof typeof completionStatus];
+    const completionKey = value === "employee-onboarding" ? "employeeOnboarding" : value;
+    return completionStatus?.[completionKey as keyof typeof completionStatus];
   };
 
   return (
@@ -67,7 +71,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
                   >
                     <div className="flex w-full items-center gap-2">
                       <item.icon className="h-4 w-4 shrink-0" />
-                      {open && <span className="flex-1 text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide group-data-[active=true]:bg-white/15">Start here</span>}</span>}
+                      {open && <span className="flex-1 text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide group-data-[active=true]:bg-white/15">Start here</span>}{item.value === "employee-onboarding" && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide">After hire</span>}</span>}
                       {isTabComplete(item.value) && open && item.value !== 'messages' && item.value !== 'find-jobs' && (
                         <Check className="h-3 w-3 shrink-0 text-blue-600" />
                       )}
