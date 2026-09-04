@@ -212,14 +212,15 @@ function Field({ label, value, onChange, type = "text", required = false, placeh
   );
 }
 
-function Choice({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
+function Choice({ label, value, onChange, options, optionLabels = {} }: { label: string; value: string; onChange: (value: string) => void; options: string[]; optionLabels?: Record<string, string> }) {
   return (
     <div className="space-y-3">
       <Label>{label} *</Label>
-      <RadioGroup value={value} onValueChange={onChange} className="grid gap-3 sm:grid-cols-2">
+      <RadioGroup value={value} onValueChange={onChange} className="grid min-w-0 gap-3 sm:grid-cols-2">
         {options.map((option) => (
-          <label key={option} className="flex cursor-pointer items-center gap-3 rounded-xl border p-4">
-            <RadioGroupItem value={option} /> <span className="text-sm font-medium">{option}</span>
+          <label key={option} className="flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border p-4">
+            <RadioGroupItem value={option} className="shrink-0" />
+            <span className="min-w-0 break-words text-sm font-medium">{optionLabels[option] ?? option}</span>
           </label>
         ))}
       </RadioGroup>
@@ -766,7 +767,13 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               {currentStep === 3 && (
                 <div className="space-y-7">
                   <OfficialDocument title="Direct deposit authorization form" url="/forms/04-direct-deposit-auth-form.pdf" />
-                  <Choice label="How would you like to be paid?" value={data.paymentMethod} onChange={(v) => update("paymentMethod", v)} options={["direct_deposit", "paper_check"]} />
+                  <Choice
+                    label="How would you like to be paid?"
+                    value={data.paymentMethod}
+                    onChange={(v) => update("paymentMethod", v)}
+                    options={["direct_deposit", "paper_check"]}
+                    optionLabels={{ direct_deposit: "Direct deposit", paper_check: "Paper check" }}
+                  />
                   {data.paymentMethod === "direct_deposit" && (
                     <div className="space-y-5 rounded-2xl border p-5">
                       <div className="flex items-center gap-2">

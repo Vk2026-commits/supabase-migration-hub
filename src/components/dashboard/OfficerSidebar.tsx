@@ -67,11 +67,11 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
                 <SidebarMenuItem key={item.value}>
                   <SidebarMenuButton
                     onClick={() => onTabChange(item.value)}
-                    className={getNavCls(item.value)}
+                    className={`h-auto min-h-9 py-2 ${getNavCls(item.value)}`}
                   >
-                    <div className="flex w-full items-center gap-2">
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {open && <span className="flex-1 text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide group-data-[active=true]:bg-white/15">Start here</span>}{item.value === "employee-onboarding" && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide">After hire</span>}</span>}
+                    <div className="flex min-w-0 w-full items-start gap-2">
+                      <item.icon className="mt-0.5 h-4 w-4 shrink-0" />
+                      {open && <span className="min-w-0 flex-1 break-words text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className="ml-2 inline-flex whitespace-nowrap rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide group-data-[active=true]:bg-white/15">Start here</span>}{item.value === "employee-onboarding" && <span className="ml-2 inline-flex whitespace-nowrap rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide">After hire</span>}</span>}
                       {isTabComplete(item.value) && open && item.value !== 'messages' && item.value !== 'find-jobs' && (
                         <Check className="h-3 w-3 shrink-0 text-blue-600" />
                       )}
