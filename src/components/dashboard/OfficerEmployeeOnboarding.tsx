@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { buildDirectDeposit, buildI9, buildW4, pdfUrl } from "@/lib/officialOnboardingForms";
+import { buildDirectDeposit, buildI9, buildPolicyAcknowledgement, buildW4, pdfUrl } from "@/lib/officialOnboardingForms";
 
 type Props = {
   userId: string;
@@ -75,12 +75,23 @@ type OnboardingData = {
   trackTikPasswordSet: boolean;
   issuedItems: Record<string, boolean>;
   policies: Record<string, boolean>;
+  policyAcknowledgements: Record<string, PolicyAcknowledgement>;
+  availabilitySchedule: Record<string, { start?: string; end?: string }>;
   signatureName: string;
   signatureDate: string;
   signatureImage: string;
   w4SignatureName: string;
   w4SignatureDate: string;
   w4SignatureImage: string;
+};
+
+type PolicyAcknowledgement = {
+  printedName: string;
+  employeeTitle: string;
+  signatureDate: string;
+  signatureImage: string;
+  accepted: boolean;
+  notes: string;
 };
 
 type BankAccountDraft = {
@@ -194,6 +205,8 @@ const initialData: OnboardingData = {
   scheduledShift: "",
   startDate: "",
   policies: {},
+  policyAcknowledgements: {},
+  availabilitySchedule: {},
   signatureName: "",
   signatureDate: new Date().toISOString().slice(0, 10),
   signatureImage: "",
@@ -286,7 +299,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [showSsn, setShowSsn] = useState(false);
   const [bankAccounts, setBankAccounts] = useState<BankAccountDraft[]>(() => [newBankAccount("entire", "bank-1")]);
   const [savedBankAccounts, setSavedBankAccounts] = useState<SavedBankAccount[]>([]);
-  const [openPolicyDocument, setOpenPolicyDocument] = useState<string | null>(null);
+  const [activePolicyKey, setActivePolicyKey] = useState<string | null>(null);
+  const [policyPreview, setPolicyPreview] = useState<{ key: string; url: string; page: number } | null>(null);
   const [i9Url, setI9Url] = useState("/forms/02-i-9-2026.pdf");
   const [w4Url, setW4Url] = useState("/forms/W-4_Form_2026.pdf");
   const [directDepositUrl, setDirectDepositUrl] = useState("/forms/04-direct-deposit-auth-form.pdf");
@@ -334,7 +348,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       setActiveOfficerId(resolved);
       const [profileResult, officerResult, hiringResult, maskedResult] = await Promise.all([
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
-        supabase.from("officer_profiles").select("phone,address_street,address_city,address_state,address_zip").eq("id", resolved).maybeSingle(),
+        supabase.from("officer_profiles").select("phone,address_street,address_city,address_state,address_zip,availability_schedule,title").eq("id", resolved).maybeSingle(),
         (supabase as any).from("guard_hiring_applications").select("id,company_name,application_data").eq("officer_id", resolved).eq("application_type", "employer_copy").eq("status", "submitted").order("submitted_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.functions.invoke("manage-sensitive-data", {
           body: { action: "get_masked_data", data: {} },
@@ -360,6 +374,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         city: officerResult.data?.address_city || "",
         state: officerResult.data?.address_state || "",
         zip: officerResult.data?.address_zip || "",
+        offeredPosition: hiring?.position || hiring?.application_data?.position || officerResult.data?.title || "Security Officer",
+        availabilitySchedule: (officerResult.data as any)?.availability_schedule || {},
         employerName: hiring?.company_name || hiring?.application_data?.companyName || "Your hiring company",
         ...saved,
       });
@@ -478,7 +494,38 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return () => clearTimeout(timer);
   }, [data, bankAccounts, ssn, currentStep]);
 
-  const policiesComplete = policyItems.every(([key]) => data.policies[key]);
+  useEffect(() => {
+    if (currentStep !== 5 || !activePolicyKey) return;
+    const item = policyItems.find(([key]) => key === activePolicyKey);
+    if (!item) return;
+    const [key, title, path] = item;
+    const acknowledgement = data.policyAcknowledgements[key] || {
+      printedName: [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" "),
+      employeeTitle: data.offeredPosition || "Security Officer",
+      signatureDate: new Date().toISOString().slice(0, 10),
+      signatureImage: "",
+      accepted: false,
+      notes: "",
+    };
+    const timer = setTimeout(async () => {
+      try {
+        const result = await buildPolicyAcknowledgement(path, { title, ...acknowledgement }, data);
+        const nextUrl = pdfUrl(result.bytes);
+        setPolicyPreview((previous) => {
+          if (previous?.url.startsWith("blob:")) URL.revokeObjectURL(previous.url);
+          return { key, url: nextUrl, page: result.previewPage };
+        });
+      } catch (error) {
+        console.error("Company document preview failed", error);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [activePolicyKey, currentStep, data]);
+
+  const policiesComplete = policyItems.every(([key]) => {
+    const acknowledgement = data.policyAcknowledgements[key];
+    return Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+  });
   const i9AuthorizationComplete = data.citizenshipStatus !== "Authorized to work until a specified date" || Boolean(data.workAuthorizationExpiration && (data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)));
   const bankAccountsComplete = savedBankAccounts.length > 0 || (bankAccounts.length > 0 && bankAccounts.every((account, index) => Boolean(
     account.bankName && account.bankCity && account.bankState && /^\d{9}$/.test(account.routingNumber.replace(/\D/g, "")) && /^\d{4,17}$/.test(account.accountNumber.replace(/\D/g, "")) && (index === bankAccounts.length - 1 ? account.allocationType === "entire" : account.allocationType === "amount" && Number(account.allocationAmount) > 0)
@@ -651,6 +698,48 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   };
 
   const progress = Math.round(((currentStep + 1) / steps.length) * 100);
+  const completedPolicyCount = policyItems.filter(([key]) => {
+    const acknowledgement = data.policyAcknowledgements[key];
+    return Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+  }).length;
+  const activePolicy = activePolicyKey ? policyItems.find(([key]) => key === activePolicyKey) : null;
+  const activePolicyAcknowledgement = activePolicyKey ? data.policyAcknowledgements[activePolicyKey] : null;
+  const openPolicy = (key: string) => {
+    setActivePolicyKey(key);
+    setData((current) => current.policyAcknowledgements[key] ? current : {
+      ...current,
+      policyAcknowledgements: {
+        ...current.policyAcknowledgements,
+        [key]: {
+          printedName: [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
+          employeeTitle: current.offeredPosition || "Security Officer",
+          signatureDate: new Date().toISOString().slice(0, 10),
+          signatureImage: "",
+          accepted: false,
+          notes: "",
+        },
+      },
+    });
+    requestAnimationFrame(() => document.getElementById("company-document-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const updatePolicyAcknowledgement = (key: string, changes: Partial<PolicyAcknowledgement>) => {
+    setData((current) => ({
+      ...current,
+      policyAcknowledgements: {
+        ...current.policyAcknowledgements,
+        [key]: { ...current.policyAcknowledgements[key], ...changes },
+      },
+    }));
+  };
+  const savePolicyAcknowledgement = (key: string) => {
+    const acknowledgement = data.policyAcknowledgements[key];
+    if (!acknowledgement?.accepted || !acknowledgement.printedName || !acknowledgement.signatureDate || !acknowledgement.signatureImage) {
+      toast.error("Accept the document, add your name and date, and sign before saving");
+      return;
+    }
+    setData((current) => ({ ...current, policies: { ...current.policies, [key]: true } }));
+    toast.success("Signed document saved to your onboarding packet");
+  };
   if (!loaded)
     return (
       <Card className="rounded-2xl">
@@ -936,7 +1025,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               )}
               {currentStep === 5 && (
                 <div className="space-y-5">
-                  <p className="text-sm text-muted-foreground">Review every document from the Kairos onboarding packet inside We Find Guards, then acknowledge it individually.</p>
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">How company documents work</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl bg-background p-4"><strong className="block">1. Fill it out</strong><span className="text-sm text-muted-foreground">Add your name, date, acknowledgment, and signature.</span></div>
+                      <div className="rounded-xl bg-background p-4"><strong className="block">2. See it update</strong><span className="text-sm text-muted-foreground">The PDF preview changes automatically as you type.</span></div>
+                      <div className="rounded-xl bg-background p-4"><strong className="block">3. Save it</strong><span className="text-sm text-muted-foreground">Save the signed document to complete it.</span></div>
+                    </div>
+                    <p className="mt-4 text-sm font-medium">{completedPolicyCount} of {policyItems.length} documents completed</p>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/10"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((completedPolicyCount / policyItems.length) * 100)}%` }} /></div>
+                  </div>
                   <div className="grid gap-5 rounded-2xl border p-5 md:grid-cols-2">
                     <Field label="Offered position" value={data.offeredPosition} onChange={(v) => update("offeredPosition", v)} required />
                     <Field label="Hourly rate" type="number" value={data.hourlyRate} onChange={(v) => update("hourlyRate", v)} />
@@ -946,24 +1044,38 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <span className="text-sm font-medium">TrackTik password set</span>
                     </label>
                   </div>
-                  {openPolicyDocument && (
-                    <div className="space-y-2">
-                      <Button type="button" variant="outline" onClick={() => setOpenPolicyDocument(null)}>
-                        Close document
-                      </Button>
-                      <OfficialDocument title="Employer onboarding document" url={openPolicyDocument} />
+                  {activePolicy && activePolicyAcknowledgement && (
+                    <div id="company-document-editor" className="scroll-mt-4 space-y-6 rounded-2xl border-2 border-primary/30 bg-card p-5 sm:p-7">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Fill out this document</p><h3 className="mt-1 text-xl font-bold">{activePolicy[1]}</h3><p className="mt-1 text-sm text-muted-foreground">Your existing profile and onboarding information is filled in automatically where the PDF has matching fields.</p></div>
+                        <Button type="button" variant="ghost" onClick={() => setActivePolicyKey(null)}>Close</Button>
+                      </div>
+                      <div className="grid gap-5 md:grid-cols-2">
+                        <Field label="Employee legal name" value={activePolicyAcknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { printedName: value })} required />
+                        <Field label="Position or title" value={activePolicyAcknowledgement.employeeTitle} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { employeeTitle: value })} required />
+                        <Field label="Date signed" type="date" value={activePolicyAcknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { signatureDate: value })} required />
+                        <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={activePolicyAcknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(activePolicy[0], { notes: event.target.value })} placeholder="Optional" /></div>
+                      </div>
+                      <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
+                        <Checkbox checked={activePolicyAcknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { accepted: Boolean(value) })} />
+                        <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
+                      </label>
+                      <SignaturePad value={activePolicyAcknowledgement.signatureImage} suggestedName={activePolicyAcknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { signatureImage: value })} />
+                      <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900"><strong>Live PDF preview:</strong> the signed acknowledgment page and matching fields update automatically below.</div>
+                      <OfficialDocument title={activePolicy[1]} url={policyPreview?.key === activePolicy[0] ? policyPreview.url : activePolicy[2]} autoFilled initialPage={policyPreview?.key === activePolicy[0] ? policyPreview.page : 1} />
+                      <Button type="button" size="lg" className="w-full" onClick={() => savePolicyAcknowledgement(activePolicy[0])}><FileCheck2 className="mr-2 h-5 w-5" />{data.policies[activePolicy[0]] ? "Update saved document" : "Save signed document"}</Button>
                     </div>
                   )}
                   {policyItems.map(([key, label, document]) => (
-                    <div key={key} className="rounded-xl border p-4">
-                      <div className="flex flex-wrap items-start gap-3">
-                        <Checkbox checked={Boolean(data.policies[key])} onCheckedChange={(value) => update("policies", { ...data.policies, [key]: Boolean(value) })} />
+                    <div key={key} className={`rounded-xl border p-4 ${data.policies[key] ? "border-green-200 bg-green-50/50" : ""}`}>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${data.policies[key] ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{data.policies[key] ? <Check className="h-4 w-4" /> : policyItems.findIndex(([itemKey]) => itemKey === key) + 1}</div>
                         <div className="min-w-0 flex-1">
                           <p className="font-medium">{label}</p>
-                          <p className="text-sm text-muted-foreground">I have received, reviewed, and agree to follow this document.</p>
+                          <p className="text-sm text-muted-foreground">{data.policies[key] ? "Signed and saved to your onboarding packet." : "Open, fill out, preview, and sign this document."}</p>
                         </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setOpenPolicyDocument(document)}>
-                          Review document
+                        <Button type="button" variant={data.policies[key] ? "outline" : "default"} size="sm" onClick={() => openPolicy(key)}>
+                          {data.policies[key] ? "Edit & preview" : "Fill out document"}
                         </Button>
                       </div>
                     </div>

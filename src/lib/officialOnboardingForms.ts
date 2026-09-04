@@ -52,6 +52,35 @@ export type DirectDepositAccountValues = {
   allocationAmount: string;
 };
 
+export type PolicyAcknowledgementValues = {
+  title: string;
+  printedName: string;
+  employeeTitle: string;
+  signatureDate: string;
+  signatureImage: string;
+  accepted: boolean;
+  notes: string;
+};
+
+export type PolicyAutofillValues = OfficialOnboardingValues & {
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  employerName: string;
+  employeeIdNumber?: string;
+  offeredPosition?: string;
+  hourlyRate?: string;
+  trackTikUsername?: string;
+  issuedItems?: Record<string, boolean>;
+  availabilitySchedule?: Record<string, { start?: string; end?: string }>;
+  scheduledPost?: string;
+  scheduledShift?: string;
+  uniformShirt?: string;
+  uniformPants?: string;
+  uniformShoes?: string;
+};
+
 const date = (value: string) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || "");
   return match ? `${match[2]}/${match[3]}/${match[1]}` : value || "";
@@ -292,6 +321,114 @@ export async function buildDirectDeposit(values: OfficialOnboardingValues, accou
     page.drawText(segment, { x: boxes[index].x + (boxes[index].width - textWidth) / 2, y: boxes[index].y + 3.1, size, font, color: rgb(0, 0, 0) });
   });
   return document.save();
+}
+
+const wrapText = (font: any, text: string, size: number, maxWidth: number) => {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  words.forEach((word) => {
+    const candidate = line ? `${line} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) <= maxWidth) line = candidate;
+    else { if (line) lines.push(line); line = word; }
+  });
+  if (line) lines.push(line);
+  return lines;
+};
+
+export async function buildPolicyAcknowledgement(path: string, acknowledgement: PolicyAcknowledgementValues, values: PolicyAutofillValues) {
+  const document = await load(path);
+  const originalPageCount = document.getPageCount();
+  const form = document.getForm();
+  const employeeName = acknowledgement.printedName || [values.legalFirstName, values.middleInitial, values.legalLastName].filter(Boolean).join(" ");
+  const formattedDate = date(acknowledgement.signatureDate);
+  const schedule = values.availabilitySchedule || {};
+  const fieldValues: Record<string, string> = {
+    "Employee Name": employeeName,
+    "Employees Name Printed": employeeName,
+    Employee: employeeName,
+    "Printed Name": employeeName,
+    "Print Name": employeeName,
+    "Temporary Employees Signature Date": [employeeName, formattedDate].filter(Boolean).join(" - "),
+    Date: formattedDate,
+    "Todays Date": formattedDate,
+    "This Confidentiality Agreement the Agreement dated as of": formattedDate,
+    Title: acknowledgement.employeeTitle || values.offeredPosition || "Security Officer",
+    "Employee File Number": values.employeeIdNumber || "",
+    "Street Address": values.address || "",
+    "City State ZIP": [values.city, values.state, values.zip].filter(Boolean).join(", "),
+    "User Name  for Track Tik": values.trackTikUsername || "",
+    Position: values.offeredPosition || "Security Officer",
+    "Item": Object.entries(values.issuedItems || {}).filter(([, selected]) => selected).map(([item]) => item).join(", "),
+    "NotesExplanations ex School MonFri 700am300pm": acknowledgement.notes || "",
+  };
+  Object.entries(schedule).forEach(([day, hours]) => {
+    const upper = day.toUpperCase();
+    fieldValues[`${upper}From`] = hours?.start || "";
+    fieldValues[`${upper}To`] = hours?.end || "";
+  });
+  setText(form, fieldValues);
+
+  const regularFont = await document.embedFont(StandardFonts.Helvetica);
+  const boldFont = await document.embedFont(StandardFonts.HelveticaBold);
+  const signatureFont = await document.embedFont(StandardFonts.TimesRomanItalic);
+  const signatureImage = acknowledgement.signatureImage ? await document.embedPng(await trimSignature(acknowledgement.signatureImage)) : null;
+  for (const field of form.getFields()) {
+    const name = field.getName();
+    const lower = name.toLowerCase();
+    const employeeSignature = lower.includes("signature") && !/(company|employer|manager|supervisor|representative)/.test(lower);
+    if (!employeeSignature) continue;
+    if (field.constructor.name === "PDFTextField") {
+      try { (field as any).setText(employeeName); } catch { /* field type differs */ }
+      continue;
+    }
+    try {
+      for (const widget of (field as any).acroField.getWidgets()) {
+        const rect = widget.getRectangle();
+        const pageRef = widget.P();
+        const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[document.getPageCount() - 1];
+        if (signatureImage) {
+          const scale = Math.min((rect.width - 6) / signatureImage.width, (rect.height - 3) / signatureImage.height);
+          const width = signatureImage.width * scale;
+          const height = signatureImage.height * scale;
+          page.drawImage(signatureImage, { x: rect.x + (rect.width - width) / 2, y: rect.y + (rect.height - height) / 2, width, height });
+        } else if (employeeName) {
+          let size = Math.min(13, rect.height - 3);
+          while (size > 6 && signatureFont.widthOfTextAtSize(employeeName, size) > rect.width - 6) size -= 0.5;
+          page.drawText(employeeName, { x: rect.x + 3, y: rect.y + Math.max(2, (rect.height - size) / 2), size, font: signatureFont, color: rgb(0, 0, 0) });
+        }
+      }
+    } catch { /* signature widget differs between documents */ }
+  }
+  try { form.updateFieldAppearances(regularFont); } catch { /* viewer regenerates */ }
+
+  const receipt = document.addPage([612, 792]);
+  receipt.drawRectangle({ x: 0, y: 716, width: 612, height: 76, color: rgb(0.06, 0.29, 0.72) });
+  receipt.drawText("WE FIND GUARDS", { x: 48, y: 755, size: 12, font: boldFont, color: rgb(1, 1, 1) });
+  receipt.drawText("SIGNED DOCUMENT ACKNOWLEDGMENT", { x: 48, y: 733, size: 18, font: boldFont, color: rgb(1, 1, 1) });
+  receipt.drawText(acknowledgement.title, { x: 48, y: 678, size: 18, font: boldFont, color: rgb(0.06, 0.09, 0.16), maxWidth: 516 });
+  const statement = `I acknowledge that I received and reviewed the complete ${acknowledgement.title} document and agree to follow the policies, responsibilities, and requirements that apply to my employment with ${values.employerName}.`;
+  wrapText(regularFont, statement, 11, 516).forEach((line, index) => receipt.drawText(line, { x: 48, y: 636 - index * 17, size: 11, font: regularFont, color: rgb(0.17, 0.2, 0.27) }));
+  receipt.drawText("Employee", { x: 48, y: 524, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
+  receipt.drawText(employeeName, { x: 48, y: 501, size: 13, font: regularFont, color: rgb(0.06, 0.09, 0.16) });
+  receipt.drawText("Position", { x: 330, y: 524, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
+  receipt.drawText(acknowledgement.employeeTitle || values.offeredPosition || "Security Officer", { x: 330, y: 501, size: 13, font: regularFont, color: rgb(0.06, 0.09, 0.16) });
+  receipt.drawText("Signature", { x: 48, y: 444, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
+  receipt.drawRectangle({ x: 48, y: 324, width: 332, height: 102, color: rgb(0.98, 0.99, 1), borderColor: rgb(0.78, 0.82, 0.9), borderWidth: 1 });
+  if (signatureImage) {
+    const scale = Math.min(286 / signatureImage.width, 70 / signatureImage.height);
+    const width = signatureImage.width * scale;
+    const height = signatureImage.height * scale;
+    receipt.drawImage(signatureImage, { x: 71 + (286 - width) / 2, y: 340 + (70 - height) / 2, width, height });
+  } else if (employeeName) receipt.drawText(employeeName, { x: 70, y: 360, size: 24, font: signatureFont, color: rgb(0.04, 0.08, 0.15) });
+  receipt.drawText("Date signed", { x: 414, y: 444, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
+  receipt.drawText(formattedDate, { x: 414, y: 392, size: 13, font: regularFont, color: rgb(0.06, 0.09, 0.16) });
+  if (acknowledgement.notes) {
+    receipt.drawText("Employee notes", { x: 48, y: 274, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
+    wrapText(regularFont, acknowledgement.notes, 10, 516).slice(0, 7).forEach((line, index) => receipt.drawText(line, { x: 48, y: 250 - index * 15, size: 10, font: regularFont, color: rgb(0.17, 0.2, 0.27) }));
+  }
+  receipt.drawText(`Document ${originalPageCount + 1} of ${originalPageCount + 1} - acknowledgment added by We Find Guards`, { x: 48, y: 42, size: 8, font: regularFont, color: rgb(0.45, 0.49, 0.56) });
+  return { bytes: await document.save(), previewPage: originalPageCount + 1 };
 }
 
 export function pdfUrl(bytes: Uint8Array) {
