@@ -24,6 +24,7 @@ interface Props {
 type Schedule = Record<string, { start: string; end: string }>;
 type SharedData = { employmentTypes: string[]; shiftPreferences: string[]; schedule: Schedule };
 type WorkItem = Record<string, string>;
+type HiringDestination = { id: string; companyId: string; companyName: string; position: string; city: string; state: string };
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const weekdays = days.slice(0, 5);
@@ -70,7 +71,8 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [masterId, setMasterId] = useState<string | null>(null);
   const [masterStatus, setMasterStatus] = useState<"draft" | "submitted">("draft");
   const [currentStep, setCurrentStep] = useState(0);
-  const [jobs, setJobs] = useState<Array<{ id: string; companyName: string; position: string; city: string; state: string }>>([]);
+  const [jobs, setJobs] = useState<HiringDestination[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -107,8 +109,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
         supabase.from("officer_profiles").select("phone,address_street,address_unit,address_city,address_state,address_zip,employment_type,shift_preference,availability_schedule").eq("user_id", userId).maybeSingle(),
         appTable.select("*").eq("user_id", userId).eq("application_type", "master").maybeSingle(),
+        loadingOfficerId ? supabase.from("work_history").select("*").eq("officer_id", loadingOfficerId).order("start_date", { ascending: false }) : Promise.resolve({ data: [] }),
+        (supabase as any).rpc("list_active_hiring_destinations"),
       ];
-      if (loadingOfficerId) requests.push(supabase.from("work_history").select("*").eq("officer_id", loadingOfficerId).order("start_date", { ascending: false }), supabase.from("job_applications").select("id,job_posting:job_postings(title,location,company:company_profiles(company_name))").eq("officer_id", loadingOfficerId));
       const [profileResult, officerResult, masterResult, workResult, jobsResult] = await Promise.all(requests);
       if (!mounted) return;
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
@@ -129,10 +132,22 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const savedAvailability = (draft as any).availability as SharedData | undefined;
       setShared(savedAvailability || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} });
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(Math.min(Number(master?.current_step || 0), 9));
-      setJobs((jobsResult?.data || []).map((item: any) => {
-        const [city = "", ...stateParts] = (item.job_posting?.location || "").split(",").map((part: string) => part.trim());
-        return { id: item.id, position: item.job_posting?.title || "Security Officer", companyName: item.job_posting?.company?.company_name || "Hiring Company", city, state: stateParts.join(", ") };
+      const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({
+        id: item.id,
+        companyId: item.company_id,
+        companyName: item.company_name,
+        position: item.position,
+        city: item.city || "",
+        state: item.state || "",
       }));
+      const savedJobId = (draft as any).jobPostingId || "";
+      const matchingDestination = destinations.find((item) => item.id === savedJobId) || destinations.find((item) =>
+        item.companyName.trim().toLowerCase() === (draft.companyName || initialForm.companyName).trim().toLowerCase()
+        && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()
+        && item.city.trim().toLowerCase() === (draft.companyCity || initialForm.companyCity).trim().toLowerCase()
+      );
+      setJobs(destinations);
+      setSelectedJobId(matchingDestination?.id || "");
       setLoaded(true);
     })();
     return () => { mounted = false; };
@@ -166,7 +181,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setSaving(true);
     const performSave = async () => {
       try {
-        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, availability: shared } };
+        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, jobPostingId: selectedJobId, availability: shared } };
         const savedMasterId = masterIdRef.current;
         const query = savedMasterId ? (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).select("id").single() : (supabase as any).from("guard_hiring_applications").insert(payload).select("id").single();
         const { data, error } = await query;
@@ -206,13 +221,13 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { void saveDraft(); }, 250);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [form, shared, currentStep, loaded, activeOfficerId]);
+  }, [form, shared, currentStep, loaded, activeOfficerId, selectedJobId]);
 
   const availabilityComplete = shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule).some(v => v.start && v.end);
   const photosComplete = Boolean(photos.headshot && photos["full-body"]);
   const certificationComplete = certifications.some(c => Boolean(c.document_front_url));
-  const stepComplete = (step: number) => step === 0 ? Boolean(form.position) : step === 1 ? Boolean(form.applicantName && form.email && form.phone && form.address && form.city && form.state && form.zip) : step === 2 ? Boolean(form.isAdult && form.eligibleToWork) : step === 6 ? availabilityComplete : step === 7 ? photosComplete : step === 8 ? certificationComplete : step === 9 ? Boolean(form.signature && form.signatureDate && acknowledged) : true;
-  const complete = useMemo(() => [0, 1, 2, 6, 7, 8, 9].every(stepComplete), [form, shared, photos, certifications, acknowledged]);
+  const stepComplete = (step: number) => step === 0 ? Boolean(selectedJobId && form.position) : step === 1 ? Boolean(form.applicantName && form.email && form.phone && form.address && form.city && form.state && form.zip) : step === 2 ? Boolean(form.isAdult && form.eligibleToWork) : step === 6 ? availabilityComplete : step === 7 ? photosComplete : step === 8 ? certificationComplete : step === 9 ? Boolean(form.signature && form.signatureDate && acknowledged) : true;
+  const complete = useMemo(() => [0, 1, 2, 6, 7, 8, 9].every(stepComplete), [form, shared, photos, certifications, acknowledged, selectedJobId]);
   const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
   const updateList = (key: "workHistory" | "references", index: number, field: string, value: string) => setForm(current => ({ ...current, [key]: current[key].map((item, i) => i === index ? { ...item, [field]: value } : item) }));
   const go = async (step: number) => {
@@ -241,16 +256,26 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setSubmitting(true);
     try {
       await syncShared();
-      const snapshot = { ...form, availability: shared, canonicalPhotoTypes: Object.keys(photos), canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id) } as any;
-      const base: any = { officer_id: officerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, status: "submitted", current_step: 9, submitted_at: new Date().toISOString(), signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
+      const selectedJob = jobs.find(j => j.id === selectedJobId);
+      if (!selectedJob) throw new Error("Select an active company position before submitting");
+      const snapshot = { ...form, jobPostingId: selectedJob.id, availability: shared, canonicalPhotoTypes: Object.keys(photos), canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id) } as any;
+      const base: any = { officer_id: activeOfficerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, status: "submitted", current_step: 9, submitted_at: new Date().toISOString(), signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
       const result = masterId ? await (supabase as any).from("guard_hiring_applications").update({ ...base, application_type: "master", job_application_id: null }).eq("id", masterId).select("id").single() : await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "master", job_application_id: null }).select("id").single();
       if (result.error) throw result.error; setMasterId(result.data.id); setMasterStatus("submitted");
-      const selectedJob = jobs.find(j => j.companyName === form.companyName && j.position === form.position);
-      if (selectedJob) {
-        const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
-        const { error: copyError } = await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "employer_copy", source_application_id: result.data.id, job_application_id: selectedJob.id, company_name: selectedJob.companyName, position: selectedJob.position, application_data: employerSnapshot });
-        if (copyError && copyError.code !== "23505") throw copyError;
+      let jobApplication: { id: string } | null = null;
+      const existingJobApplication = await supabase.from("job_applications").select("id").eq("job_posting_id", selectedJob.id).eq("officer_id", activeOfficerId).maybeSingle();
+      if (existingJobApplication.error) throw existingJobApplication.error;
+      if (existingJobApplication.data) {
+        jobApplication = existingJobApplication.data;
+      } else {
+        const createdJobApplication = await supabase.from("job_applications").insert({ job_posting_id: selectedJob.id, officer_id: activeOfficerId, status: "interested" }).select("id").single();
+        if (createdJobApplication.error) throw createdJobApplication.error;
+        jobApplication = createdJobApplication.data;
       }
+      if (!jobApplication) throw new Error("Could not link this application to the selected company");
+      const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
+      const { error: copyError } = await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "employer_copy", source_application_id: result.data.id, job_application_id: jobApplication.id, company_name: selectedJob.companyName, position: selectedJob.position, application_data: employerSnapshot });
+      if (copyError && copyError.code !== "23505") throw copyError;
       toast.success("Onboarding application submitted"); onChanged?.(); await generateGuardApplicationPDF(form);
     } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
     finally { setSubmitting(false); }
@@ -261,7 +286,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background"><div className="flex items-center gap-3 px-5 py-5 sm:px-8"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-7 w-7" /></div><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">We Find Guards</p><h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1><p className="mt-1 text-sm text-muted-foreground">Your application saves automatically. You can leave and continue later.</p>{saveError && <p className="mt-2 text-sm font-semibold text-destructive">Draft not saved. Please check your connection and try again.</p>}</div><span className={`hidden items-center gap-1 text-xs sm:flex ${saveError ? "text-destructive" : "text-muted-foreground"}`}><Cloud className="h-4 w-4" />{saveError ? "Save failed" : saving ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Autosave on"}</span></div><div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div></div>
     <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]"><aside className="hidden lg:block"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => <button key={s[0]} type="button" onClick={() => go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : stepComplete(i) ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{stepComplete(i) && i !== currentStep ? <Check className="h-4 w-4" /> : i + 1}</span><span className="min-w-0"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block truncate text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{s[1]}</span></span></button>)}</nav></aside>
       <main className="min-w-0"><div className="mb-4 flex justify-between lg:hidden"><span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Step {currentStep + 1} of 10</span><span className="text-sm text-muted-foreground">{progress}% complete</span></div><Card className="rounded-2xl shadow-sm"><CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader><CardContent className="px-5 py-7 sm:px-8 sm:py-9">
-        {currentStep === 0 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Current hiring destination</p><h3 className="mt-2 text-xl font-bold">{form.companyName}</h3><p className="mt-1 text-sm text-muted-foreground">{[form.companyCity, form.companyState].filter(Boolean).join(", ")}</p></div><div className="grid gap-5 md:grid-cols-2"><div className="space-y-2 md:col-span-2"><Label>Company and job location *</Label><select className="h-12 w-full rounded-lg border bg-background px-4" value={`${form.companyName}|${form.position}|${form.companyCity}|${form.companyState}`} onChange={e => { const [companyName, position, companyCity, companyState] = e.target.value.split("|"); setForm(c => ({ ...c, companyName, position, companyCity, companyState })); }}><option value="Kairos Security|Security Officer|Houston|Texas">Kairos Security — Houston, Texas</option>{jobs.filter(j => !(j.companyName === "Kairos Security" && j.city === "Houston")).map(j => <option key={j.id} value={`${j.companyName}|${j.position}|${j.city}|${j.state}`}>{j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} — {j.position}</option>)}</select><p className="text-sm text-muted-foreground">Additional companies will appear here after they are added as hiring companies and post a job.</p></div><Field label="Position applied for" value={form.position} onChange={v => update("position", v)} required /><Field label="Available start date" value={form.startDate} onChange={v => update("startDate", v)} type="date" /></div></div>}
+        {currentStep === 0 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Current hiring destination</p><h3 className="mt-2 text-xl font-bold">{selectedJobId ? form.companyName : "Choose a hiring company"}</h3><p className="mt-1 text-sm text-muted-foreground">{selectedJobId ? [form.companyCity, form.companyState].filter(Boolean).join(", ") : "Select an active position below."}</p></div><div className="grid gap-5 md:grid-cols-2"><div className="space-y-2 md:col-span-2"><Label>Company and job location *</Label><select className="h-12 w-full rounded-lg border bg-background px-4" value={selectedJobId} onChange={e => { const job = jobs.find(item => item.id === e.target.value); setSelectedJobId(e.target.value); if (job) setForm(c => ({ ...c, companyName: job.companyName, position: job.position, companyCity: job.city, companyState: job.state })); }}><option value="">Select a company and position</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} — {j.position}</option>)}</select><p className="text-sm text-muted-foreground">Companies appear here after they create an active job posting.</p></div><Field label="Position applied for" value={form.position} onChange={v => update("position", v)} required /><Field label="Available start date" value={form.startDate} onChange={v => update("startDate", v)} type="date" /></div></div>}
         {currentStep === 1 && <div className="space-y-5"><p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">Information entered here is the same information shown in your Profile tab.</p><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name" value={form.applicantName} onChange={v => update("applicantName", v)} required /><Field label="Email" value={form.email} onChange={v => update("email", v)} type="email" required /><Field label="Phone" value={form.phone} onChange={v => update("phone", v)} type="tel" required /></div><AddressAutocomplete value={{ street: form.address, unit: "", city: form.city, state: form.state, zip: form.zip }} onChange={a => setForm(c => ({ ...c, address: a.street, city: a.city, state: a.state, zip: a.zip }))} /></div>}
         {currentStep === 2 && <div className="grid gap-7 md:grid-cols-2"><YesNo label="Are you 18 years of age or older?" value={form.isAdult} onChange={v => update("isAdult", v)} /><YesNo label="Can you provide proof that you may work in the U.S.?" value={form.eligibleToWork} onChange={v => update("eligibleToWork", v)} /><YesNo label="Do you have a valid driver's license?" value={form.driversLicense} onChange={v => update("driversLicense", v)} /><Field label="Security license number" value={form.securityLicenseNumber} onChange={v => update("securityLicenseNumber", v)} /><Field label="Security license state" value={form.securityLicenseState} onChange={v => update("securityLicenseState", v)} /></div>}
         {currentStep === 3 && <div className="space-y-6"><div className="space-y-2"><Label>Highest education, school, diploma, or degree</Label><Textarea value={form.education} onChange={e => update("education", e.target.value)} /></div><div className="space-y-2"><Label>Security training, skills, and equipment</Label><Textarea rows={5} value={form.skills} onChange={e => update("skills", e.target.value)} /></div></div>}
