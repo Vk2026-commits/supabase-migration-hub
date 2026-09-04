@@ -141,9 +141,9 @@ export async function buildI9(values: OfficialOnboardingValues, ssn: string) {
         const pageRef = widget.P();
         const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
         if (signatureImage) {
-          const scale = Math.min((rect.width - 2) / signatureImage.width, 22 / signatureImage.height);
+          const scale = Math.min((rect.width - 105) / signatureImage.width, 22 / signatureImage.height);
           const width = signatureImage.width * scale; const height = signatureImage.height * scale;
-          page.drawImage(signatureImage, { x: rect.x + 1, y: rect.y + (rect.height - height) / 2, width, height });
+          page.drawImage(signatureImage, { x: rect.x + rect.width - width - 6, y: rect.y + (rect.height - height) / 2, width, height });
         } else if (font) {
           let size = Math.min(14, Math.max(7, rect.height - 3));
           while (size > 5 && font.widthOfTextAtSize(values.signatureName, size) > rect.width - 6) size -= 0.5;
