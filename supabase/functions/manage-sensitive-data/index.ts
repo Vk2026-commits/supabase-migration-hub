@@ -106,8 +106,12 @@ serve(async (req) => {
       );
     }
 
-    // Create authenticated client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Keep the service key as the API key while forwarding the officer's JWT.
+    // This gives PostgREST/trigger functions the correct auth.uid() for RLS and
+    // audit rows instead of running the write with a null user context.
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
     
     // Verify JWT token
     const token = authHeader.replace("Bearer ", "");
