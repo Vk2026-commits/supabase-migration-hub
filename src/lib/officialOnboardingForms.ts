@@ -60,6 +60,7 @@ export type PolicyAcknowledgementValues = {
   signatureImage: string;
   accepted: boolean;
   notes: string;
+  documentFields?: Record<string, string>;
 };
 
 export type PolicyAutofillValues = OfficialOnboardingValues & {
@@ -359,8 +360,13 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     "City State ZIP": [values.city, values.state, values.zip].filter(Boolean).join(", "),
     "User Name  for Track Tik": values.trackTikUsername || "",
     Position: values.offeredPosition || "Security Officer",
+    Text1: employeeName,
+    Text2: date(values.startDate) || formattedDate,
+    Text3: values.employeeIdNumber || "",
+    Text4: "Security",
     "Item": Object.entries(values.issuedItems || {}).filter(([, selected]) => selected).map(([item]) => item).join(", "),
     "NotesExplanations ex School MonFri 700am300pm": acknowledgement.notes || "",
+    ...Object.fromEntries(Object.entries(acknowledgement.documentFields || {}).map(([name, value]) => [name, name.startsWith("Date") ? date(value) : value])),
   };
   Object.entries(schedule).forEach(([day, hours]) => {
     const upper = day.toUpperCase();
@@ -368,6 +374,13 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     fieldValues[`${upper}To`] = hours?.end || "";
   });
   setText(form, fieldValues);
+  Object.entries(acknowledgement.documentFields || {}).forEach(([name, value]) => {
+    if (!value) return;
+    try {
+      const textField = form.getTextField(name);
+      textField.setFontSize(/^Qty/.test(name) ? 9 : /^Text[1-4]$/.test(name) ? 9 : 7);
+    } catch { /* field is not a text field in this document */ }
+  });
 
   const regularFont = await document.embedFont(StandardFonts.Helvetica);
   const boldFont = await document.embedFont(StandardFonts.HelveticaBold);

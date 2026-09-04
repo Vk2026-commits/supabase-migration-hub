@@ -93,6 +93,7 @@ type PolicyAcknowledgement = {
   signatureImage: string;
   accepted: boolean;
   notes: string;
+  documentFields: Record<string, string>;
 };
 
 type BankAccountDraft = {
@@ -142,6 +143,26 @@ const policyItems = [
   ["uniform", "Uniform receipt and return checklist", "/forms/23-uniform-check-list.pdf"],
   ["schedule", "Initial work schedule", "/forms/24-kairos-schedule.pdf"],
   ["handbook", "Employee handbook acknowledgment", "/forms/06-acknowledgement-of-handbook.pdf"],
+] as const;
+
+const propertyEquipmentRows = [
+  ["Building KeyCard", "Building key/card"],
+  ["Identification Badge", "Identification badge"],
+  ["Mobile Device Enter service provider and model", "Mobile device"],
+  ["Parking Pass", "Parking pass"],
+  ["Credit Card Enter issuer last four digits and expiration date", "Company credit card"],
+  ["Home Computer Enter make and model", "Home computer"],
+  ["Laptop Computer Enter make and model", "Laptop computer"],
+  ["Printer Copier Scanner", "Printer/copier/scanner"],
+] as const;
+
+const propertyAdditionalRows = [
+  ["Fax machine", "Fax machine"],
+  ["Company Car Enter year make model mileage", "Company vehicle"],
+  ["Customer Contact List", "Customer contact list"],
+  ["CoWorker Contact List", "Coworker contact list"],
+  ["Other Enter Details", "Other item 1"],
+  ["Other Enter Details_2", "Other item 2"],
 ] as const;
 
 const issuedItemOptions = ["Building key/card", "Identification badge", "Mobile device", "Parking pass", "Laptop", "Uniform", "Radio", "Flashlight"];
@@ -508,6 +529,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       signatureImage: "",
       accepted: false,
       notes: "",
+      documentFields: {},
     };
     const timer = setTimeout(async () => {
       try {
@@ -515,7 +537,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         const nextUrl = pdfUrl(result.bytes);
         setPolicyPreview((previous) => {
           if (previous?.url.startsWith("blob:")) URL.revokeObjectURL(previous.url);
-          return { key, url: nextUrl, page: result.previewPage };
+          return { key, url: nextUrl, page: 1 };
         });
       } catch (error) {
         console.error("Company document preview failed", error);
@@ -718,6 +740,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           signatureImage: "",
           accepted: false,
           notes: "",
+          documentFields: {},
         },
       },
     });
@@ -1092,6 +1115,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                                   <Field label="Date signed" type="date" value={acknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(key, { signatureDate: value })} required />
                                   <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
                                 </div>
+                                {key === "property" && (
+                                  <PropertyDocumentFields acknowledgement={acknowledgement} data={data} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
+                                )}
                                 <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
                                   <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
                                   <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
@@ -1198,6 +1224,46 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         )}
       </div>
     </form>
+  );
+}
+
+function PropertyDocumentFields({ acknowledgement, data, onChange }: { acknowledgement: PolicyAcknowledgement; data: OnboardingData; onChange: (field: string, value: string) => void }) {
+  const fields = acknowledgement.documentFields || {};
+  const value = (field: string) => fields[field] || "";
+
+  return (
+    <section className="space-y-5 rounded-2xl border bg-muted/10 p-4 sm:p-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company property receipt</p>
+        <h4 className="mt-1 text-lg font-semibold">Enter the information shown on the PDF</h4>
+        <p className="mt-1 text-sm text-muted-foreground">Your name, employee ID, and hire date are filled from onboarding. Add only property actually issued to you. Return information can be completed later when an item is returned.</p>
+      </div>
+      <div className="grid gap-3 rounded-xl border bg-background p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div><p className="text-xs text-muted-foreground">Employee name</p><p className="font-medium">{acknowledgement.printedName || "Not entered"}</p></div>
+        <div><p className="text-xs text-muted-foreground">Date of hire</p><p className="font-medium">{data.startDate || acknowledgement.signatureDate || "Not entered"}</p></div>
+        <div><p className="text-xs text-muted-foreground">Employee ID</p><p className="font-medium">{data.employeeIdNumber || "Not assigned"}</p></div>
+        <Field label="Department" value={value("Text4") || "Security"} onChange={(next) => onChange("Text4", next)} />
+      </div>
+      <div className="space-y-4">
+        {propertyEquipmentRows.map(([pdfName, label]) => (
+          <div key={pdfName} className="rounded-xl border bg-background p-4">
+            <p className="mb-3 font-semibold">{label}</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Quantity received" type="number" value={value(`Qty${pdfName}`)} onChange={(next) => onChange(`Qty${pdfName}`, next)} placeholder="0" />
+              <Field label="Number, ID, or details" value={value(`Number or ID${pdfName}`)} onChange={(next) => onChange(`Number or ID${pdfName}`, next)} placeholder="Optional identifier" />
+              <Field label="Returned to" value={value(`Returned To${pdfName}`)} onChange={(next) => onChange(`Returned To${pdfName}`, next)} placeholder="Complete when returned" />
+              <Field label="Return date" type="date" value={value(`Date${pdfName}`)} onChange={(next) => onChange(`Date${pdfName}`, next)} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {propertyAdditionalRows.map(([pdfName, label]) => (
+          <Field key={pdfName} label={label} value={value(pdfName)} onChange={(next) => onChange(pdfName, next)} placeholder="Quantity or details, if issued" />
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">The company representative signature remains for the employer to complete.</p>
+    </section>
   );
 }
 
