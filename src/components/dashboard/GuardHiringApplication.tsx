@@ -71,11 +71,18 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [submitting, setSubmitting] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
+  const pendingSaveCount = useRef(0);
+  const masterIdRef = useRef<string | null>(null);
   const activeOfficerId = officerId || resolvedOfficerId;
 
   useEffect(() => {
     if (officerId) setResolvedOfficerId(officerId);
   }, [officerId]);
+
+  useEffect(() => {
+    masterIdRef.current = masterId;
+  }, [masterId]);
 
   useEffect(() => {
     let mounted = true;
@@ -100,8 +107,20 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
       const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
-      setForm({ ...initialForm, ...draft, applicantName: profile?.full_name || draft.applicantName || "", email: profile?.email || draft.email || "", phone: officer?.phone || draft.phone || "", address: officer?.address_street || draft.address || "", city: officer?.address_city || draft.city || "", state: officer?.address_state || draft.state || "", zip: officer?.address_zip || draft.zip || "", workHistory: canonicalWork.length ? canonicalWork : (draft.workHistory || initialForm.workHistory) });
-      setShared({ employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} });
+      setForm({
+        ...initialForm,
+        ...draft,
+        applicantName: draft.applicantName || profile?.full_name || "",
+        email: draft.email || profile?.email || "",
+        phone: draft.phone || officer?.phone || "",
+        address: draft.address || officer?.address_street || "",
+        city: draft.city || officer?.address_city || "",
+        state: draft.state || officer?.address_state || "",
+        zip: draft.zip || officer?.address_zip || "",
+        workHistory: draft.workHistory?.length ? draft.workHistory : (canonicalWork.length ? canonicalWork : initialForm.workHistory),
+      });
+      const savedAvailability = (draft as any).availability as SharedData | undefined;
+      setShared(savedAvailability || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} });
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(Math.min(Number(master?.current_step || 0), 9));
       setJobs((jobsResult?.data || []).map((item: any) => {
         const [city = "", ...stateParts] = (item.job_posting?.location || "").split(",").map((part: string) => part.trim());
@@ -112,37 +131,65 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     return () => { mounted = false; };
   }, [userId, officerId]);
 
-  const syncShared = async () => {
+  const syncShared = async (includeWorkHistory = false) => {
     if (!activeOfficerId) throw new Error("Your officer profile is not ready yet");
-    await Promise.all([
+    const [profileResult, officerResult] = await Promise.all([
       supabase.from("profiles").update({ full_name: form.applicantName }).eq("id", userId),
       supabase.from("officer_profiles").update({ phone: form.phone, address_street: form.address, address_city: form.city, address_state: form.state, address_zip: form.zip, employment_type: shared.employmentTypes, shift_preference: shared.shiftPreferences, availability_schedule: shared.schedule } as any).eq("id", activeOfficerId),
     ]);
+    if (profileResult.error) throw profileResult.error;
+    if (officerResult.error) throw officerResult.error;
+    if (!includeWorkHistory) return;
     for (const item of form.workHistory.filter(j => j.employer?.trim())) {
       const payload: any = { officer_id: activeOfficerId, company_name: item.employer, position_title: item.title || null, start_date: item.startDate || null, end_date: item.endDate || null, supervisor_name: item.supervisor || null, supervisor_phone: item.phone || null, reason_for_leaving: item.reason || null };
-      if (item.id) await supabase.from("work_history").update(payload).eq("id", item.id); else {
-        const { data } = await supabase.from("work_history").insert(payload).select("id").single();
+      if (item.id) {
+        const { error } = await supabase.from("work_history").update(payload).eq("id", item.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from("work_history").insert(payload).select("id").single();
+        if (error) throw error;
         if (data?.id) item.id = data.id;
       }
     }
   };
 
-  const saveDraft = async (step = currentStep) => {
-    if (!loaded || !activeOfficerId) return;
+  const saveDraft = (step = currentStep, syncManagementRecords = false): Promise<boolean> => {
+    if (!loaded || !activeOfficerId) return Promise.resolve(false);
+    pendingSaveCount.current += 1;
     setSaving(true);
-    try {
-      await syncShared();
-      const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, availability: shared } };
-      const query = masterId ? (supabase as any).from("guard_hiring_applications").update(payload).eq("id", masterId).select("id").single() : (supabase as any).from("guard_hiring_applications").insert(payload).select("id").single();
-      const { data, error } = await query; if (error) throw error; if (data?.id) setMasterId(data.id); setSaveError(null); setSavedAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
-    } catch (error: any) { console.error("Draft save failed", error); setSaveError(error.message || "Draft could not be saved"); }
-    finally { setSaving(false); }
+    const performSave = async () => {
+      try {
+        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, availability: shared } };
+        const savedMasterId = masterIdRef.current;
+        const query = savedMasterId ? (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).select("id").single() : (supabase as any).from("guard_hiring_applications").insert(payload).select("id").single();
+        const { data, error } = await query;
+        if (error) throw error;
+        if (data?.id) {
+          masterIdRef.current = data.id;
+          setMasterId(data.id);
+        }
+        await syncShared(syncManagementRecords);
+        setSaveError(null);
+        setSavedAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+        return true;
+      } catch (error: any) {
+        console.error("Draft save failed", error);
+        setSaveError(error.message || "Draft could not be saved");
+        return false;
+      }
+    };
+    const queuedSave = saveQueue.current.then(performSave, performSave);
+    saveQueue.current = queuedSave;
+    return queuedSave.finally(() => {
+      pendingSaveCount.current -= 1;
+      if (pendingSaveCount.current === 0) setSaving(false);
+    });
   };
 
   useEffect(() => {
     if (!loaded || !activeOfficerId) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => saveDraft(), 400);
+    saveTimer.current = setTimeout(() => { void saveDraft(); }, 250);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [form, shared, currentStep, loaded, activeOfficerId]);
 
@@ -153,8 +200,18 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const complete = useMemo(() => [0, 1, 2, 6, 7, 8, 9].every(stepComplete), [form, shared, photos, certifications, acknowledged]);
   const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
   const updateList = (key: "workHistory" | "references", index: number, field: string, value: string) => setForm(current => ({ ...current, [key]: current[key].map((item, i) => i === index ? { ...item, [field]: value } : item) }));
-  const go = (step: number) => { const nextStep = Math.max(0, Math.min(9, step)); setCurrentStep(nextStep); requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" })); };
-  const next = async () => { if (!stepComplete(currentStep)) { toast.error(currentStep === 7 ? "Upload your headshot and full-body photo" : currentStep === 8 ? "Add a license or certification and upload its front document" : "Complete the required fields before continuing"); return; } await saveDraft(currentStep + 1); go(currentStep + 1); };
+  const go = async (step: number) => {
+    const nextStep = Math.max(0, Math.min(9, step));
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const saved = await saveDraft(nextStep, true);
+    if (!saved) {
+      toast.error("Your progress could not be saved. Please try again before leaving this page.");
+      return;
+    }
+    setCurrentStep(nextStep);
+    requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
+  };
+  const next = async () => { if (!stepComplete(currentStep)) { toast.error(currentStep === 7 ? "Upload your headshot and full-body photo" : currentStep === 8 ? "Add a license or certification and upload its front document" : "Complete the required fields before continuing"); return; } await go(currentStep + 1); };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); if (!complete || !activeOfficerId) { toast.error("Complete every required onboarding item before submitting"); return; }
