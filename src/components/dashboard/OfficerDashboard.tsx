@@ -96,36 +96,58 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   });
   const [quickSetStart, setQuickSetStart] = useState("");
   const [quickSetEnd, setQuickSetEnd] = useState("");
+  const ensureOfficerProfilePromise = useRef<Promise<any> | null>(null);
 
   useEffect(() => {
     loadProfile();
   }, [userId]);
 
   const ensureOfficerProfile = async () => {
-    if (!officerProfile) {
+    if (officerProfile) return officerProfile;
+    if (ensureOfficerProfilePromise.current) return ensureOfficerProfilePromise.current;
+
+    ensureOfficerProfilePromise.current = (async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           toast.error("You must be logged in");
           return null;
         }
-        // Call backend function using elevated privileges to ensure a row exists
-        const { data, error } = await supabase.functions.invoke('ensure-officer-profile', { body: {} });
-        if (error) throw error;
-        // After ensuring, fetch the profile row
-        const { data: ensured } = await supabase
+
+        // Prefer the service-backed ensure function, but do not leave a new
+        // officer unable to onboard if that function has not been deployed yet.
+        const functionResult = await supabase.functions.invoke('ensure-officer-profile', { body: {} });
+        if (functionResult.error) console.warn("Officer profile function unavailable; using direct fallback", functionResult.error);
+
+        let { data: ensured, error: selectError } = await supabase
           .from('officer_profiles')
           .select('*')
           .eq('user_id', user.id)
           .maybeSingle();
+        if (selectError) throw selectError;
+
+        if (!ensured) {
+          const { data: created, error: createError } = await supabase
+            .from('officer_profiles')
+            .upsert({ user_id: user.id } as any, { onConflict: 'user_id' })
+            .select('*')
+            .single();
+          if (createError) throw createError;
+          ensured = created;
+        }
+
         if (ensured) setOfficerProfile(ensured);
         return ensured ?? null;
       } catch (error: any) {
-        toast.error("Failed to create profile");
+        console.error("Failed to create officer profile", error);
+        toast.error(error.message || "Failed to create profile");
         return null;
+      } finally {
+        ensureOfficerProfilePromise.current = null;
       }
-    }
-    return officerProfile;
+    })();
+
+    return ensureOfficerProfilePromise.current;
   };
 
   const loadProfile = async () => {
