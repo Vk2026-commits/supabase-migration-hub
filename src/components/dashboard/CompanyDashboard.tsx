@@ -19,6 +19,7 @@ import JobApplicationsList from "./JobApplicationsList";
 import SubscriptionManager from "./SubscriptionManager";
 import { useSearchParams } from "@/lib/router-compat";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
+import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileWizard";
 
 interface CompanyDashboardProps {
   userId: string;
@@ -30,7 +31,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "profile");
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CompanyProfileForm>({
     company_name: "",
     industry: "",
     company_size: "",
@@ -61,6 +62,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   useEffect(() => {
     loadProfile();
   }, [userId]);
+
+  useEffect(() => {
+    requestAnimationFrame(() => document.getElementById("company-dashboard-content")?.scrollIntoView({ behavior: "auto", block: "start" }));
+  }, [activeTab]);
 
   const loadProfile = async () => {
     const { data } = await supabase
@@ -113,28 +118,32 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         .from('company-logos')
         .getPublicUrl(fileName);
 
-      setFormData({ ...formData, logo_url: publicUrl });
+      setFormData((current) => ({ ...current, logo_url: publicUrl }));
       toast.success("Logo uploaded successfully!");
+      return publicUrl;
     } catch (error: any) {
-      toast.error(error.message);
+      throw error;
     } finally {
       setUploadingLogo(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent, showToast = true) => {
+    e?.preventDefault();
     setLoading(true);
 
     try {
       // Upload logo if a new file was selected
+      let logoUrl = formData.logo_url;
       if (logoFile) {
-        await handleLogoUpload(logoFile);
+        logoUrl = await handleLogoUpload(logoFile);
+        setLogoFile(null);
       }
 
       const profileData = {
         user_id: userId,
         ...formData,
+        logo_url: logoUrl,
         year_founded: formData.year_founded ? parseInt(formData.year_founded) : null,
       };
 
@@ -153,10 +162,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         if (error) throw error;
       }
 
-      toast.success("Company profile updated successfully!");
-      loadProfile();
+      if (showToast) toast.success("Company profile updated successfully!");
+      await loadProfile();
+      return true;
     } catch (error: any) {
       toast.error(error.message);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -200,8 +211,20 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             </div>
           </div>
           
-          <div className="p-6 space-y-6 w-full overflow-auto">
+          <div id="company-dashboard-content" className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6">
             {activeTab === "profile" && (
+              <CompanyProfileWizard
+                formData={formData}
+                setFormData={setFormData}
+                logoFile={logoFile}
+                setLogoFile={setLogoFile}
+                loading={loading}
+                uploadingLogo={uploadingLogo}
+                onSave={() => handleSubmit(undefined, false)}
+                onBrowse={() => { window.location.href = "/browse"; }}
+              />
+            )}
+            {false && activeTab === "profile" && (
               <>
                 <div className="grid md:grid-cols-3 gap-4">
                   <Card>
