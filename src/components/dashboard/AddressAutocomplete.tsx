@@ -81,6 +81,26 @@ const buildSuggestion = (feature: PhotonFeature, index: number): AddressSuggesti
   };
 };
 
+const buildCitySuggestion = (feature: PhotonFeature, index: number): AddressSuggestion | null => {
+  const properties = feature.properties;
+  if (!properties) return null;
+
+  const city = properties.city || properties.town || properties.village || properties.name || properties.district || "";
+  const state = properties.state || "";
+  const label = [city, state].filter(Boolean).join(", ");
+
+  if (!city || !label) return null;
+
+  return {
+    id: `city-${properties.osm_type || "place"}-${properties.osm_id || index}-${label}`,
+    label,
+    street: "",
+    city,
+    state,
+    zip: "",
+  };
+};
+
 export const AddressAutocomplete = ({ value, onChange, streetLabel = "Home Address", unitLabel = "Apt/Unit", idPrefix = "address" }: AddressAutocompleteProps) => {
   const [activeField, setActiveField] = useState<"street" | "city" | "state" | null>(null);
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
@@ -135,9 +155,10 @@ export const AddressAutocomplete = ({ value, onChange, streetLabel = "Home Addre
         if (!response.ok) throw new Error("Address lookup failed");
 
         const result = await response.json() as { features?: PhotonFeature[] };
+        const suggestionBuilder = activeField === "city" ? buildCitySuggestion : buildSuggestion;
         const nextSuggestions = (result.features || [])
           .filter((feature) => feature.properties?.countrycode?.toLowerCase() === "us")
-          .map(buildSuggestion)
+          .map(suggestionBuilder)
           .filter((suggestion): suggestion is AddressSuggestion => Boolean(suggestion))
           .filter((suggestion, index, all) => all.findIndex((item) => item.label === suggestion.label) === index)
           .slice(0, 6);
@@ -162,6 +183,12 @@ export const AddressAutocomplete = ({ value, onChange, streetLabel = "Home Addre
   const chooseSuggestion = (suggestion: AddressSuggestion) => {
     if (activeField === "state") {
       updateField("state", suggestion.state);
+    } else if (activeField === "city") {
+      onChange({
+        ...value,
+        city: suggestion.city,
+        state: suggestion.state || value.state,
+      });
     } else {
       onChange({
         ...value,
@@ -179,7 +206,7 @@ export const AddressAutocomplete = ({ value, onChange, streetLabel = "Home Addre
     <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md">
       {loading && (
         <div className="flex items-center gap-2 px-3 py-3 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Finding addresses…
+          <Loader2 className="h-4 w-4 animate-spin" /> {activeField === "city" ? "Finding cities…" : "Finding addresses…"}
         </div>
       )}
       {!loading && suggestions.map((suggestion) => (
