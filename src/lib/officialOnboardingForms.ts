@@ -72,6 +72,12 @@ export type PolicyAutofillValues = OfficialOnboardingValues & {
   employeeIdNumber?: string;
   offeredPosition?: string;
   hourlyRate?: string;
+  supervisorName?: string;
+  acceptanceDeadline?: string;
+  employerRepresentativeName?: string;
+  employerRepresentativeTitle?: string;
+  employerSignatureName?: string;
+  offerPreparedAt?: string;
   trackTikUsername?: string;
   issuedItems?: Record<string, boolean>;
   availabilitySchedule?: Record<string, { start?: string; end?: string }>;
@@ -344,6 +350,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const employeeName = acknowledgement.printedName || [values.legalFirstName, values.middleInitial, values.legalLastName].filter(Boolean).join(" ");
   const formattedDate = date(acknowledgement.signatureDate);
   const isKairosConfidentialityAgreement = /kairos security/i.test(values.employerName || "") && path.includes("09-confidentialityagreement");
+  const isOfferLetter = path.includes("10-offer-letter-per-hour");
   const employerRepresentativeName = isKairosConfidentialityAgreement ? "Erika Garces" : "";
   const employerRepresentativeTitle = isKairosConfidentialityAgreement ? "Authorized Hiring Representative" : "";
   const schedule = values.availabilitySchedule || {};
@@ -363,6 +370,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     "Employee File Number": values.employeeIdNumber || "",
     "Street Address": values.address || "",
     "City State ZIP": [values.city, values.state, values.zip].filter(Boolean).join(", "),
+    undefined: employeeName,
     "User Name  for Track Tik": values.trackTikUsername || "",
     Position: values.offeredPosition || "Security Officer",
     Text1: employeeName,
@@ -378,7 +386,27 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     fieldValues[`${upper}From`] = hours?.start || "";
     fieldValues[`${upper}To`] = hours?.end || "";
   });
+  const regularFont = await document.embedFont(StandardFonts.Helvetica);
+  const boldFont = await document.embedFont(StandardFonts.HelveticaBold);
+  const signatureFont = await document.embedFont(StandardFonts.TimesRomanItalic);
   setText(form, fieldValues);
+  if (isOfferLetter) {
+    const page = document.getPages()[0];
+    const white = rgb(1, 1, 1);
+    const ink = rgb(0, 0, 0);
+    const coverAndWrite = (x: number, y: number, width: number, text: string, size = 9, font = regularFont) => {
+      page.drawRectangle({ x, y, width, height: 19, color: white });
+      page.drawText(text || "", { x: x + 2, y: y + 4, size, font, color: ink, maxWidth: width - 4 });
+    };
+    coverAndWrite(90, 551, 70, date(values.offerPreparedAt?.slice(0, 10) || values.startDate || ""), 7);
+    coverAndWrite(260, 550, 88, values.offeredPosition || "Security Officer", 7);
+    coverAndWrite(422, 550, 72, values.supervisorName || "Supervisor", 7);
+    coverAndWrite(316, 536, 58, date(values.startDate || ""), 7);
+    coverAndWrite(332, 507, 31, values.hourlyRate ? Number(values.hourlyRate).toFixed(2) : "", 7);
+    coverAndWrite(112, 114, 105, date(values.acceptanceDeadline || ""), 8);
+    coverAndWrite(88, 71, 125, values.employerRepresentativeName || values.employerSignatureName || "", 10, signatureFont);
+    coverAndWrite(214, 71, 190, values.employerRepresentativeTitle || "Authorized Hiring Representative", 7);
+  }
   Object.entries(acknowledgement.documentFields || {}).forEach(([name, value]) => {
     if (!value) return;
     try {
@@ -387,9 +415,6 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     } catch { /* field is not a text field in this document */ }
   });
 
-  const regularFont = await document.embedFont(StandardFonts.Helvetica);
-  const boldFont = await document.embedFont(StandardFonts.HelveticaBold);
-  const signatureFont = await document.embedFont(StandardFonts.TimesRomanItalic);
   const signatureImage = acknowledgement.signatureImage ? await document.embedPng(await trimSignature(acknowledgement.signatureImage)) : null;
   for (const field of form.getFields()) {
     const name = field.getName();
@@ -455,6 +480,11 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   } else if (employeeName) receipt.drawText(employeeName, { x: 70, y: 360, size: 24, font: signatureFont, color: rgb(0.04, 0.08, 0.15) });
   receipt.drawText("Date signed", { x: 414, y: 444, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
   receipt.drawText(formattedDate, { x: 414, y: 392, size: 13, font: regularFont, color: rgb(0.06, 0.09, 0.16) });
+  if (isOfferLetter && values.employerSignatureName) {
+    receipt.drawText("Offer prepared and approved by company", { x: 48, y: 292, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
+    receipt.drawText(values.employerSignatureName, { x: 48, y: 260, size: 20, font: signatureFont, color: rgb(0.04, 0.08, 0.15) });
+    receipt.drawText(values.employerRepresentativeTitle || "Authorized Hiring Representative", { x: 330, y: 260, size: 11, font: regularFont, color: rgb(0.06, 0.09, 0.16) });
+  }
   if (acknowledgement.notes) {
     receipt.drawText("Employee notes", { x: 48, y: 274, size: 9, font: boldFont, color: rgb(0.39, 0.43, 0.5) });
     wrapText(regularFont, acknowledgement.notes, 10, 516).slice(0, 7).forEach((line, index) => receipt.drawText(line, { x: 48, y: 250 - index * 15, size: 10, font: regularFont, color: rgb(0.17, 0.2, 0.27) }));

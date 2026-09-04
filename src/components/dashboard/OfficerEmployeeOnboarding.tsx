@@ -70,6 +70,12 @@ type OnboardingData = {
   startDate: string;
   offeredPosition: string;
   hourlyRate: string;
+  supervisorName: string;
+  acceptanceDeadline: string;
+  employerRepresentativeName: string;
+  employerRepresentativeTitle: string;
+  employerSignatureName: string;
+  offerPreparedAt: string;
   employeeIdNumber: string;
   trackTikUsername: string;
   trackTikPasswordSet: boolean;
@@ -237,6 +243,12 @@ const initialData: OnboardingData = {
   w4SignatureImage: "",
   offeredPosition: "Security Officer",
   hourlyRate: "",
+  supervisorName: "",
+  acceptanceDeadline: "",
+  employerRepresentativeName: "",
+  employerRepresentativeTitle: "",
+  employerSignatureName: "",
+  offerPreparedAt: "",
   employeeIdNumber: "",
   trackTikUsername: "",
   trackTikPasswordSet: false,
@@ -368,10 +380,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       if (!resolved && onEnsureProfile) resolved = (await onEnsureProfile())?.id || null;
       if (!mounted || !resolved) return;
       setActiveOfficerId(resolved);
-      const [profileResult, officerResult, hiringResult, maskedResult] = await Promise.all([
+      const [profileResult, officerResult, hiringResult, hireResult, maskedResult] = await Promise.all([
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
         supabase.from("officer_profiles").select("phone,address_street,address_city,address_state,address_zip,availability_schedule,title").eq("id", resolved).maybeSingle(),
         (supabase as any).from("guard_hiring_applications").select("id,company_name,application_data").eq("officer_id", resolved).eq("application_type", "employer_copy").eq("status", "submitted").order("submitted_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("hires").select("hire_date,position_title,offer_terms,offer_prepared_at,company_profiles(company_name)").eq("officer_id", resolved).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.functions.invoke("manage-sensitive-data", {
           body: { action: "get_masked_data", data: {} },
         }),
@@ -386,6 +399,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       if (!mounted) return;
       const fullName = (profileResult.data?.full_name || "").trim().split(/\s+/);
       const saved = existing.data?.form_data || {};
+      const hire = hireResult.data as any;
+      const offer = (hire?.offer_terms || {}) as Record<string, string>;
       setData({
         ...initialData,
         legalFirstName: fullName[0] || "",
@@ -400,6 +415,20 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         availabilitySchedule: (officerResult.data as any)?.availability_schedule || {},
         employerName: hiring?.company_name || hiring?.application_data?.companyName || "Your hiring company",
         ...saved,
+        ...(hire?.offer_prepared_at ? {
+          employerName: hire.company_profiles?.company_name || hiring?.company_name || saved.employerName || "Your hiring company",
+          startDate: offer.startDate || hire.hire_date || "",
+          offeredPosition: offer.offeredPosition || hire.position_title || "Security Officer",
+          hourlyRate: offer.hourlyRate || "",
+          supervisorName: offer.supervisorName || "",
+          scheduledPost: offer.scheduledPost || "",
+          scheduledShift: offer.scheduledShift || "",
+          acceptanceDeadline: offer.acceptanceDeadline || "",
+          employerRepresentativeName: offer.representativeName || "",
+          employerRepresentativeTitle: offer.representativeTitle || "",
+          employerSignatureName: offer.employerSignatureName || offer.representativeName || "",
+          offerPreparedAt: hire.offer_prepared_at,
+        } : {}),
       });
       setHiringApplicationId(hiring?.id || null);
       setPacketId(existing.data?.id || null);
@@ -547,7 +576,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return () => clearTimeout(timer);
   }, [activePolicyKey, currentStep, data]);
 
-  const policiesComplete = policyItems.every(([key]) => {
+  const policiesComplete = Boolean(data.offerPreparedAt) && policyItems.every(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
     return Boolean(data.policies[key] && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   });
@@ -556,7 +585,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     account.bankName && account.bankCity && account.bankState && /^\d{9}$/.test(account.routingNumber.replace(/\D/g, "")) && /^\d{4,17}$/.test(account.accountNumber.replace(/\D/g, "")) && (index === bankAccounts.length - 1 ? account.allocationType === "entire" : account.allocationType === "amount" && Number(account.allocationAmount) > 0)
   )));
   const directDepositComplete = bankAccountsComplete && data.bankAuthorizationAccepted && Boolean(data.bankSignatureName && data.bankSignatureDate && data.bankSignatureImage);
-  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
+  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.offerPreparedAt && data.startDate && data.scheduledPost && data.scheduledShift && data.supervisorName) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
   const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, bankAccounts, savedBankAccounts, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
@@ -1092,8 +1121,20 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/10"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((completedPolicyCount / policyItems.length) * 100)}%` }} /></div>
                   </div>
                   <div className="grid gap-5 rounded-2xl border p-5 md:grid-cols-2">
-                    <Field label="Offered position" value={data.offeredPosition} onChange={(v) => update("offeredPosition", v)} required />
-                    <Field label="Hourly rate" type="number" value={data.hourlyRate} onChange={(v) => update("hourlyRate", v)} />
+                    {data.offerPreparedAt ? (
+                      <div className="md:col-span-2 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
+                        <strong className="block">Company-prepared offer</strong>
+                        {data.employerName} approved the position, pay, start date, assignment, and supervisor below. These terms are locked; your step is to review and accept the offer letter.
+                      </div>
+                    ) : (
+                      <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong className="block">Waiting for prepared offer</strong>Your hiring company has not prepared the offer terms yet.</div>
+                    )}
+                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Position</span><strong className="block">{data.offeredPosition || "Not provided"}</strong></div>
+                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Pay</span><strong className="block">{data.hourlyRate ? `$${Number(data.hourlyRate).toFixed(2)} per hour` : "Not provided"}</strong></div>
+                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Start date</span><strong className="block">{data.startDate || "Not provided"}</strong></div>
+                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Supervisor</span><strong className="block">{data.supervisorName || "Not provided"}</strong></div>
+                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Assignment</span><strong className="block">{data.scheduledPost || "Not provided"}</strong></div>
+                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift || "Not provided"}</strong></div>
                     <Field label="TrackTik username" value={data.trackTikUsername} onChange={(v) => update("trackTikUsername", v)} />
                     <label className="flex items-center gap-3 self-end rounded-xl border p-4">
                       <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(v) => update("trackTikPasswordSet", Boolean(v))} />
@@ -1127,6 +1168,12 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                             }} />
                             {viewed && (
                               <div className="space-y-6">
+                                {key === "offer" && data.offerPreparedAt && (
+                                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
+                                    <strong className="block">Prepared and signed by {data.employerRepresentativeName || data.employerName}</strong>
+                                    {data.employerRepresentativeTitle || "Authorized hiring representative"}. Review the company-completed offer above, then accept and sign below.
+                                  </div>
+                                )}
                                 <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Step 2: Complete and sign.</strong> Existing profile information is added automatically, and the preview refreshes inside this same card.</div>
                                 <div className="grid gap-5 md:grid-cols-2">
                                   <Field label="Employee legal name" value={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { printedName: value })} required />
@@ -1177,11 +1224,17 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   </div>
                   <div className="border-t pt-6">
                     <h3 className="mb-4 text-lg font-semibold">Assignment and schedule</h3>
-                    <div className="grid gap-5 md:grid-cols-2">
-                      <Field label="Post or assignment" value={data.scheduledPost} onChange={(v) => update("scheduledPost", v)} />
-                      <Field label="Expected shift" value={data.scheduledShift} onChange={(v) => update("scheduledShift", v)} />
-                      <Field label="Employment start date" type="date" value={data.startDate} onChange={(v) => update("startDate", v)} required />
-                    </div>
+                    {data.offerPreparedAt ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="rounded-xl border bg-muted/20 p-4"><span className="text-xs text-muted-foreground">Post or assignment</span><strong className="block">{data.scheduledPost}</strong></div>
+                        <div className="rounded-xl border bg-muted/20 p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift}</strong></div>
+                        <div className="rounded-xl border bg-muted/20 p-4"><span className="text-xs text-muted-foreground">Employment start date</span><strong className="block">{data.startDate}</strong></div>
+                        <div className="rounded-xl border bg-muted/20 p-4"><span className="text-xs text-muted-foreground">Supervisor</span><strong className="block">{data.supervisorName}</strong></div>
+                        <p className="sm:col-span-2 text-sm text-muted-foreground">These details were prepared by {data.employerName}. Contact the company if a term needs to change.</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">Your hiring company must prepare the assignment and offer terms before you can confirm this step.</div>
+                    )}
                   </div>
                 </div>
               )}

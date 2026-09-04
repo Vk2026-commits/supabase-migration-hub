@@ -377,6 +377,8 @@ export type Database = {
           hired_by_user_id: string
           id: string
           officer_id: string
+          offer_prepared_at: string | null
+          offer_terms: Json
           position_title: string | null
           status: string | null
           updated_at: string | null
@@ -388,6 +390,8 @@ export type Database = {
           hired_by_user_id: string
           id?: string
           officer_id: string
+          offer_prepared_at?: string | null
+          offer_terms?: Json
           position_title?: string | null
           status?: string | null
           updated_at?: string | null
@@ -399,6 +403,8 @@ export type Database = {
           hired_by_user_id?: string
           id?: string
           officer_id?: string
+          offer_prepared_at?: string | null
+          offer_terms?: Json
           position_title?: string | null
           status?: string | null
           updated_at?: string | null
