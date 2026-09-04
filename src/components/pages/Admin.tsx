@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface Analytics {
   totalOfficers: number;
@@ -1295,10 +1296,7 @@ const Admin = () => {
                           <Label>Title</Label>
                           <Input value={editingOfficer?.title || ""} onChange={(e) => setEditingOfficer({ ...editingOfficer, title: e.target.value })} />
                         </div>
-                        <div className="space-y-2">
-                          <Label>Date of Birth</Label>
-                          <Input type="date" value={editingOfficer?.date_of_birth || ""} onChange={(e) => setEditingOfficer({ ...editingOfficer, date_of_birth: e.target.value })} />
-                        </div>
+                        <DatePicker id="admin-officer-date-of-birth" label="Date of Birth" value={editingOfficer?.date_of_birth || ""} onChange={(date_of_birth) => setEditingOfficer({ ...editingOfficer, date_of_birth })} />
                         <div className="space-y-2">
                           <Label>Years Experience</Label>
                           <Input type="number" value={editingOfficer?.years_experience || ""} onChange={(e) => setEditingOfficer({ ...editingOfficer, years_experience: parseInt(e.target.value) || 0 })} />
@@ -1698,14 +1696,8 @@ const Admin = () => {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-2">
-                          <Label>Payment Due Date</Label>
-                          <Input type="date" value={editingCompany?.payment_due_date || ""} onChange={(e) => setEditingCompany({ ...editingCompany, payment_due_date: e.target.value })} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Last Payment Date</Label>
-                          <Input type="date" value={editingCompany?.last_payment_date || ""} onChange={(e) => setEditingCompany({ ...editingCompany, last_payment_date: e.target.value })} />
-                        </div>
+                        <DatePicker id="admin-payment-due-date" label="Payment Due Date" value={editingCompany?.payment_due_date || ""} onChange={(payment_due_date) => setEditingCompany({ ...editingCompany, payment_due_date })} />
+                        <DatePicker id="admin-last-payment-date" label="Last Payment Date" value={editingCompany?.last_payment_date || ""} onChange={(last_payment_date) => setEditingCompany({ ...editingCompany, last_payment_date })} />
                         <div className="space-y-2">
                           <Label>Trial Start Date</Label>
                           <Input type="datetime-local" value={editingCompany?.trial_start_date?.slice(0, 16) || ""} onChange={(e) => setEditingCompany({ ...editingCompany, trial_start_date: e.target.value })} />
