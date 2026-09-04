@@ -785,6 +785,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
     setActivePolicyKey(null);
     toast.success("Document verified, saved, and marked complete");
+    const currentIndex = policyItems.findIndex(([k]) => k === key);
+    const nextItem = policyItems[currentIndex + 1];
+    if (nextItem) {
+      const nextKey = nextItem[0];
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          document.getElementById(`policy-${nextKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+    }
   };
   if (!loaded)
     return (
