@@ -212,24 +212,16 @@ const Auth = () => {
             </div>
             <CardTitle className="text-2xl">Check your email</CardTitle>
             <CardDescription className="text-base">
-              We sent a confirmation link to <span className="font-medium text-foreground">{confirmationEmail}</span>.
+              Confirm your account to continue logging in
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
             <p className="text-sm text-muted-foreground">
-              Confirm your email to activate your account. Security officers will then open directly to the We Find Guards hiring application.
+              We sent a confirmation link to <span className="font-medium text-foreground">{confirmationEmail}</span>. Open that email and select the confirmation link.
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => {
-                setConfirmationEmail("");
-                setMode("signin");
-              }}
-            >
-              Back to sign in
-            </Button>
+            <div className="rounded-lg border bg-muted/40 p-4 text-sm">
+              After you confirm, you will be signed in automatically and taken directly to the We Find Guards hiring application.
+            </div>
           </CardContent>
         </Card>
       </div>
