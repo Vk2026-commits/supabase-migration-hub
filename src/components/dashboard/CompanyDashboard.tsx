@@ -29,6 +29,7 @@ interface CompanyDashboardProps {
 const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [searchParams] = useSearchParams();
   const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "profile");
   const [formData, setFormData] = useState<CompanyProfileForm>({
@@ -63,6 +64,16 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const expiringItems = useExpiringCredentials(userId, "company");
   const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
+  const companyProfileComplete = Boolean(
+    companyProfile &&
+    formData.company_name.trim() &&
+    formData.company_address.trim() &&
+    formData.company_city.trim() &&
+    formData.company_state.trim() &&
+    formData.company_zip.trim() &&
+    formData.contact_person_name.trim() &&
+    formData.contact_email.trim(),
+  );
 
   useEffect(() => {
     loadProfile();
@@ -77,7 +88,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       .from("company_profiles")
       .select("*")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
 
     if (data) {
       setCompanyProfile(data);
@@ -110,6 +121,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         logo_url: data.logo_url || "",
       });
     }
+    setProfileLoaded(true);
   };
 
   const handleLogoUpload = async (file: File) => {
@@ -204,7 +216,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   return (
     <SidebarProvider>
       <div className="flex min-h-[calc(100vh-4rem)] w-full">
-        <CompanySidebar activeTab={activeTab} onTabChange={setActiveTab} />
+        <CompanySidebar activeTab={activeTab} onTabChange={setActiveTab} profileComplete={companyProfileComplete} />
         
         <div className="flex-1 flex flex-col min-w-0">
           <div className="border-b bg-background sticky top-0 z-10">
@@ -223,16 +235,17 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
           
           <div id="company-dashboard-content" className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6">
             {activeTab === "profile" && (
-              <CompanyProfileWizard
+              profileLoaded ? <CompanyProfileWizard
                 formData={formData}
                 setFormData={setFormData}
                 logoFile={logoFile}
                 setLogoFile={setLogoFile}
                 loading={loading}
                 uploadingLogo={uploadingLogo}
+                isComplete={companyProfileComplete}
                 onSave={() => handleSubmit(undefined, false)}
                 onBrowse={() => { window.location.href = "/browse"; }}
-              />
+              /> : <div className="py-20 text-center text-muted-foreground">Loading your company profile…</div>
             )}
             {false && activeTab === "profile" && (
               <>

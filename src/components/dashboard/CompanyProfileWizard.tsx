@@ -45,6 +45,7 @@ type Props = {
   setLogoFile: Dispatch<SetStateAction<File | null>>;
   loading: boolean;
   uploadingLogo: boolean;
+  isComplete: boolean;
   onSave: () => Promise<boolean>;
   onBrowse: () => void;
 };
@@ -64,8 +65,8 @@ const Field = ({ label, value, onChange, type = "text", placeholder = "", requir
   </div>
 );
 
-export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoFile, loading, uploadingLogo, onSave, onBrowse }: Props) {
-  const [currentStep, setCurrentStep] = useState(0);
+export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoFile, loading, uploadingLogo, isComplete, onSave, onBrowse }: Props) {
+  const [currentStep, setCurrentStep] = useState(isComplete ? steps.length - 1 : 0);
   const update = <K extends keyof CompanyProfileForm>(key: K, value: CompanyProfileForm[K]) => setFormData((current) => ({ ...current, [key]: value }));
   const stepComplete = (step: number) => step === 0
     ? Boolean(formData.company_name.trim() && formData.company_address.trim() && formData.company_city.trim() && formData.company_state.trim() && formData.company_zip.trim())
@@ -78,7 +79,7 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
           : Boolean(formData.company_name.trim() && formData.contact_person_name.trim() && formData.contact_email.trim());
   const canContinue = currentStep === 0 || currentStep === 2 ? stepComplete(currentStep) : true;
   const completedCount = useMemo(() => steps.filter((_, index) => stepComplete(index)).length, [formData]);
-  const progress = Math.round(((currentStep + 1) / steps.length) * 100);
+  const progress = isComplete ? 100 : Math.round(((currentStep + 1) / steps.length) * 100);
   const go = (step: number) => {
     setCurrentStep(Math.max(0, Math.min(steps.length - 1, step)));
     requestAnimationFrame(() => document.getElementById("company-profile-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
@@ -101,11 +102,11 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
     <div id="company-profile-top" className="mx-auto w-full max-w-6xl scroll-mt-20 pb-24 lg:pb-8">
       <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
         <div className="flex items-center gap-3 px-5 py-5 sm:px-8">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><Building2 className="h-7 w-7" /></div>
+          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white ${isComplete ? "bg-emerald-600" : "bg-primary"}`}>{isComplete ? <Check className="h-7 w-7" /> : <Building2 className="h-7 w-7" />}</div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">We Find Guards</p>
-            <h2 className="text-xl font-bold sm:text-2xl">Build your company profile</h2>
-            <p className="mt-1 text-sm text-muted-foreground">A strong profile helps qualified officers understand who they will work for.</p>
+            <h2 className="text-xl font-bold sm:text-2xl">{isComplete ? "Company profile complete" : "Build your company profile"}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{isComplete ? "Your company is ready to hire. You can review or update the information below anytime." : "A strong profile helps qualified officers understand who they will work for."}</p>
           </div>
           <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex"><Cloud className="h-4 w-4" />Saved as you continue</span>
         </div>
@@ -125,7 +126,7 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
         </aside>
 
         <main className="min-w-0">
-          <div className="mb-4 flex justify-between lg:hidden"><span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Step {currentStep + 1} of {steps.length}</span><span className="text-sm text-muted-foreground">{progress}% complete</span></div>
+          <div className="mb-4 flex justify-between lg:hidden"><span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{isComplete ? <span className="flex items-center gap-1"><Check className="h-4 w-4" />Profile complete</span> : `Step ${currentStep + 1} of ${steps.length}`}</span><span className="text-sm text-muted-foreground">{progress}% complete</span></div>
           <Card className="rounded-2xl shadow-sm">
             <CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader>
             <CardContent className="px-5 py-7 sm:px-8 sm:py-9">
@@ -153,7 +154,7 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
 
               {currentStep === 3 && <div className="space-y-7"><div className="grid gap-5 md:grid-cols-2"><Field label="Company license number" value={formData.license_number} onChange={(value) => update("license_number", value)} placeholder="A12345" /><div className="space-y-2"><Label>Licensed states</Label><Input className="h-12 text-base" value={formData.licensed_states.join(", ")} placeholder="TX, CA, FL" onChange={(event) => update("licensed_states", event.target.value.split(",").map((state) => state.trim().toUpperCase()).filter(Boolean))} /><p className="text-xs text-muted-foreground">Enter state abbreviations separated by commas.</p></div></div><div className="space-y-3"><Label className="text-base">Texas security license type(s)</Label>{[["Class A", "Private Investigation Company"], ["Class B", "Security Contractor Company"], ["Class C", "Investigations and Security Contractor Company"]].map(([value, description]) => <label key={value} className="flex cursor-pointer items-start gap-3 rounded-xl border p-4 hover:bg-muted/40"><Checkbox checked={formData.license_types.includes(value)} onCheckedChange={(checked) => update("license_types", checked ? [...formData.license_types, value] : formData.license_types.filter((item) => item !== value))} /><span><span className="block font-semibold">{value}</span><span className="text-sm text-muted-foreground">{description}</span></span></label>)}</div></div>}
 
-              {currentStep === 4 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company profile</p><h3 className="mt-2 text-2xl font-bold">{formData.company_name || "Company name not entered"}</h3><p className="mt-1 text-muted-foreground">{formData.industry || "Security services"}{formData.licensed_states.length ? ` · Licensed in ${formData.licensed_states.join(", ")}` : ""}</p></div><div className="grid gap-4 sm:grid-cols-2"><Review label="Company address" value={[formData.company_address, formData.company_address_unit, formData.company_city, formData.company_state, formData.company_zip].filter(Boolean).join(", ") || "Not entered"} /><Review label="Hiring contact" value={formData.contact_person_name || "Not entered"} /><Review label="Contact email" value={formData.contact_email || "Not entered"} /><Review label="Company phone" value={formData.company_phone || "Not entered"} /><Review label="License number" value={formData.license_number || "Not entered"} /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Profile progress</p><p className="mt-1 text-muted-foreground">{completedCount} of {steps.length} sections ready. You can return anytime to update these details.</p></div></div>}
+              {currentStep === 4 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company profile</p><h3 className="mt-2 text-2xl font-bold">{formData.company_name || "Company name not entered"}</h3><p className="mt-1 text-muted-foreground">{formData.industry || "Security services"}{formData.licensed_states.length ? ` · Licensed in ${formData.licensed_states.join(", ")}` : ""}</p></div><div className="grid gap-4 sm:grid-cols-2"><Review label="Company address" value={[formData.company_address, formData.company_address_unit, formData.company_city, formData.company_state, formData.company_zip].filter(Boolean).join(", ") || "Not entered"} /><Review label="Hiring contact" value={formData.contact_person_name || "Not entered"} /><Review label="Contact email" value={formData.contact_email || "Not entered"} /><Review label="Company phone" value={formData.company_phone || "Not entered"} /><Review label="License number" value={formData.license_number || "Not entered"} /></div><div className={`rounded-xl p-4 text-sm ${isComplete ? "border border-emerald-200 bg-emerald-50 text-emerald-950" : "bg-muted/40"}`}><p className="flex items-center gap-2 font-semibold">{isComplete && <Check className="h-4 w-4" />}{isComplete ? "Company profile complete" : "Profile progress"}</p><p className={`mt-1 ${isComplete ? "text-emerald-800" : "text-muted-foreground"}`}>{isComplete ? "All required company and hiring contact information has been saved." : `${completedCount} of ${steps.length} sections ready. You can return anytime to update these details.`}</p></div></div>}
             </CardContent>
           </Card>
 

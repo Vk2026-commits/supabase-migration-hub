@@ -1,5 +1,5 @@
 import { NavLink } from "@/lib/router-compat";
-import { Briefcase, Users, Heart, UserCheck, Building2, CreditCard } from "lucide-react";
+import { Briefcase, Users, Heart, UserCheck, Building2, CheckCircle2, CreditCard } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -16,9 +16,10 @@ import {
 interface CompanySidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  profileComplete: boolean;
 }
 
-export function CompanySidebar({ activeTab, onTabChange }: CompanySidebarProps) {
+export function CompanySidebar({ activeTab, onTabChange, profileComplete }: CompanySidebarProps) {
   const { open } = useSidebar();
 
   const items = [
@@ -60,8 +61,8 @@ export function CompanySidebar({ activeTab, onTabChange }: CompanySidebarProps) 
                       onClick={() => onTabChange(item.value)}
                       className={getNavCls(item.value)}
                     >
-                      <item.icon className="h-4 w-4" />
-                      {open && <span>{item.title}</span>}
+                      {item.value === "profile" && profileComplete ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <item.icon className="h-4 w-4" />}
+                      {open && <span className="flex min-w-0 flex-1 items-center justify-between gap-2"><span>{item.title}</span>{item.value === "profile" && profileComplete && <span className="text-xs font-semibold text-emerald-600">Complete</span>}</span>}
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
