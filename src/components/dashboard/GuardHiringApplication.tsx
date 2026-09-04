@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Cloud, Download, ExternalLink, FileCheck2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Cloud, Copy, Download, ExternalLink, FileCheck2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +25,14 @@ type SharedData = { employmentTypes: string[]; shiftPreferences: string[]; sched
 type WorkItem = Record<string, string>;
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const weekdays = days.slice(0, 5);
+const timeOptions = Array.from({ length: 48 }, (_, index) => {
+  const hour = Math.floor(index / 2);
+  const minute = index % 2 === 0 ? "00" : "30";
+  const value = `${String(hour).padStart(2, "0")}:${minute}`;
+  const label = `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
+  return { value, label };
+});
 const blankJob: WorkItem = { id: "", employer: "", title: "", startDate: "", endDate: "", supervisor: "", phone: "", reason: "" };
 const blankReference = { name: "", relationship: "", phone: "", email: "" };
 const steps = [
@@ -175,7 +183,55 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
 
 function Availability({ shared, setShared }: { shared: SharedData; setShared: React.Dispatch<React.SetStateAction<SharedData>> }) {
   const toggle = (key: "employmentTypes" | "shiftPreferences", value: string, checked: boolean) => setShared(c => ({ ...c, [key]: checked ? Array.from(new Set([...c[key], value])) : c[key].filter(v => v !== value) }));
-  return <div className="space-y-7"><section className="space-y-3"><Label className="text-base">Employment type *</Label><div className="flex flex-wrap gap-5">{[["full_time", "Full-time"], ["part_time", "Part-time"], ["contract", "Contract"]].map(([v,l]) => <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3"><Checkbox checked={shared.employmentTypes.includes(v)} onCheckedChange={c => toggle("employmentTypes", v, Boolean(c))} />{l}</label>)}</div></section><section className="space-y-3"><Label className="text-base">Preferred shift *</Label><div className="flex flex-wrap gap-5">{[["first_shift", "Day"], ["second_shift", "Evening"], ["third_shift", "Night"], ["weekend", "Weekend"]].map(([v,l]) => <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3"><Checkbox checked={shared.shiftPreferences.includes(v)} onCheckedChange={c => toggle("shiftPreferences", v, Boolean(c))} />{l}</label>)}</div></section><section className="space-y-3"><Label className="text-base">Weekly schedule *</Label>{days.map(day => <div key={day} className="grid grid-cols-[1fr_110px_110px] items-center gap-2 rounded-lg border p-3"><span className="text-sm font-medium">{day}</span><Input aria-label={`${day} start`} type="time" value={shared.schedule[day]?.start || ""} onChange={e => setShared(c => ({ ...c, schedule: { ...c.schedule, [day]: { start: e.target.value, end: c.schedule[day]?.end || "" } } }))} /><Input aria-label={`${day} end`} type="time" value={shared.schedule[day]?.end || ""} onChange={e => setShared(c => ({ ...c, schedule: { ...c.schedule, [day]: { start: c.schedule[day]?.start || "", end: e.target.value } } }))} /></div>)}</section></div>;
+  const updateTime = (day: string, field: "start" | "end", value: string) => setShared(current => ({
+    ...current,
+    schedule: {
+      ...current.schedule,
+      [day]: {
+        start: field === "start" ? value : current.schedule[day]?.start || "",
+        end: field === "end" ? value : current.schedule[day]?.end || "",
+      },
+    },
+  }));
+  const copyDay = (sourceDay: string, targetDays: string[]) => setShared(current => {
+    const source = current.schedule[sourceDay];
+    if (!source?.start || !source?.end) return current;
+    const schedule = { ...current.schedule };
+    targetDays.forEach(day => { schedule[day] = { ...source }; });
+    return { ...current, schedule };
+  });
+
+  return <div className="space-y-7">
+    <section className="space-y-3"><Label className="text-base">Employment type *</Label><div className="flex flex-wrap gap-5">{[["full_time", "Full-time"], ["part_time", "Part-time"], ["contract", "Contract"]].map(([v,l]) => <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3"><Checkbox checked={shared.employmentTypes.includes(v)} onCheckedChange={c => toggle("employmentTypes", v, Boolean(c))} />{l}</label>)}</div></section>
+    <section className="space-y-3"><Label className="text-base">Preferred shift *</Label><div className="flex flex-wrap gap-5">{[["first_shift", "Day"], ["second_shift", "Evening"], ["third_shift", "Night"], ["weekend", "Weekend"]].map(([v,l]) => <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3"><Checkbox checked={shared.shiftPreferences.includes(v)} onCheckedChange={c => toggle("shiftPreferences", v, Boolean(c))} />{l}</label>)}</div></section>
+    <section className="space-y-3">
+      <div><Label className="text-base">Weekly schedule *</Label><p className="mt-1 text-sm text-muted-foreground">Choose a start and end time, then copy that schedule to other days if needed.</p></div>
+      {days.map(day => {
+        const schedule = shared.schedule[day];
+        const canCopy = Boolean(schedule?.start && schedule?.end);
+        return <div key={day} className="space-y-3 rounded-xl border p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold">{day}</span>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={!canCopy} onClick={() => copyDay(day, weekdays)}><Copy className="mr-1.5 h-3.5 w-3.5" />Copy to weekdays</Button>
+              <Button type="button" variant="outline" size="sm" disabled={!canCopy} onClick={() => copyDay(day, days)}><Copy className="mr-1.5 h-3.5 w-3.5" />Copy to every day</Button>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TimeSelect label={`${day} start time`} value={schedule?.start || ""} placeholder="Select start time" onChange={value => updateTime(day, "start", value)} />
+            <TimeSelect label={`${day} end time`} value={schedule?.end || ""} placeholder="Select end time" onChange={value => updateTime(day, "end", value)} />
+          </div>
+        </div>;
+      })}
+    </section>
+  </div>;
+}
+
+function TimeSelect({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (value: string) => void }) {
+  const options = value && !timeOptions.some(option => option.value === value)
+    ? [{ value, label: value }, ...timeOptions]
+    : timeOptions;
+  return <div className="space-y-2"><Label className="text-sm">{label}</Label><select aria-label={label} className="h-12 w-full rounded-lg border bg-background px-3 text-base" value={value} onChange={event => onChange(event.target.value)}><option value="">{placeholder}</option>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>;
 }
 function Actions({ current, go, next, submit, complete, form }: any) { return <div className="mt-5 hidden items-center justify-between lg:flex"><Button type="button" variant="outline" onClick={() => go(current - 1)} disabled={!current}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>{current < 9 ? <Button type="button" onClick={next}>Continue<ArrowRight className="ml-2 h-4 w-4" /></Button> : <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(form)}><Download className="mr-2 h-4 w-4" />Preview PDF</Button><Button type="submit" disabled={submit || !complete}><FileCheck2 className="mr-2 h-4 w-4" />{submit ? "Submitting…" : "Submit application"}</Button></div>}</div>; }
 function GovernmentForm({ title, href }: { title: string; href: string }) { return <div className="rounded-xl border p-4"><FileCheck2 className="mb-3 h-6 w-6 text-primary" /><h3 className="font-semibold">{title}</h3><Button asChild variant="outline" className="mt-4 w-full"><a href={href} target="_blank" rel="noreferrer">Open fillable PDF<ExternalLink className="ml-2 h-4 w-4" /></a></Button></div>; }
