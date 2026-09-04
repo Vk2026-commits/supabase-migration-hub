@@ -28,7 +28,8 @@ export type GuardApplicationData = {
 
 const display = (value?: string) => value?.trim() || "Not provided";
 
-export async function generateGuardApplicationPDF(data: GuardApplicationData) {
+export async function generateGuardApplicationPDF(data: GuardApplicationData, mode: "download" | "print" = "download") {
+  const printWindow = mode === "print" ? window.open("", "_blank") : null;
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const width = doc.internal.pageSize.getWidth();
@@ -148,5 +149,12 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData) {
   }
 
   const safeName = data.applicantName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "applicant";
-  doc.save(`we-find-guards-application-${safeName}.pdf`);
+  if (mode === "print") {
+    doc.autoPrint();
+    const url = doc.output("bloburl");
+    if (printWindow) printWindow.location.href = url.toString();
+    else window.open(url.toString(), "_blank");
+  } else {
+    doc.save(`we-find-guards-application-${safeName}.pdf`);
+  }
 }
