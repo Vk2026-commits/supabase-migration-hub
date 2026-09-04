@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ const getPrivateFilePath = (value: string | null | undefined, bucket: string) =>
 
 const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardProps) => {
   const [activeTab, setActiveTab] = useState(initialTab);
+  const dashboardTopRef = useRef<HTMLDivElement>(null);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -316,12 +317,20 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
     workHistory: workHistoryCount > 0,
   };
 
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      dashboardTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+  };
+
   return (
     <SidebarProvider>
-      <div className="flex w-full min-h-screen">
+      <div ref={dashboardTopRef} className="flex w-full min-h-screen scroll-mt-0">
         <OfficerSidebar 
           activeTab={activeTab} 
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           completionStatus={completionStatus}
         />
         <div className="flex min-w-0 flex-1">
@@ -386,7 +395,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
         <Card
           className={`cursor-pointer transition-colors hover:bg-accent/50 ${urgentExpiring ? "border-destructive/50" : ""}`}
-          onClick={() => setActiveTab("certifications")}
+          onClick={() => handleTabChange("certifications")}
         >
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Expiring Skills</CardTitle>
@@ -408,7 +417,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
         <Card
           className="cursor-pointer transition-colors hover:bg-accent/50"
-          onClick={() => setActiveTab("videos")}
+          onClick={() => handleTabChange("videos")}
         >
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Video Interviews</CardTitle>
