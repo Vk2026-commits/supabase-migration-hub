@@ -604,7 +604,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <h3 className="font-semibold">Employee signature for Form I-9</h3>
                       <p className="mt-1 text-sm text-muted-foreground">Sign with your finger, mouse, or stylus. Your signature is placed on the official I-9 and carried into your onboarding packet. You can review or redraw it before final submission.</p>
                     </div>
-                    <SignaturePad value={data.signatureImage} onChange={(value) => update("signatureImage", value)} />
+                    <SignaturePad value={data.signatureImage} suggestedName={[data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("signatureImage", value)} />
                   </div>
                 </div>
               )}
@@ -752,7 +752,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <Field label="Full legal name as signature" value={data.signatureName} onChange={(v) => update("signatureName", v)} required />
                     <Field label="Date signed" type="date" value={data.signatureDate} onChange={(v) => update("signatureDate", v)} required />
                   </div>
-                  <SignaturePad value={data.signatureImage} onChange={(value) => update("signatureImage", value)} />
+                  <SignaturePad value={data.signatureImage} suggestedName={data.signatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("signatureImage", value)} />
                 </div>
               )}
             </CardContent>
@@ -796,7 +796,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   );
 }
 
-function SignaturePad({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function SignaturePad({ value, suggestedName, onChange }: { value: string; suggestedName: string; onChange: (value: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef(false);
 
@@ -854,17 +854,36 @@ function SignaturePad({ value, onChange }: { value: string; onChange: (value: st
     }
     onChange("");
   };
+  const createFromName = () => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context || !suggestedName.trim()) return;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#111827";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    let size = 96;
+    do {
+      context.font = `italic ${size}px "Brush Script MT", "Snell Roundhand", "Segoe Script", cursive`;
+      if (context.measureText(suggestedName).width <= canvas.width - 100) break;
+      size -= 4;
+    } while (size > 42);
+    context.fillText(suggestedName, canvas.width / 2, canvas.height / 2 + 6);
+    onChange(canvas.toDataURL("image/png"));
+  };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Label>Draw your signature *</Label>
-          <p className="mt-1 text-sm text-muted-foreground">Use your finger, mouse, or stylus inside the box.</p>
+          <Label>Your signature *</Label>
+          <p className="mt-1 text-sm text-muted-foreground">Draw it below or create a written signature from your legal name.</p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={clear} disabled={!value}>
-          Clear
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={createFromName} disabled={!suggestedName.trim()}>Create signature from my name</Button>
+          <Button type="button" variant="outline" size="sm" onClick={clear} disabled={!value}>Clear</Button>
+        </div>
       </div>
       <div className="overflow-hidden rounded-2xl border-2 border-dashed bg-white shadow-inner">
         <canvas ref={canvasRef} width={900} height={240} aria-label="Draw your signature" className="h-40 w-full cursor-crosshair touch-none sm:h-44" onPointerDown={start} onPointerMove={draw} onPointerUp={finish} onPointerCancel={finish} onPointerLeave={finish} />
