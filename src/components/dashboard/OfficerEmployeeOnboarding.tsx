@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Maximize2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Maximize2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +78,35 @@ type OnboardingData = {
   w4SignatureDate: string;
   w4SignatureImage: string;
 };
+
+type BankAccountDraft = {
+  id: string;
+  bankName: string;
+  bankCity: string;
+  bankState: string;
+  accountType: "checking" | "savings" | "other";
+  routingNumber: string;
+  accountNumber: string;
+  allocationType: "amount" | "entire";
+  allocationAmount: string;
+};
+
+type SavedBankAccount = Omit<BankAccountDraft, "id" | "routingNumber" | "accountNumber"> & {
+  routingLastFour: string;
+  accountLastFour: string;
+};
+
+const newBankAccount = (allocationType: "amount" | "entire" = "entire", id = `bank-${Date.now()}`): BankAccountDraft => ({
+  id,
+  bankName: "",
+  bankCity: "",
+  bankState: "",
+  accountType: "checking",
+  routingNumber: "",
+  accountNumber: "",
+  allocationType,
+  allocationAmount: "",
+});
 
 const policyItems = [
   ["handbook", "Employee handbook", "/forms/06-acknowledgement-of-handbook.pdf"],
@@ -247,9 +276,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [ssn, setSsn] = useState("");
   const [ssnMasked, setSsnMasked] = useState("");
   const [showSsn, setShowSsn] = useState(false);
-  const [routingNumber, setRoutingNumber] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [bankMasked, setBankMasked] = useState("");
+  const [bankAccounts, setBankAccounts] = useState<BankAccountDraft[]>(() => [newBankAccount("entire", "bank-1")]);
+  const [savedBankAccounts, setSavedBankAccounts] = useState<SavedBankAccount[]>([]);
   const [openPolicyDocument, setOpenPolicyDocument] = useState<string | null>(null);
   const [i9Url, setI9Url] = useState("/forms/02-i-9-2026.pdf");
   const [w4Url, setW4Url] = useState("/forms/W-4_Form_2026.pdf");
@@ -257,6 +285,21 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const packetIdRef = useRef<string | null>(null);
 
   const update = <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => setData((current) => ({ ...current, [key]: value }));
+  const updateBankAccount = <K extends keyof BankAccountDraft>(id: string, key: K, value: BankAccountDraft[K]) => {
+    setBankAccounts((current) => current.map((account) => account.id === id ? { ...account, [key]: value } : account));
+  };
+  const addBankAccount = () => {
+    setBankAccounts((current) => current.length >= 3 ? current : [
+      ...current.map((account) => ({ ...account, allocationType: "amount" as const })),
+      newBankAccount("entire"),
+    ]);
+  };
+  const removeBankAccount = (id: string) => {
+    setBankAccounts((current) => {
+      const remaining = current.filter((account) => account.id !== id);
+      return remaining.map((account, index) => ({ ...account, allocationType: index === remaining.length - 1 ? "entire" as const : "amount" as const }));
+    });
+  };
   const handleSsnChange = (nextValue: string) => {
     if (showSsn || !/[xX]/.test(nextValue)) { setSsn(formatSsn(nextValue)); return; }
     const currentDigits = ssn.replace(/\D/g, "");
@@ -318,7 +361,19 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       setI9SubmittedAt(existing.data?.i9_submitted_at || null);
       setW4SubmittedAt(existing.data?.w4_submitted_at || null);
       setSsnMasked(maskedResult.data?.data?.ssn_last_four || "");
-      setBankMasked(maskedResult.data?.data?.bank_account_last_four || "");
+      const maskedBankData = maskedResult.data?.data;
+      const maskedAccounts = Array.isArray(maskedBankData?.bank_accounts) ? maskedBankData.bank_accounts : maskedBankData?.bank_account_last_four ? [{
+        bankName: maskedBankData.bank_name || "Saved bank",
+        bankCity: "",
+        bankState: "",
+        accountType: maskedBankData.bank_account_type || "checking",
+        allocationType: "entire",
+        allocationAmount: "",
+        routingLastFour: maskedBankData.bank_routing_last_four || "",
+        accountLastFour: maskedBankData.bank_account_last_four,
+      }] : [];
+      setSavedBankAccounts(maskedAccounts);
+      if (maskedAccounts.length) setBankAccounts([]);
       setLoaded(true);
     })().catch((error) => {
       console.error(error);
@@ -399,8 +454,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
 
   const policiesComplete = policyItems.every(([key]) => data.policies[key]);
   const i9AuthorizationComplete = data.citizenshipStatus !== "Authorized to work until a specified date" || Boolean(data.workAuthorizationExpiration && (data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)));
-  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || Boolean((bankMasked || accountNumber) && (data.bankName || bankMasked)) : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
-  const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, accountNumber, bankMasked, hiringApplicationId]);
+  const bankAccountsComplete = savedBankAccounts.length > 0 || (bankAccounts.length > 0 && bankAccounts.every((account, index) => Boolean(
+    account.bankName && account.bankCity && account.bankState && /^\d{9}$/.test(account.routingNumber.replace(/\D/g, "")) && /^\d{4,17}$/.test(account.accountNumber.replace(/\D/g, "")) && (index === bankAccounts.length - 1 ? account.allocationType === "entire" : account.allocationType === "amount" && Number(account.allocationAmount) > 0)
+  )));
+  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || bankAccountsComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
+  const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, bankAccounts, savedBankAccounts, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
     if (step === 1 && ssn) {
@@ -410,22 +468,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       if (result.error || result.data?.error) throw new Error(await functionErrorMessage(result, "SSN could not be saved"));
       setSsnMasked(result.data.ssn_last_four);
     }
-    if (step === 3 && data.paymentMethod === "direct_deposit" && (routingNumber || accountNumber)) {
+    if (step === 3 && data.paymentMethod === "direct_deposit" && bankAccounts.length) {
       const result = await supabase.functions.invoke("manage-sensitive-data", {
         body: {
-          action: "save_bank",
-          data: {
-            bank_name: data.bankName,
-            routing_number: routingNumber.replace(/\D/g, ""),
-            account_number: accountNumber.replace(/\D/g, ""),
-            account_type: data.bankAccountType,
-          },
+          action: "save_bank_accounts",
+          data: { accounts: bankAccounts.map(({ id: _id, ...account }) => ({ ...account, routingNumber: account.routingNumber.replace(/\D/g, ""), accountNumber: account.accountNumber.replace(/\D/g, "") })) },
         },
       });
       if (result.error || result.data?.error) throw new Error(await functionErrorMessage(result, "Bank information could not be saved"));
-      setBankMasked(result.data.bank_account_last_four);
-      setRoutingNumber("");
-      setAccountNumber("");
+      setSavedBankAccounts(result.data.bank_accounts || []);
+      setBankAccounts([]);
     }
   };
 
@@ -778,22 +830,48 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="space-y-5 rounded-2xl border p-5">
                       <div className="flex items-center gap-2">
                         <LockKeyhole className="h-5 w-5 text-primary" />
-                        <h3 className="font-semibold">Encrypted direct deposit</h3>
+                        <div>
+                          <h3 className="font-semibold">Encrypted direct deposit accounts</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">Add up to three accounts, as allowed on the official form. The final account receives the remaining net pay.</p>
+                        </div>
                       </div>
-                      {bankMasked && <p className="rounded-lg bg-green-50 p-3 text-sm text-green-800">Bank account saved securely as {bankMasked}. Enter new numbers only to replace it.</p>}
-                      <div className="grid gap-5 md:grid-cols-2">
-                        <Field label="Bank name" value={data.bankName} onChange={(v) => update("bankName", v)} required={!bankMasked} />
-                        <Choice
-                          label="Account type"
-                          value={data.bankAccountType}
-                          onChange={(v) => update("bankAccountType", v)}
-                          options={["checking", "savings"]}
-                          optionLabels={{ checking: "Checking", savings: "Savings" }}
-                          stacked
-                        />
-                        <Field label="9-digit routing number" value={routingNumber} onChange={setRoutingNumber} required={!bankMasked} />
-                        <Field label="Account number" value={accountNumber} onChange={setAccountNumber} required={!bankMasked} />
-                      </div>
+                      {savedBankAccounts.length > 0 && (
+                        <div className="space-y-3 rounded-xl border border-green-200 bg-green-50 p-4">
+                          <p className="font-semibold text-green-900">{savedBankAccounts.length} bank {savedBankAccounts.length === 1 ? "account" : "accounts"} saved securely</p>
+                          {savedBankAccounts.map((account, index) => (
+                            <div key={`${account.accountLastFour}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm text-green-900">
+                              <span><strong>Account {index + 1}:</strong> {account.bankName} {account.bankCity && `- ${account.bankCity}, ${account.bankState}`}</span>
+                              <span className="font-mono">{account.accountType} {account.accountLastFour}</span>
+                            </div>
+                          ))}
+                          <Button type="button" variant="outline" size="sm" onClick={() => { setSavedBankAccounts([]); setBankAccounts([newBankAccount("entire", "bank-1")]); }}>Replace bank accounts</Button>
+                        </div>
+                      )}
+                      {bankAccounts.map((account, index) => (
+                        <div key={account.id} className="space-y-5 rounded-2xl border bg-muted/20 p-4 sm:p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="font-semibold">Bank account {index + 1}</h4>
+                            {bankAccounts.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => removeBankAccount(account.id)} className="text-destructive hover:text-destructive"><Trash2 className="mr-1 h-4 w-4" />Remove</Button>}
+                          </div>
+                          <div className="grid gap-5 md:grid-cols-2">
+                            <Field label="Bank name" value={account.bankName} onChange={(v) => updateBankAccount(account.id, "bankName", v)} required />
+                            <Choice label="Account type" value={account.accountType} onChange={(v) => updateBankAccount(account.id, "accountType", v as BankAccountDraft["accountType"])} options={["checking", "savings", "other"]} optionLabels={{ checking: "Checking", savings: "Savings", other: "Other" }} stacked />
+                            <Field label="Bank city" value={account.bankCity} onChange={(v) => updateBankAccount(account.id, "bankCity", v)} required />
+                            <Field label="Bank state" value={account.bankState} onChange={(v) => updateBankAccount(account.id, "bankState", v)} required />
+                            <Field label="9-digit routing number" value={account.routingNumber} onChange={(v) => updateBankAccount(account.id, "routingNumber", v.replace(/\D/g, "").slice(0, 9))} required />
+                            <Field label="Account number" value={account.accountNumber} onChange={(v) => updateBankAccount(account.id, "accountNumber", v.replace(/\D/g, "").slice(0, 17))} required />
+                            {index < bankAccounts.length - 1 ? (
+                              <Field label="Amount to deposit each payday" type="number" value={account.allocationAmount} onChange={(v) => updateBankAccount(account.id, "allocationAmount", v)} required />
+                            ) : (
+                              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+                                <p className="font-semibold text-primary">Entire remaining net amount</p>
+                                <p className="mt-1 text-muted-foreground">The official form requires the last account to receive the remaining pay.</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {bankAccounts.length > 0 && bankAccounts.length < 3 && <Button type="button" variant="outline" onClick={addBankAccount}><Plus className="mr-2 h-4 w-4" />Add another bank account</Button>}
                     </div>
                   )}
                 </div>

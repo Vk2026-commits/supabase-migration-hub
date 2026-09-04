@@ -245,6 +245,72 @@ serve(async (req) => {
         );
       }
 
+      case "save_bank_accounts": {
+        const accounts = Array.isArray(data?.accounts) ? data.accounts.slice(0, 3) : [];
+        if (!accounts.length || accounts.length > 3) {
+          return new Response(JSON.stringify({ error: "Add between one and three bank accounts" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const normalizedAccounts = accounts.map((account: any, index: number) => ({
+          bankName: String(account.bankName || "").trim(),
+          bankCity: String(account.bankCity || "").trim(),
+          bankState: String(account.bankState || "").trim(),
+          accountType: ["checking", "savings", "other"].includes(account.accountType) ? account.accountType : "checking",
+          routingNumber: String(account.routingNumber || "").replace(/\D/g, ""),
+          accountNumber: String(account.accountNumber || "").replace(/\D/g, ""),
+          allocationType: index === accounts.length - 1 ? "entire" : "amount",
+          allocationAmount: index === accounts.length - 1 ? "" : String(account.allocationAmount || "").trim(),
+        }));
+        const invalidAccount = normalizedAccounts.find((account: any, index: number) =>
+          !account.bankName || !account.bankCity || !account.bankState || !/^\d{9}$/.test(account.routingNumber) || !/^\d{4,17}$/.test(account.accountNumber) || (index < normalizedAccounts.length - 1 && !(Number(account.allocationAmount) > 0))
+        );
+        if (invalidAccount) {
+          return new Response(JSON.stringify({ error: "Complete the bank name, city, state, routing number, account number, and deposit amount for every account" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        const routingEncrypted = await encrypt(JSON.stringify(normalizedAccounts.map((account: any) => account.routingNumber)));
+        const accountEncrypted = await encrypt(JSON.stringify(normalizedAccounts.map((account: any) => account.accountNumber)));
+        if (!routingEncrypted || !accountEncrypted) {
+          return new Response(JSON.stringify({ error: "Encryption service unavailable" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        const maskedAccounts = normalizedAccounts.map((account: any) => ({
+          bankName: account.bankName,
+          bankCity: account.bankCity,
+          bankState: account.bankState,
+          accountType: account.accountType,
+          allocationType: account.allocationType,
+          allocationAmount: account.allocationAmount,
+          routingLastFour: `*****${account.routingNumber.slice(-4)}`,
+          accountLastFour: `****${account.accountNumber.slice(-4)}`,
+        }));
+        const lastAccount = normalizedAccounts[normalizedAccounts.length - 1];
+        const { error: upsertError } = await supabase.from("officer_sensitive_data").upsert({
+          officer_id: officerId,
+          bank_name: JSON.stringify(maskedAccounts),
+          bank_routing_encrypted: routingEncrypted,
+          bank_routing_last_four: `*****${lastAccount.routingNumber.slice(-4)}`,
+          bank_account_encrypted: accountEncrypted,
+          bank_account_last_four: `****${lastAccount.accountNumber.slice(-4)}`,
+          bank_account_type: normalizedAccounts.length > 1 ? "multiple" : lastAccount.accountType,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "officer_id" });
+        if (upsertError) {
+          console.error("Bank accounts upsert error:", upsertError);
+          return new Response(JSON.stringify({ error: "Failed to save bank accounts" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ success: true, bank_accounts: maskedAccounts }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
       case "save_bank": {
         const { bank_name, routing_number, account_number, account_type } = data;
         if (!bank_name || !/^\d{9}$/.test(routing_number || "") || !/^\d{4,17}$/.test(account_number || "")) {
@@ -298,8 +364,12 @@ serve(async (req) => {
           );
         }
 
+        let bankAccounts = null;
+        if (sensitiveData?.bank_name?.trim().startsWith("[")) {
+          try { bankAccounts = JSON.parse(sensitiveData.bank_name); } catch { bankAccounts = null; }
+        }
         return new Response(
-          JSON.stringify({ data: sensitiveData || null }),
+          JSON.stringify({ data: sensitiveData ? { ...sensitiveData, bank_accounts: bankAccounts } : null }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
