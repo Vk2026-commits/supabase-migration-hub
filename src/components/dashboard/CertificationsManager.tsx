@@ -36,6 +36,14 @@ interface CertificationsManagerProps {
   onChanged?: (certifications: Certification[]) => void;
 }
 
+type LicenseFormData = {
+  certification_number: string;
+  issue_date: string;
+  expiry_date: string;
+};
+
+type PendingLicenseUploads = { front?: File; back?: File };
+
 const LICENSE_LEVELS = [
   { value: "level-ii", label: "Non-Commission Certificate or License" },
   { value: "level-iii", label: "Commission Certificate or License" },
@@ -97,7 +105,7 @@ function CertificationDatePicker({
   const selectedDate = parseStoredDate(value);
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       <Label htmlFor={id}>{label}</Label>
       <Popover>
         <PopoverTrigger asChild>
@@ -106,12 +114,12 @@ function CertificationDatePicker({
             type="button"
             variant="outline"
             className={cn(
-              "h-12 w-full justify-start text-left text-base font-normal",
+              "h-12 min-w-0 w-full justify-start overflow-hidden text-left text-base font-normal",
               !selectedDate && "text-muted-foreground",
             )}
           >
             <CalendarDays className="mr-2 h-4 w-4 shrink-0" />
-            {selectedDate ? format(selectedDate, "MMM d, yyyy") : placeholder}
+            <span className="min-w-0 truncate">{selectedDate ? format(selectedDate, "MMM d, yyyy") : placeholder}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
@@ -144,6 +152,8 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
   const [uploading, setUploading] = useState<string | null>(null);
   const [currentOfficerId, setCurrentOfficerId] = useState(officerId);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [licenseForms, setLicenseForms] = useState<Record<string, LicenseFormData>>({});
+  const [pendingLicenseUploads, setPendingLicenseUploads] = useState<Record<string, PendingLicenseUploads>>({});
 
   useEffect(() => {
     if (officerId) {
@@ -385,26 +395,25 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
   };
 
   const LicenseForm = ({ licenseLevel, label }: { licenseLevel: string; label: string }) => {
-    const [formData, setFormData] = useState({
-      certification_number: "",
-      issue_date: "",
-      expiry_date: "",
-    });
-    const [pendingUploads, setPendingUploads] = useState<{ front?: File; back?: File }>({});
-
     const existingLicense = certifications.find(
       (c) => c.license_level === licenseLevel && c.certification_type === "license"
     );
-
-    useEffect(() => {
-      if (existingLicense) {
-        setFormData({
-          certification_number: existingLicense.certification_number || "",
-          issue_date: existingLicense.issue_date || "",
-          expiry_date: existingLicense.expiry_date || "",
-        });
-      }
-    }, [existingLicense]);
+    const formData = licenseForms[licenseLevel] || {
+      certification_number: existingLicense?.certification_number || "",
+      issue_date: existingLicense?.issue_date || "",
+      expiry_date: existingLicense?.expiry_date || "",
+    };
+    const setFormData = (next: LicenseFormData) => {
+      setLicenseForms((current) => ({ ...current, [licenseLevel]: next }));
+    };
+    const pendingUploads = pendingLicenseUploads[licenseLevel] || {};
+    const setPendingUploads = (next: React.SetStateAction<PendingLicenseUploads>) => {
+      setPendingLicenseUploads((current) => {
+        const previous = current[licenseLevel] || {};
+        const value = typeof next === "function" ? next(previous) : next;
+        return { ...current, [licenseLevel]: value };
+      });
+    };
 
     const handlePendingUpload = (e: React.ChangeEvent<HTMLInputElement>, side: "front" | "back") => {
       if (!e.target.files || e.target.files.length === 0) return;
@@ -504,7 +513,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-4">
               <CertificationDatePicker
                 id={`${licenseLevel}-issue`}
                 label="Certification Date"
