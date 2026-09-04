@@ -184,6 +184,20 @@ const maskSsn = (value: string) => {
   return digits.length <= 5 ? formatSsn(digits) : `XXX-XX-${digits.slice(5)}`;
 };
 
+const functionErrorMessage = async (result: any, fallback: string) => {
+  if (result?.data?.error) return String(result.data.error);
+  const context = result?.error?.context;
+  if (context && typeof context.clone === "function") {
+    try {
+      const payload = await context.clone().json();
+      if (payload?.error) return String(payload.error);
+    } catch {
+      // The function may have returned a non-JSON gateway response.
+    }
+  }
+  return result?.error?.message || fallback;
+};
+
 function Field({ label, value, onChange, type = "text", required = false, placeholder = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
   const id = `employee-onboarding-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   if (type === "date") return <DatePicker id={id} label={label} value={value} onChange={onChange} required={required} />;
@@ -392,7 +406,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       const result = await supabase.functions.invoke("manage-sensitive-data", {
         body: { action: "save_ssn", data: { ssn: formatSsn(ssn) } },
       });
-      if (result.error || result.data?.error) throw new Error(result.data?.error || result.error?.message || "SSN could not be saved");
+      if (result.error || result.data?.error) throw new Error(await functionErrorMessage(result, "SSN could not be saved"));
       setSsnMasked(result.data.ssn_last_four);
     }
     if (step === 3 && data.paymentMethod === "direct_deposit" && (routingNumber || accountNumber)) {
@@ -407,7 +421,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           },
         },
       });
-      if (result.error || result.data?.error) throw new Error(result.data?.error || result.error?.message || "Bank information could not be saved");
+      if (result.error || result.data?.error) throw new Error(await functionErrorMessage(result, "Bank information could not be saved"));
       setBankMasked(result.data.bank_account_last_four);
       setRoutingNumber("");
       setAccountNumber("");

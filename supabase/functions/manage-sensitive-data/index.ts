@@ -149,18 +149,22 @@ serve(async (req) => {
     switch (action) {
       case "save_ssn": {
         const { ssn } = data;
-        
-        // Validate SSN format (XXX-XX-XXXX)
-        const ssnRegex = /^\d{3}-\d{2}-\d{4}$/;
-        if (!ssnRegex.test(ssn)) {
+
+        // Accept either digits or the formatted value from the masked UI. The
+        // browser can submit while the visual mask is transitioning, so always
+        // normalize at this trusted boundary before validating and encrypting.
+        const ssnDigits = String(ssn || "").replace(/\D/g, "");
+        if (!/^\d{9}$/.test(ssnDigits)) {
           return new Response(
-            JSON.stringify({ error: "Invalid SSN format. Use XXX-XX-XXXX" }),
+            JSON.stringify({ error: "Enter all 9 digits of the Social Security number" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        const ssnLastFour = `***-**-${ssn.slice(-4)}`;
-        const ssnEncrypted = await encrypt(ssn);
+        const normalizedSsn = `${ssnDigits.slice(0, 3)}-${ssnDigits.slice(3, 5)}-${ssnDigits.slice(5)}`;
+
+        const ssnLastFour = `***-**-${ssnDigits.slice(-4)}`;
+        const ssnEncrypted = await encrypt(normalizedSsn);
 
         if (!ssnEncrypted) {
           console.error("Failed to encrypt SSN - encryption key may not be configured");
