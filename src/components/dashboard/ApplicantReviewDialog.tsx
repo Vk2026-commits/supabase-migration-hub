@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Briefcase, Calendar, Download, FileText, Image as ImageIcon, Mail, MapPin, Phone, Printer, ShieldCheck, User } from "lucide-react";
+import { Briefcase, Calendar, Download, Eye, FileText, Image as ImageIcon, Mail, MapPin, Phone, Printer, ShieldCheck, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +41,7 @@ const formatTime = (item: string) => {
 
 export function ApplicantReviewDialog({ open, onOpenChange, application }: ApplicantReviewDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string } | null>(null);
   const [review, setReview] = useState<ReviewData>({ snapshot: null, officer: null, certifications: [], workHistory: [], photos: [], documentUrls: {} });
 
   useEffect(() => {
@@ -170,7 +171,12 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </Section>
 
           <Section title="Licenses and certifications" icon={FileText}>
-            {review.certifications.length ? <div className="grid gap-4 md:grid-cols-2">{review.certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.name || pretty(cert.license_level || "Certification")}</p><p className="text-sm text-muted-foreground">{cert.certification_number || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.certification_type || "certificate")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.issue_date} /><Info label="Expires" content={cert.expiry_date} /></div><div className="flex flex-wrap gap-2">{(["front", "back"] as const).map(side => review.documentUrls[`${cert.id}-${side}`] ? <Button key={side} asChild size="sm" variant="outline"><a href={review.documentUrls[`${cert.id}-${side}`]} target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />{pretty(side)} document</a></Button> : null)}</div></div>)}</div> : <Empty text="No licenses or certification documents are available" />}
+            {review.certifications.length ? <div className="grid gap-4 md:grid-cols-2">{review.certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.name || pretty(cert.license_level || "Certification")}</p><p className="text-sm text-muted-foreground">{cert.certification_number || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.certification_type || "certificate")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.issue_date} /><Info label="Expires" content={cert.expiry_date} /></div><div className="space-y-2">{(["front", "back"] as const).map(side => {
+              const documentUrl = review.documentUrls[`${cert.id}-${side}`];
+              if (!documentUrl) return null;
+              const label = `${pretty(side)} document`;
+              return <div key={side} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2"><span className="pl-1 text-sm font-medium">{label}</span><div className="flex gap-2"><Button type="button" size="sm" onClick={() => setPreviewDocument({ label: `${cert.name || pretty(cert.license_level || "Certification")} — ${label}`, url: documentUrl })}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={documentUrl} download target="_blank" rel="noreferrer" aria-label={`Download ${label}`}><Download className="h-4 w-4" /></a></Button></div></div>;
+            })}</div></div>)}</div> : <Empty text="No licenses or certification documents are available" />}
           </Section>
 
           <Section title="Work history" icon={Briefcase}>
@@ -182,6 +188,21 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </Section>
         </>}
       </div>
+
+      <Dialog open={Boolean(previewDocument)} onOpenChange={(nextOpen) => { if (!nextOpen) setPreviewDocument(null); }}>
+        <DialogContent className="flex h-[92vh] max-w-5xl flex-col overflow-hidden p-0">
+          <DialogHeader className="border-b px-5 py-4 pr-12">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <DialogTitle className="truncate">{previewDocument?.label}</DialogTitle>
+                <DialogDescription>View the uploaded certificate without leaving the applicant review.</DialogDescription>
+              </div>
+              {previewDocument && <Button asChild size="sm" variant="outline"><a href={previewDocument.url} download target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />Download</a></Button>}
+            </div>
+          </DialogHeader>
+          {previewDocument && <iframe src={previewDocument.url} title={previewDocument.label} className="min-h-0 flex-1 bg-muted" />}
+        </DialogContent>
+      </Dialog>
     </DialogContent>
   </Dialog>;
 }
