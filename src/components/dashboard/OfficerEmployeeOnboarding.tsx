@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, FileCheck2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, FileCheck2, LockKeyhole, Maximize2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { buildI9, buildW4, pdfUrl } from "@/lib/officialOnboardingForms";
 
@@ -69,6 +70,7 @@ type OnboardingData = {
   policies: Record<string, boolean>;
   signatureName: string;
   signatureDate: string;
+  signatureImage: string;
 };
 
 const policyItems = [
@@ -111,7 +113,7 @@ const initialData: OnboardingData = {
   filingStatus: "", multipleJobs: false, qualifyingChildren: "", otherDependents: "", otherIncome: "", deductions: "", extraWithholding: "",
   paymentMethod: "direct_deposit", bankName: "", bankAccountType: "checking", emergencyName: "", emergencyRelationship: "",
   emergencyPhone: "", emergencyAltPhone: "", physicianName: "", medicalNotes: "", uniformShirt: "", uniformPants: "", uniformShoes: "",
-  scheduledPost: "", scheduledShift: "", startDate: "", policies: {}, signatureName: "", signatureDate: new Date().toISOString().slice(0, 10),
+  scheduledPost: "", scheduledShift: "", startDate: "", policies: {}, signatureName: "", signatureDate: new Date().toISOString().slice(0, 10), signatureImage: "",
   offeredPosition: "Security Officer", hourlyRate: "", employeeIdNumber: "", trackTikUsername: "", trackTikPasswordSet: false, issuedItems: {},
 };
 
@@ -246,7 +248,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone)
     : step === 5 ? policiesComplete
     : step === 6 ? Boolean(data.startDate)
-    : Boolean(data.signatureName && data.signatureDate);
+    : Boolean(data.signatureName && data.signatureDate && data.signatureImage);
   const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, accountNumber, bankMasked, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
@@ -320,7 +322,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           {currentStep === 4 && <div className="space-y-6"><OfficialDocument title="Emergency contact form" url="/forms/05-emergency-contact-form-fill.pdf" /><div className="grid gap-5 md:grid-cols-2"><Field label="Emergency contact name" value={data.emergencyName} onChange={v => update("emergencyName", v)} required /><Field label="Relationship" value={data.emergencyRelationship} onChange={v => update("emergencyRelationship", v)} required /><Field label="Primary phone" type="tel" value={data.emergencyPhone} onChange={v => update("emergencyPhone", v)} required /><Field label="Alternate phone" type="tel" value={data.emergencyAltPhone} onChange={v => update("emergencyAltPhone", v)} /><Field label="Physician name" value={data.physicianName} onChange={v => update("physicianName", v)} /></div><div className="space-y-2"><Label>Medical or emergency instructions</Label><Textarea rows={4} value={data.medicalNotes} onChange={event => update("medicalNotes", event.target.value)} /></div></div>}
           {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Review every document from the Kairos onboarding packet inside We Find Guards, then acknowledge it individually.</p><div className="grid gap-5 rounded-2xl border p-5 md:grid-cols-2"><Field label="Offered position" value={data.offeredPosition} onChange={v => update("offeredPosition", v)} required /><Field label="Hourly rate" type="number" value={data.hourlyRate} onChange={v => update("hourlyRate", v)} /><Field label="TrackTik username" value={data.trackTikUsername} onChange={v => update("trackTikUsername", v)} /><label className="flex items-center gap-3 self-end rounded-xl border p-4"><Checkbox checked={data.trackTikPasswordSet} onCheckedChange={v => update("trackTikPasswordSet", Boolean(v))} /><span className="text-sm font-medium">TrackTik password set</span></label></div>{openPolicyDocument && <div className="space-y-2"><Button type="button" variant="outline" onClick={() => setOpenPolicyDocument(null)}>Close document</Button><OfficialDocument title="Employer onboarding document" url={openPolicyDocument} /></div>}{policyItems.map(([key, label, document]) => <div key={key} className="rounded-xl border p-4"><div className="flex flex-wrap items-start gap-3"><Checkbox checked={Boolean(data.policies[key])} onCheckedChange={value => update("policies", { ...data.policies, [key]: Boolean(value) })} /><div className="min-w-0 flex-1"><p className="font-medium">{label}</p><p className="text-sm text-muted-foreground">I have received, reviewed, and agree to follow this document.</p></div><Button type="button" variant="outline" size="sm" onClick={() => setOpenPolicyDocument(document)}>Review document</Button></div></div>)}</div>}
           {currentStep === 6 && <div className="space-y-6"><div><h3 className="text-lg font-semibold">Company property and uniform checklist</h3><p className="text-sm text-muted-foreground">Check only the items your employer has issued to you.</p></div><div className="grid gap-3 sm:grid-cols-2">{issuedItemOptions.map(item => <label key={item} className="flex items-center gap-3 rounded-xl border p-4"><Checkbox checked={Boolean(data.issuedItems[item])} onCheckedChange={v => update("issuedItems", { ...data.issuedItems, [item]: Boolean(v) })} /><span className="text-sm font-medium">{item}</span></label>)}</div><div className="grid gap-5 border-t pt-6 md:grid-cols-4"><Field label="Employee ID number" value={data.employeeIdNumber} onChange={v => update("employeeIdNumber", v)} /><Field label="Shirt size" value={data.uniformShirt} onChange={v => update("uniformShirt", v)} /><Field label="Pants size" value={data.uniformPants} onChange={v => update("uniformPants", v)} /><Field label="Shoe size" value={data.uniformShoes} onChange={v => update("uniformShoes", v)} /></div><div className="border-t pt-6"><h3 className="mb-4 text-lg font-semibold">Assignment and schedule</h3><div className="grid gap-5 md:grid-cols-2"><Field label="Post or assignment" value={data.scheduledPost} onChange={v => update("scheduledPost", v)} /><Field label="Expected shift" value={data.scheduledShift} onChange={v => update("scheduledShift", v)} /><Field label="Employment start date" type="date" value={data.startDate} onChange={v => update("startDate", v)} required /></div></div></div>}
-          {currentStep === 7 && <div className="space-y-7"><div className="rounded-2xl border bg-muted/30 p-5"><h3 className="font-semibold">Packet review</h3><div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">{steps.slice(1, 7).map((step, index) => <div key={step[0]} className="flex items-center gap-2">{completeStep(index + 1) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <span className="h-4 w-4 rounded-full border" />} {step[0]}</div>)}</div></div><div className="rounded-xl bg-primary/5 p-4 text-sm">By signing, I certify that the information I entered is true and complete, that I completed the employee portions of the government forms, and that my electronic signature has the same effect as a handwritten signature.</div><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name as signature" value={data.signatureName} onChange={v => update("signatureName", v)} required /><Field label="Date signed" type="date" value={data.signatureDate} onChange={v => update("signatureDate", v)} required /></div></div>}
+          {currentStep === 7 && <div className="space-y-7"><div className="rounded-2xl border bg-muted/30 p-5"><h3 className="font-semibold">Packet review</h3><div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">{steps.slice(1, 7).map((step, index) => <div key={step[0]} className="flex items-center gap-2">{completeStep(index + 1) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <span className="h-4 w-4 rounded-full border" />} {step[0]}</div>)}</div></div><div className="rounded-xl bg-primary/5 p-4 text-sm">By signing, I certify that the information I entered is true and complete, that I completed the employee portions of the government forms, and that my electronic signature has the same effect as a handwritten signature.</div><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name as signature" value={data.signatureName} onChange={v => update("signatureName", v)} required /><Field label="Date signed" type="date" value={data.signatureDate} onChange={v => update("signatureDate", v)} required /></div><SignaturePad value={data.signatureImage} onChange={value => update("signatureImage", value)} /></div>}
         </CardContent></Card>
         <div className="mt-5 hidden items-center justify-between lg:flex"><Button type="button" variant="outline" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>{currentStep < 7 ? <Button type="button" onClick={next} disabled={saving}>Save and continue<ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button type="submit" disabled={submitting || !allComplete || status === "submitted"}><FileCheck2 className="mr-2 h-4 w-4" />{status === "submitted" ? "Submitted" : submitting ? "Submitting…" : "Submit onboarding"}</Button>}</div>
       </main>
@@ -329,10 +331,70 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   </form>;
 }
 
+function SignaturePad({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    if (!value) return;
+    const image = new Image();
+    image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    image.src = value;
+  }, [value]);
+
+  const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!;
+    const rect = canvas.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * (canvas.width / rect.width), y: (event.clientY - rect.top) * (canvas.height / rect.height) };
+  };
+  const start = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current!;
+    const context = canvas.getContext("2d")!;
+    drawingRef.current = true;
+    canvas.setPointerCapture(event.pointerId);
+    const position = point(event);
+    context.beginPath(); context.moveTo(position.x, position.y);
+    context.strokeStyle = "#111827"; context.lineWidth = 4; context.lineCap = "round"; context.lineJoin = "round";
+  };
+  const draw = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    const context = canvasRef.current!.getContext("2d")!;
+    const position = point(event);
+    context.lineTo(position.x, position.y); context.stroke();
+  };
+  const finish = () => {
+    if (!drawingRef.current || !canvasRef.current) return;
+    drawingRef.current = false;
+    onChange(canvasRef.current.toDataURL("image/png"));
+  };
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (canvas && context) { context.fillStyle = "#ffffff"; context.fillRect(0, 0, canvas.width, canvas.height); }
+    onChange("");
+  };
+
+  return <div className="space-y-3"><div className="flex items-end justify-between gap-3"><div><Label>Draw your signature *</Label><p className="mt-1 text-sm text-muted-foreground">Use your finger, mouse, or stylus inside the box.</p></div><Button type="button" variant="outline" size="sm" onClick={clear} disabled={!value}>Clear</Button></div><div className="overflow-hidden rounded-2xl border-2 border-dashed bg-white shadow-inner"><canvas ref={canvasRef} width={900} height={240} aria-label="Draw your signature" className="h-40 w-full cursor-crosshair touch-none sm:h-44" onPointerDown={start} onPointerMove={draw} onPointerUp={finish} onPointerCancel={finish} onPointerLeave={finish} /></div>{value && <p className="flex items-center gap-2 text-sm font-medium text-green-700"><CheckCircle2 className="h-4 w-4" />Signature captured and included on your official forms.</p>}</div>;
+}
+
 function OfficialDocument({ title, url }: { title: string; url: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const autoFilled = title.startsWith("Official Form");
+  const helpText = autoFilled
+    ? "Your answers automatically update this official PDF. You can preview it at any time."
+    : "Review this document here without leaving your onboarding application.";
+
   return <section className="overflow-hidden rounded-2xl border bg-muted/20">
-    <div className="flex items-center justify-between border-b bg-background px-4 py-3"><div className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-primary" /><span className="font-semibold">{title}</span></div><span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Official document</span></div>
-    <iframe title={title} src={`${url}#view=FitH&toolbar=1`} className="h-[640px] w-full bg-white sm:h-[760px]" />
-    <p className="border-t bg-background px-4 py-3 text-xs text-muted-foreground">The official PDF stays inside the onboarding page. Use the guided fields to save your answers and populate the document securely.</p>
+    <div className="flex flex-col gap-4 bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3"><div className="rounded-xl bg-primary/10 p-2 text-primary"><FileCheck2 className="h-5 w-5" /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-semibold">{title}</span><span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">{autoFilled ? "Official government form" : "Onboarding document"}</span></div><p className="mt-1 text-sm text-muted-foreground">{helpText}</p></div></div>
+      <div className="hidden shrink-0 md:block"><Button type="button" variant="outline" onClick={() => setExpanded(value => !value)}>{expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}{expanded ? "Hide document" : "Preview document"}</Button></div>
+      <Dialog><DialogTrigger asChild><Button type="button" className="w-full md:hidden"><Maximize2 className="mr-2 h-4 w-4" />View document full screen</Button></DialogTrigger><DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none"><DialogHeader className="border-b px-5 py-4 pr-12 text-left"><DialogTitle>{title}</DialogTitle><DialogDescription>{helpText}</DialogDescription></DialogHeader><iframe title={`${title} mobile preview`} src={`${url}#view=FitH&toolbar=1`} className="h-[calc(100dvh-82px)] w-full bg-white" /></DialogContent></Dialog>
+    </div>
+    {expanded && <div className="hidden border-t md:block"><iframe title={title} src={`${url}#view=FitH&toolbar=1`} className="h-[min(760px,75vh)] w-full bg-white" /></div>}
   </section>;
 }
