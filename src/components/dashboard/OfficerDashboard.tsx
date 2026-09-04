@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ interface OfficerDashboardProps {
 
 const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   const [activeTab, setActiveTab] = useState("profile");
+  const activeContentRef = useRef<HTMLDivElement>(null);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -282,12 +283,24 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
     workHistory: workHistoryCount > 0,
   };
 
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+
+    // Wait for React to replace the active panel, then bring that panel into
+    // view. This also works when the user selects the already-active item.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        activeContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
+
   return (
     <SidebarProvider>
       <div className="flex w-full min-h-screen">
         <OfficerSidebar 
           activeTab={activeTab} 
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           completionStatus={completionStatus}
         />
         <div className="flex-1 flex">
@@ -299,7 +312,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
               Welcome, {profile?.full_name || profile?.email}
             </h1>
 
-            {activeTab !== "find-jobs" && (
+            {activeTab === "profile" && (
               <Alert className="mb-6 border-primary/20 bg-primary/5">
                 <Info className="h-4 w-4 text-primary" />
                 <AlertDescription className="text-sm">
@@ -311,7 +324,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
             )}
 
           <div className="space-y-6">
-            {activeTab !== "find-jobs" && (
+            {activeTab === "profile" && (
               <div className="grid md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
@@ -352,7 +365,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
         <Card
           className={`cursor-pointer transition-colors hover:bg-accent/50 ${urgentExpiring ? "border-destructive/50" : ""}`}
-          onClick={() => setActiveTab("certifications")}
+          onClick={() => handleTabChange("certifications")}
         >
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Expiring Skills</CardTitle>
@@ -384,6 +397,8 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
         </Card>
       </div>
             )}
+
+            <div ref={activeContentRef} className="scroll-mt-24" />
 
 
             {activeTab === "profile" && (
