@@ -72,6 +72,19 @@ export function brokeredPreviewStorage() {
 
   return {
     getItem: async (key: string) => {
+      // Once this preview has a session, do not block page rendering while the
+      // editor broker catches up. Reconcile the shared copy in the background.
+      const cached = localStorage.getItem(key);
+      if (cached !== null) {
+        void request("lovable-preview-auth:get", key).then((result) => {
+          if (!result?.ok || typeof result.value !== "string") return;
+          if (result.value === "") localStorage.removeItem(key);
+          else localStorage.setItem(key, result.value);
+        });
+        firstGet = false;
+        return cached;
+      }
+
       let result = await request("lovable-preview-auth:get", key);
       if (!result && firstGet) {
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
@@ -89,11 +102,11 @@ export function brokeredPreviewStorage() {
     },
     setItem: (key: string, value: string) => {
       localStorage.setItem(key, value);
-      return request("lovable-preview-auth:set", key, value).then(() => undefined);
+      void request("lovable-preview-auth:set", key, value);
     },
     removeItem: (key: string) => {
       localStorage.removeItem(key);
-      return request("lovable-preview-auth:remove", key).then(() => undefined);
+      void request("lovable-preview-auth:remove", key);
     },
   };
 }

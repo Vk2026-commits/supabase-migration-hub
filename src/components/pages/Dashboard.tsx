@@ -21,61 +21,71 @@ const Dashboard = () => {
 
   useEffect(() => {
     const getProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
 
-      setUser(session.user);
+        if (!session) {
+          navigate("/auth");
+          return;
+        }
 
-      // Check if user is admin
-      const { data: roles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", session.user.id)
-        .eq("role", "admin")
-        .maybeSingle();
+        setUser(session.user);
 
-      const isAdmin = !!roles;
-      const previewRole = isAdmin && (viewAs === "officer" || viewAs === "company") ? viewAs : null;
+        // These requests are independent, so avoid paying for two network
+        // round trips before the dashboard can render.
+        const [{ data: roles, error: rolesError }, { data: profileData, error: profileError }] =
+          await Promise.all([
+            supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", session.user.id)
+              .eq("role", "admin")
+              .maybeSingle(),
+            supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .maybeSingle(),
+          ]);
 
-      if (isAdmin && !previewRole) {
-        navigate("/admin");
-        return;
-      }
+        if (rolesError) throw rolesError;
+        if (profileError) throw profileError;
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
+        const isAdmin = !!roles;
+        const previewRole = isAdmin && (viewAs === "officer" || viewAs === "company") ? viewAs : null;
 
-      setProfile(previewRole ? { ...profileData, role: previewRole } : profileData);
+        if (isAdmin && !previewRole) {
+          navigate("/admin");
+          return;
+        }
 
-      // Check if this is a company with expired trial
-      if (!previewRole && profileData?.role === "company") {
-        const { data: companyData } = await supabase
-          .from("company_profiles")
-          .select("*")
-          .eq("user_id", session.user.id)
-          .single();
+        setProfile(previewRole ? { ...profileData, role: previewRole } : profileData);
 
-        if (companyData) {
-          setCompanyProfile(companyData);
-          
-          // Check if trial has expired and they're still on free tier
-          const trialExpired = companyData.trial_end_date && new Date(companyData.trial_end_date) < new Date();
-          const isFreeTier = companyData.subscription_tier === 'free';
-          
-          if (trialExpired && isFreeTier) {
-            setShowExpiredTrialDialog(true);
+        // Check if this is a company with expired trial.
+        if (!previewRole && profileData?.role === "company") {
+          const { data: companyData, error: companyError } = await supabase
+            .from("company_profiles")
+            .select("*")
+            .eq("user_id", session.user.id)
+            .maybeSingle();
+
+          if (companyError) throw companyError;
+          if (companyData) {
+            setCompanyProfile(companyData);
+
+            const trialExpired = companyData.trial_end_date && new Date(companyData.trial_end_date) < new Date();
+            const isFreeTier = companyData.subscription_tier === "free";
+
+            if (trialExpired && isFreeTier) {
+              setShowExpiredTrialDialog(true);
+            }
           }
         }
+      } catch (error) {
+        console.error("Failed to load dashboard:", error);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     getProfile();
