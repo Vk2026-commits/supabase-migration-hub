@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { buildI9, buildW4, pdfUrl } from "@/lib/officialOnboardingForms";
+import { buildDirectDeposit, buildI9, buildW4, pdfUrl } from "@/lib/officialOnboardingForms";
 
 type Props = {
   userId: string;
@@ -289,6 +289,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [openPolicyDocument, setOpenPolicyDocument] = useState<string | null>(null);
   const [i9Url, setI9Url] = useState("/forms/02-i-9-2026.pdf");
   const [w4Url, setW4Url] = useState("/forms/W-4_Form_2026.pdf");
+  const [directDepositUrl, setDirectDepositUrl] = useState("/forms/04-direct-deposit-auth-form.pdf");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const packetIdRef = useRef<string | null>(null);
 
@@ -459,6 +460,23 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }, 500);
     return () => clearTimeout(timer);
   }, [data, ssn, currentStep]);
+
+  useEffect(() => {
+    if (currentStep !== 3 || data.paymentMethod !== "direct_deposit" || bankAccounts.length === 0) return;
+    const timer = setTimeout(async () => {
+      try {
+        const bytes = await buildDirectDeposit(data, bankAccounts, ssn);
+        const nextUrl = pdfUrl(bytes);
+        setDirectDepositUrl((previous) => {
+          if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
+          return nextUrl;
+        });
+      } catch (error) {
+        console.error("Direct deposit form preview failed", error);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [data, bankAccounts, ssn, currentStep]);
 
   const policiesComplete = policyItems.every(([key]) => data.policies[key]);
   const i9AuthorizationComplete = data.citizenshipStatus !== "Authorized to work until a specified date" || Boolean(data.workAuthorizationExpiration && (data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)));
@@ -827,7 +845,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               )}
               {currentStep === 3 && (
                 <div className="space-y-7">
-                  <OfficialDocument title="Direct deposit authorization form" url="/forms/04-direct-deposit-auth-form.pdf" />
+                  <OfficialDocument title="Direct deposit authorization form" url={directDepositUrl} autoFilled initialPage={2} />
                   <Choice
                     label="How would you like to be paid?"
                     value={data.paymentMethod}
@@ -1145,10 +1163,11 @@ function SignaturePad({ value, suggestedName, onChange }: { value: string; sugge
   );
 }
 
-function OfficialDocument({ title, url }: { title: string; url: string }) {
+function OfficialDocument({ title, url, autoFilled = false, initialPage = 1 }: { title: string; url: string; autoFilled?: boolean; initialPage?: number }) {
   const [expanded, setExpanded] = useState(false);
-  const autoFilled = title.startsWith("Official Form");
-  const helpText = autoFilled ? "Your answers automatically update this official PDF. You can preview it at any time." : "Review this document here without leaving your onboarding application.";
+  const updatesFromAnswers = autoFilled || title.startsWith("Official Form");
+  const helpText = updatesFromAnswers ? "Your answers automatically update this official PDF. You can preview it at any time." : "Review this document here without leaving your onboarding application.";
+  const previewUrl = `${url}#page=${initialPage}&view=FitH&toolbar=1`;
 
   return (
     <section className="overflow-hidden rounded-2xl border bg-muted/20">
@@ -1160,7 +1179,7 @@ function OfficialDocument({ title, url }: { title: string; url: string }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{title}</span>
-              <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">{autoFilled ? "Official government form" : "Onboarding document"}</span>
+              <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">{updatesFromAnswers ? "Auto-filled document" : "Onboarding document"}</span>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{helpText}</p>
           </div>
@@ -1183,13 +1202,13 @@ function OfficialDocument({ title, url }: { title: string; url: string }) {
               <DialogTitle>{title}</DialogTitle>
               <DialogDescription>{helpText}</DialogDescription>
             </DialogHeader>
-            <iframe title={`${title} mobile preview`} src={`${url}#view=FitH&toolbar=1`} className="h-[calc(100dvh-82px)] w-full bg-white" />
+            <iframe key={url} title={`${title} mobile preview`} src={previewUrl} className="h-[calc(100dvh-82px)] w-full bg-white" />
           </DialogContent>
         </Dialog>
       </div>
       {expanded && (
         <div className="hidden border-t md:block">
-          <iframe title={title} src={`${url}#view=FitH&toolbar=1`} className="h-[min(760px,75vh)] w-full bg-white" />
+          <iframe key={url} title={title} src={previewUrl} className="h-[min(760px,75vh)] w-full bg-white" />
         </div>
       )}
     </section>

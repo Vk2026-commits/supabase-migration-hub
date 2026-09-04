@@ -36,6 +36,20 @@ export type OfficialOnboardingValues = {
   w4SignatureName: string;
   w4SignatureDate: string;
   w4SignatureImage: string;
+  bankSignatureName: string;
+  bankSignatureDate: string;
+  bankSignatureImage: string;
+};
+
+export type DirectDepositAccountValues = {
+  bankName: string;
+  bankCity: string;
+  bankState: string;
+  accountType: "checking" | "savings" | "other";
+  routingNumber: string;
+  accountNumber: string;
+  allocationType: "amount" | "entire";
+  allocationAmount: string;
 };
 
 const date = (value: string) => {
@@ -202,6 +216,81 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
   }
   if (values.w4SignatureDate) page.drawText(date(values.w4SignatureDate), { x: 470, y: 98, size: 10, color: rgb(0, 0, 0) });
   try { form.updateFieldAppearances(await document.embedFont(StandardFonts.Helvetica)); } catch { /* viewer regenerates */ }
+  return document.save();
+}
+
+export async function buildDirectDeposit(values: OfficialOnboardingValues, accounts: DirectDepositAccountValues[], ssn: string) {
+  const document = await load("/forms/04-direct-deposit-auth-form.pdf");
+  const form = document.getForm();
+  const normalizedAccounts = accounts.slice(0, 3);
+  const bankFieldNames = ["1  Bank NameCityState", "2  Bank NameCityState", "3  Bank NameCityState"];
+  const routingFieldNames = ["Routing #", "Text8", "Text2"];
+  const accountFieldNames = ["Account Number", "Account Number_2", "Account Number_3"];
+  const amountFieldNames = ["I wish to deposit", "I wish to deposit_2", "I wish to deposit_3"];
+
+  setText(form, {
+    "Company Name": values.employerName,
+    "Employee Name": values.bankSignatureName || [values.legalFirstName, values.middleInitial, values.legalLastName].filter(Boolean).join(" "),
+    Date: date(values.bankSignatureDate),
+    ...Object.fromEntries(normalizedAccounts.flatMap((account, index) => [
+      [bankFieldNames[index], [account.bankName, [account.bankCity, account.bankState].filter(Boolean).join(", ")].filter(Boolean).join(" - ")],
+      [routingFieldNames[index], account.routingNumber.replace(/\D/g, "")],
+      [accountFieldNames[index], account.accountNumber.replace(/\D/g, "")],
+      [amountFieldNames[index], account.allocationType === "amount" ? account.allocationAmount : ""],
+    ])),
+  });
+
+  normalizedAccounts.forEach((account, index) => {
+    const suffix = index === 0 ? "" : `_${index + 1}`;
+    setChecks(form, {
+      [`Checking${suffix}`]: account.accountType === "checking",
+      [`Savings${suffix}`]: account.accountType === "savings",
+      [`Other${suffix}`]: account.accountType === "other",
+      [`Entire Net Amount${suffix}`]: account.allocationType === "entire",
+    });
+  });
+
+  const page = document.getPages()[1];
+  const font = await document.embedFont(StandardFonts.Helvetica);
+  const ssnDigits = ssn.replace(/\D/g, "").slice(0, 9);
+
+  if (values.bankSignatureImage || values.bankSignatureName) {
+    try {
+      const signatureField = form.getField("Employee Signature") as any;
+      const widget = signatureField.acroField.getWidgets()[0];
+      const rect = widget.getRectangle();
+      if (values.bankSignatureImage) {
+        const signature = await document.embedPng(await trimSignature(values.bankSignatureImage));
+        const scale = Math.min((rect.width - 6) / signature.width, (rect.height - 3) / signature.height);
+        const width = signature.width * scale;
+        const height = signature.height * scale;
+        page.drawImage(signature, { x: rect.x + (rect.width - width) / 2, y: rect.y + (rect.height - height) / 2, width, height });
+      } else {
+        const signatureFont = await document.embedFont(StandardFonts.TimesRomanItalic);
+        let size = Math.min(13, rect.height - 3);
+        while (size > 6 && signatureFont.widthOfTextAtSize(values.bankSignatureName, size) > rect.width - 6) size -= 0.5;
+        page.drawText(values.bankSignatureName, { x: rect.x + 3, y: rect.y + Math.max(2, (rect.height - size) / 2), size, font: signatureFont, color: rgb(0, 0, 0) });
+      }
+    } catch { /* signature widget differs between editions */ }
+  }
+
+  try { form.updateFieldAppearances(font); } catch { /* viewer regenerates */ }
+  const segments = [ssnDigits.slice(0, 3), ssnDigits.slice(3, 5), ssnDigits.slice(5, 9)];
+  const ssnFields = ["Check Box1.0.0", "Check Box1.1.0", "Check Box1.0.1"];
+  const boxes = [
+    { x: 461.798, y: 344.838, width: 26.575, height: 14.251 },
+    { x: 495.691, y: 344.453, width: 17.332, height: 14.25 },
+    { x: 519.956, y: 344.453, width: 37.745, height: 14.25 },
+  ];
+  ssnFields.forEach((name, index) => {
+    try { form.removeField(form.getField(name)); } catch { /* field not present in this edition */ }
+    page.drawRectangle({ ...boxes[index], color: rgb(1, 1, 1), borderColor: rgb(0, 0, 0), borderWidth: 0.8 });
+    const segment = segments[index];
+    if (!segment) return;
+    const size = 8;
+    const textWidth = font.widthOfTextAtSize(segment, size);
+    page.drawText(segment, { x: boxes[index].x + (boxes[index].width - textWidth) / 2, y: boxes[index].y + 3.1, size, font, color: rgb(0, 0, 0) });
+  });
   return document.save();
 }
 
