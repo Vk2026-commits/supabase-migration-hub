@@ -125,7 +125,6 @@ const newBankAccount = (allocationType: "amount" | "entire" = "entire", id = `ba
 });
 
 const policyItems = [
-  ["handbook", "Employee handbook", "/forms/06-acknowledgement-of-handbook.pdf"],
   ["property", "Company property and equipment", "/forms/07-receipt-company-property.pdf"],
   ["confidentiality", "Confidentiality agreement", "/forms/09-confidentialityagreement.pdf"],
   ["offer", "Offer letter", "/forms/10-offer-letter-per-hour.pdf"],
@@ -142,6 +141,7 @@ const policyItems = [
   ["workersComp", "Workers’ compensation notice", "/forms/22-texas-department-of-insurance.pdf"],
   ["uniform", "Uniform receipt and return checklist", "/forms/23-uniform-check-list.pdf"],
   ["schedule", "Initial work schedule", "/forms/24-kairos-schedule.pdf"],
+  ["handbook", "Employee handbook acknowledgment", "/forms/06-acknowledgement-of-handbook.pdf"],
 ] as const;
 
 const issuedItemOptions = ["Building key/card", "Identification badge", "Mobile device", "Parking pass", "Laptop", "Uniform", "Radio", "Flashlight"];
