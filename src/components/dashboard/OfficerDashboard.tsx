@@ -8,10 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info } from "lucide-react";
+import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
-import { PhotoUpload } from "./PhotoUpload";
 import { OfficerPhotos } from "./OfficerPhotos";
 import { VideoInterviewsManager } from "./VideoInterviewsManager";
 import { WorkHistory } from "./WorkHistory";
@@ -54,6 +53,10 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [photoCount, setPhotoCount] = useState(0);
   const [workHistoryCount, setWorkHistoryCount] = useState(0);
   const [videoInterviewCount, setVideoInterviewCount] = useState(0);
+  const [applicationSubmitted, setApplicationSubmitted] = useState(false);
+  const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
+  const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
+  const choseInitialExperience = useRef(false);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -149,34 +152,29 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult] = await Promise.all([
-          supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult] = await Promise.all([
+          supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
           supabase.from("video_interviews").select("id", { count: 'exact', head: true }).eq("officer_id", data.id),
+          (supabase as any).from("guard_hiring_applications").select("status").eq("officer_id", data.id).eq("application_type", "master").maybeSingle(),
+          supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
         ]);
         
         setCertCount(certsResult.count || 0);
         setTrainingCount(trainingsResult.count || 0);
         setWorkHistoryCount(workResult.count || 0);
         setVideoInterviewCount(videosResult.count || 0);
-        // Photos count is based on avatar_url presence
-        setPhotoCount(data.avatar_url ? 1 : 0);
+        setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
+        setApplicationSubmitted(applicationResult.data?.status === "submitted");
+        const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
+        setPhotoCount(photoNames.length);
+        setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
+        if (!choseInitialExperience.current) {
+          choseInitialExperience.current = true;
+          if (initialTab === "profile" && applicationResult.data?.status !== "submitted") setActiveTab("hiring-application");
+        }
       }
-    }
-  };
-
-  const handlePhotoChange = async (url: string) => {
-    try {
-      const { error } = await supabase
-        .from("officer_profiles")
-        .update({ avatar_url: url })
-        .eq("user_id", userId);
-
-      if (error) throw error;
-      loadProfile();
-    } catch (error: any) {
-      toast.error("Failed to update profile photo");
     }
   };
 
@@ -312,10 +310,18 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
     availability: !!(officerProfile?.employment_type?.length && 
                      officerProfile?.shift_preference?.length &&
                      Object.keys(formData.availability_schedule).length > 0),
-    photos: photoCount > 0,
-    certifications: certCount > 0,
+    photos: requiredPhotosComplete,
+    certifications: certificationDocumentComplete,
     workHistory: workHistoryCount > 0,
   };
+
+  const onboardingItems = [
+    { label: "Submit hiring application", complete: applicationSubmitted, tab: "hiring-application" },
+    { label: "Set availability", complete: completionStatus.availability, tab: "availability" },
+    { label: "Add headshot and full-body photo", complete: requiredPhotosComplete, tab: "photos" },
+    { label: "Upload a certification front document", complete: certificationDocumentComplete, tab: "certifications" },
+  ];
+  const onboardingComplete = onboardingItems.every((item) => item.complete);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -341,6 +347,13 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" ? "sr-only" : ""}`}>
               Welcome, {profile?.full_name || profile?.email}
             </h1>
+
+            {!onboardingComplete && activeTab !== "hiring-application" && (
+              <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">
+                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="h-5 w-5 text-primary" />Finish your onboarding</CardTitle><CardDescription>You can use the dashboard now. Complete these items so employers can review your profile.</CardDescription></CardHeader>
+                <CardContent className="grid gap-2 sm:grid-cols-2">{onboardingItems.map((item) => <button key={item.label} type="button" onClick={() => handleTabChange(item.tab)} className="flex items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors hover:bg-muted">{item.complete ? <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" /> : <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />}<span className={item.complete ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{item.label}</span></button>)}</CardContent>
+              </Card>
+            )}
 
             {activeTab === "profile" && (
               <Alert className="mb-6 border-primary/20 bg-primary/5">
@@ -434,7 +447,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             )}
 
             {activeTab === "profile" && (
-          <Card>
+          <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle>Professional Profile</CardTitle>
               <CardDescription>
@@ -443,20 +456,6 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="flex flex-col items-center pb-4 border-b space-y-3">
-                  <PhotoUpload
-                    userId={userId}
-                    currentPhotoUrl={officerProfile?.avatar_url}
-                    onPhotoChange={handlePhotoChange}
-                    size="lg"
-                  />
-                  <div className="text-center max-w-md">
-                    <p className="text-sm text-muted-foreground">
-                      Upload a professional headshot photo to make a great first impression with potential employers. 
-                      A clear, well-lit photo can significantly increase your chances of getting hired.
-                    </p>
-                  </div>
-                </div>
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="first_name">First Name</Label>
@@ -618,7 +617,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
                   />
                 </div>
 
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" className="h-12 w-full text-base sm:w-auto" disabled={loading}>
                   {loading ? "Saving..." : "Save Profile"}
                 </Button>
                 </form>
@@ -627,7 +626,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             )}
 
             {activeTab === "availability" && (
-          <Card>
+          <Card className="rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
@@ -847,7 +846,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
                     </Button>
                   </div>
                 ))}
-                  <Button onClick={handleSubmit} disabled={loading}>
+                  <Button className="h-12 w-full text-base sm:w-auto" onClick={handleSubmit} disabled={loading}>
                     {loading ? "Saving..." : "Save Availability"}
                   </Button>
                 </div>
@@ -857,7 +856,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             )}
 
             {activeTab === "photos" && (
-              <OfficerPhotos userId={userId} />
+              <OfficerPhotos userId={userId} onChanged={loadProfile} />
             )}
 
             {activeTab === "certifications" && (
@@ -865,6 +864,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               officerId={officerProfile?.id || ""} 
               userId={userId}
               onEnsureProfile={ensureOfficerProfile}
+              onChanged={loadProfile}
             />
             )}
 
@@ -885,7 +885,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             )}
 
             {activeTab === "hiring-application" && (
-              <GuardHiringApplication userId={userId} officerId={officerProfile?.id || null} />
+              <GuardHiringApplication userId={userId} officerId={officerProfile?.id || null} onChanged={loadProfile} />
             )}
 
             {activeTab === "find-jobs" && (

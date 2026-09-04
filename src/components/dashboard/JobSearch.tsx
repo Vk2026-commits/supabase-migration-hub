@@ -99,7 +99,7 @@ const JobSearch = ({ officerId }: JobSearchProps) => {
     try {
       const job = jobs.find(j => j.id === jobId);
       
-      const { error } = await supabase
+      const { data: jobApplication, error } = await supabase
         .from("job_applications")
         .upsert({
           job_posting_id: jobId,
@@ -107,9 +107,47 @@ const JobSearch = ({ officerId }: JobSearchProps) => {
           status,
         }, {
           onConflict: 'job_posting_id,officer_id'
-        });
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
+
+      // A job application receives one locked copy of the officer's submitted
+      // master application. Photos and documents stay in their private buckets.
+      if (status === "interested" && jobApplication?.id && job) {
+        const { data: master } = await (supabase as any)
+          .from("guard_hiring_applications")
+          .select("*")
+          .eq("officer_id", officerId)
+          .eq("application_type", "master")
+          .eq("status", "submitted")
+          .maybeSingle();
+
+        if (master) {
+          const companyName = job.company_profiles?.company_name || "Hiring Company";
+          const { error: snapshotError } = await (supabase as any)
+            .from("guard_hiring_applications")
+            .insert({
+              officer_id: master.officer_id,
+              user_id: master.user_id,
+              job_application_id: jobApplication.id,
+              application_type: "employer_copy",
+              source_application_id: master.id,
+              company_name: companyName,
+              position: job.title || master.position,
+              applicant_name: master.applicant_name,
+              applicant_email: master.applicant_email,
+              status: "submitted",
+              current_step: 9,
+              application_data: { ...master.application_data, companyName, position: job.title || master.position },
+              signature_name: master.signature_name,
+              signature_date: master.signature_date,
+              submitted_at: new Date().toISOString(),
+            });
+          if (snapshotError && snapshotError.code !== "23505") throw snapshotError;
+        }
+      }
 
       // Send message to employer if interested
       if (status === 'interested' && job) {

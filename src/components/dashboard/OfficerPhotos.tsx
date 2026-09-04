@@ -9,6 +9,8 @@ import { Upload, X } from "lucide-react";
 
 interface OfficerPhotosProps {
   userId: string;
+  embedded?: boolean;
+  onChanged?: (photos: Record<string, string>) => void;
 }
 
 const PHOTO_TYPES = [
@@ -18,7 +20,7 @@ const PHOTO_TYPES = [
   { id: "action-2", label: "Action Shot 2", description: "On duty or training" },
 ];
 
-export function OfficerPhotos({ userId }: OfficerPhotosProps) {
+export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPhotosProps) {
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
 
@@ -52,6 +54,7 @@ export function OfficerPhotos({ userId }: OfficerPhotosProps) {
       }
 
       setPhotos(photoUrls);
+      onChanged?.(photoUrls);
     } catch (error: any) {
       console.error("Error loading photos:", error);
     }
@@ -120,86 +123,43 @@ export function OfficerPhotos({ userId }: OfficerPhotosProps) {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Professional Photos</CardTitle>
-          <CardDescription>
-            Upload professional photos to showcase yourself to potential employers
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
-            {PHOTO_TYPES.map((photoType) => (
-              <div key={photoType.id} className="space-y-3">
-                <div>
-                  <Label className="text-base">{photoType.label}</Label>
-                  <p className="text-sm text-muted-foreground">{photoType.description}</p>
-                </div>
-
-                {photos[photoType.id] ? (
-                  <div className="relative group">
-                    <img
-                      src={photos[photoType.id]}
-                      alt={photoType.label}
-                      className="w-full h-64 object-cover rounded-lg border"
-                    />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center gap-2">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => uploadPhoto(e, photoType.id)}
-                        disabled={uploading === photoType.id}
-                        className="hidden"
-                        id={`photo-${photoType.id}`}
-                      />
-                      <label htmlFor={`photo-${photoType.id}`}>
-                        <Button variant="secondary" size="sm" disabled={uploading === photoType.id} asChild>
-                          <span className="cursor-pointer">
-                            <Upload className="mr-2 h-4 w-4" />
-                            Replace
-                          </span>
-                        </Button>
-                      </label>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deletePhoto(photoType.id)}
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => uploadPhoto(e, photoType.id)}
-                      disabled={uploading === photoType.id}
-                      className="hidden"
-                      id={`photo-${photoType.id}`}
-                    />
-                    <label htmlFor={`photo-${photoType.id}`} className="cursor-pointer">
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8 text-muted-foreground" />
-                        <p className="text-sm font-medium">
-                          {uploading === photoType.id ? "Uploading..." : "Click to upload"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          JPG, PNG or WEBP (max 5MB)
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-                )}
+  const content = (
+    <>
+      {!embedded && <CardHeader>
+        <CardTitle>Professional Photos</CardTitle>
+        <CardDescription>Upload professional photos to showcase yourself to potential employers</CardDescription>
+      </CardHeader>}
+      <CardContent className={embedded ? "px-0" : undefined}>
+        {embedded && <p className="mb-5 text-sm text-muted-foreground">Your headshot and full-body photo are required. Action photos are optional.</p>}
+        <div className="grid gap-6 md:grid-cols-2">
+          {PHOTO_TYPES.map((photoType) => (
+            <div key={photoType.id} className="space-y-3 rounded-xl border p-4">
+              <div>
+                <Label className="text-base">{photoType.label}{photoType.id === "headshot" || photoType.id === "full-body" ? " *" : " (optional)"}</Label>
+                <p className="text-sm text-muted-foreground">{photoType.description}</p>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+
+              {photos[photoType.id] ? (
+                <div className="group relative">
+                  <img src={photos[photoType.id]} alt={photoType.label} className="h-64 w-full rounded-lg border object-cover" />
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-lg bg-black/60 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                    <Input type="file" accept="image/*" onChange={(e) => uploadPhoto(e, photoType.id)} disabled={uploading === photoType.id} className="hidden" id={`photo-${photoType.id}`} />
+                    <label htmlFor={`photo-${photoType.id}`}><Button variant="secondary" size="sm" disabled={uploading === photoType.id} asChild><span className="cursor-pointer"><Upload className="mr-2 h-4 w-4" />Replace</span></Button></label>
+                    <Button type="button" variant="destructive" size="sm" onClick={() => deletePhoto(photoType.id)}><X className="mr-2 h-4 w-4" />Remove</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border-2 border-dashed p-8 text-center">
+                  <Input type="file" accept="image/*" onChange={(e) => uploadPhoto(e, photoType.id)} disabled={uploading === photoType.id} className="hidden" id={`photo-${photoType.id}`} />
+                  <label htmlFor={`photo-${photoType.id}`} className="cursor-pointer"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-muted-foreground" /><p className="text-sm font-medium">{uploading === photoType.id ? "Uploading..." : "Click to upload"}</p><p className="text-xs text-muted-foreground">JPG, PNG or WEBP (max 5MB)</p></div></label>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </>
   );
+
+  return embedded ? <div>{content}</div> : <Card className="rounded-2xl">{content}</Card>;
 }

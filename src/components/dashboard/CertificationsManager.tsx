@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Upload, FileText, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-interface Certification {
+export interface Certification {
   id: string;
   name: string;
   certification_type: string;
@@ -29,6 +29,7 @@ interface CertificationsManagerProps {
   officerId: string;
   userId: string;
   onEnsureProfile?: () => Promise<any>;
+  onChanged?: (certifications: Certification[]) => void;
 }
 
 const LICENSE_LEVELS = [
@@ -55,7 +56,7 @@ const TRAINING_CERTIFICATIONS = [
   "CCTV Operations",
 ];
 
-export function CertificationsManager({ officerId, userId, onEnsureProfile }: CertificationsManagerProps) {
+export function CertificationsManager({ officerId, userId, onEnsureProfile, onChanged }: CertificationsManagerProps) {
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -154,6 +155,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile }: Ce
 
       if (error) throw error;
       setCertifications((data || []) as Certification[]);
+      onChanged?.((data || []) as Certification[]);
       
       // Generate signed URLs for all documents
       if (data && data.length > 0) {
@@ -874,11 +876,11 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile }: Ce
 
   return (
     <Tabs defaultValue="level-ii" className="w-full">
-      <TabsList className="grid w-full grid-cols-4">
-        <TabsTrigger value="level-ii">Non-Commission</TabsTrigger>
-        <TabsTrigger value="level-iii">Commission</TabsTrigger>
-        <TabsTrigger value="level-iv">Personal Protection Officer</TabsTrigger>
-        <TabsTrigger value="training">Other Training</TabsTrigger>
+      <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
+        <TabsTrigger className="min-h-11 whitespace-normal" value="level-ii">Non-Commission</TabsTrigger>
+        <TabsTrigger className="min-h-11 whitespace-normal" value="level-iii">Commission</TabsTrigger>
+        <TabsTrigger className="min-h-11 whitespace-normal" value="level-iv">Personal Protection</TabsTrigger>
+        <TabsTrigger className="min-h-11 whitespace-normal" value="training">Other Training</TabsTrigger>
       </TabsList>
 
       <TabsContent value="level-ii" className="space-y-4">

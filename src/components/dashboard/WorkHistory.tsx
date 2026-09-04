@@ -199,7 +199,7 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="rounded-2xl shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Briefcase className="h-5 w-5" />
@@ -360,10 +360,9 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
           </div>
 
           <div className="flex gap-2">
-            <Button 
+            <Button className="h-12 flex-1 text-base"
               onClick={handleSave} 
               disabled={loading}
-              className="flex-1"
             >
               {loading ? "Saving..." : "Save Work History"}
             </Button>
@@ -380,7 +379,7 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
       </Card>
 
       {workHistory.length > 0 && (
-        <Card>
+        <Card className="rounded-2xl shadow-sm">
           <CardHeader>
             <CardTitle>Previous Employers</CardTitle>
             <CardDescription>
