@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { PhotoUpload } from "./PhotoUpload";
 import { OfficerPhotos } from "./OfficerPhotos";
+import { VideoInterviewsManager } from "./VideoInterviewsManager";
 import { WorkHistory } from "./WorkHistory";
 import { OfficerMessages } from "./OfficerMessages";
 import { OfficerChatPanel } from "./OfficerChatPanel";
@@ -26,6 +27,16 @@ interface OfficerDashboardProps {
   userId: string;
 }
 
+const getPrivateFilePath = (value: string | null | undefined, bucket: string) => {
+  if (!value) return null;
+
+  const bucketMarker = `/${bucket}/`;
+  const markerIndex = value.indexOf(bucketMarker);
+  const path = markerIndex >= 0 ? value.slice(markerIndex + bucketMarker.length) : value;
+
+  return decodeURIComponent(path.split("?")[0]);
+};
+
 const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   const [activeTab, setActiveTab] = useState("profile");
   const [officerProfile, setOfficerProfile] = useState<any>(null);
@@ -38,6 +49,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
   const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
   const [photoCount, setPhotoCount] = useState(0);
   const [workHistoryCount, setWorkHistoryCount] = useState(0);
+  const [videoInterviewCount, setVideoInterviewCount] = useState(0);
   const [formData, setFormData] = useState({
     first_name: "",
     last_name: "",
@@ -133,15 +145,17 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult] = await Promise.all([
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
-          supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id)
+          supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
+          supabase.from("video_interviews").select("id", { count: 'exact', head: true }).eq("officer_id", data.id),
         ]);
         
         setCertCount(certsResult.count || 0);
         setTrainingCount(trainingsResult.count || 0);
         setWorkHistoryCount(workResult.count || 0);
+        setVideoInterviewCount(videosResult.count || 0);
         // Photos count is based on avatar_url presence
         setPhotoCount(data.avatar_url ? 1 : 0);
       }
@@ -176,7 +190,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
       // Delete old resume if exists
       if (officerProfile?.resume_url) {
-        const oldPath = officerProfile.resume_url.split("/resumes/")[1];
+        const oldPath = getPrivateFilePath(officerProfile.resume_url, "resumes");
         if (oldPath) {
           await supabase.storage.from("resumes").remove([oldPath]);
         }
@@ -188,11 +202,9 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from("resumes").getPublicUrl(filePath);
-
       const { error } = await supabase
         .from("officer_profiles")
-        .update({ resume_url: data.publicUrl })
+        .update({ resume_url: filePath })
         .eq("user_id", userId);
 
       if (error) throw error;
@@ -204,6 +216,25 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
     } finally {
       setUploadingResume(false);
     }
+  };
+
+  const handleResumeOpen = async () => {
+    const filePath = getPrivateFilePath(officerProfile?.resume_url, "resumes");
+    if (!filePath) {
+      toast.error("Resume file could not be found");
+      return;
+    }
+
+    const { data, error } = await supabase.storage
+      .from("resumes")
+      .createSignedUrl(filePath, 300);
+
+    if (error || !data?.signedUrl) {
+      toast.error("Unable to open the resume securely");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -372,14 +403,19 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card
+          className="cursor-pointer transition-colors hover:bg-accent/50"
+          onClick={() => setActiveTab("videos")}
+        >
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
             <CardTitle className="text-sm font-medium leading-tight">Video Interviews</CardTitle>
             <Video className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Upload your interview</p>
+            <div className="text-xl font-bold">{videoInterviewCount}</div>
+            <p className="text-xs text-muted-foreground">
+              {videoInterviewCount === 0 ? "Upload your interview" : "Manage your interviews"}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -559,7 +595,7 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(officerProfile.resume_url, '_blank')}
+                        onClick={handleResumeOpen}
                       >
                         <FileText className="mr-2 h-4 w-4" />
                         View Current Resume
@@ -858,6 +894,14 @@ const OfficerDashboard = ({ userId }: OfficerDashboardProps) => {
               userId={userId}
               onEnsureProfile={ensureOfficerProfile}
             />
+            )}
+
+            {activeTab === "videos" && (
+              <VideoInterviewsManager
+                officerId={officerProfile?.id || ""}
+                userId={userId}
+                onChanged={loadProfile}
+              />
             )}
 
             {activeTab === "find-jobs" && (

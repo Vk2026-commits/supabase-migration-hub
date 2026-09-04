@@ -1,5 +1,5 @@
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search } from "lucide-react";
+import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video } from "lucide-react";
 
 interface OfficerSidebarProps {
   activeTab: string;
@@ -23,13 +23,14 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
     { title: "Photos", value: "photos", icon: Images },
     { title: "Certifications and Certificates", value: "certifications", icon: Award },
     { title: "Work History", value: "work-history", icon: Briefcase },
+    { title: "Video Interviews", value: "videos", icon: Video },
     { title: "Find a Job", value: "find-jobs", icon: Search },
     { title: "Messages", value: "messages", icon: MessageCircle },
   ];
 
   const getNavCls = (value: string) => {
     // Messages and Find a Job tabs don't need completion status
-    if (value === 'messages' || value === 'find-jobs') {
+    if (value === 'messages' || value === 'find-jobs' || value === 'videos') {
       return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
     }
     
@@ -40,7 +41,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus }: Off
   };
 
   const isTabComplete = (value: string) => {
-    if (value === 'messages' || value === 'find-jobs') return false; // Messages and Find a Job tabs don't show completion
+    if (value === 'messages' || value === 'find-jobs' || value === 'videos') return false;
     return completionStatus?.[value as keyof typeof completionStatus];
   };
 
