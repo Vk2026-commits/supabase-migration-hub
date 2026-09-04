@@ -343,6 +343,9 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const form = document.getForm();
   const employeeName = acknowledgement.printedName || [values.legalFirstName, values.middleInitial, values.legalLastName].filter(Boolean).join(" ");
   const formattedDate = date(acknowledgement.signatureDate);
+  const isKairosConfidentialityAgreement = /kairos security/i.test(values.employerName || "") && path.includes("09-confidentialityagreement");
+  const employerRepresentativeName = isKairosConfidentialityAgreement ? "Erika Garces" : "";
+  const employerRepresentativeTitle = isKairosConfidentialityAgreement ? "Authorized Hiring Representative" : "";
   const schedule = values.availabilitySchedule || {};
   const fieldValues: Record<string, string> = {
     "Employee Name": employeeName,
@@ -350,11 +353,13 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     Employee: employeeName,
     "Printed Name": employeeName,
     "Print Name": employeeName,
+    "Print Name_2": employerRepresentativeName,
     "Temporary Employees Signature Date": [employeeName, formattedDate].filter(Boolean).join(" - "),
     Date: formattedDate,
     "Todays Date": formattedDate,
     "This Confidentiality Agreement the Agreement dated as of": formattedDate,
     Title: acknowledgement.employeeTitle || values.offeredPosition || "Security Officer",
+    Title_2: employerRepresentativeTitle,
     "Employee File Number": values.employeeIdNumber || "",
     "Street Address": values.address || "",
     "City State ZIP": [values.city, values.state, values.zip].filter(Boolean).join(", "),
@@ -389,7 +394,8 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   for (const field of form.getFields()) {
     const name = field.getName();
     const lower = name.toLowerCase();
-    const employeeSignature = lower.includes("signature") && !/(company|employer|manager|supervisor|representative)/.test(lower);
+    const companySignature = isKairosConfidentialityAgreement && name === "Signature_2";
+    const employeeSignature = lower.includes("signature") && !companySignature && !/(company|employer|manager|supervisor|representative)/.test(lower);
     if (!employeeSignature) continue;
     if (field.constructor.name === "PDFTextField") {
       try { (field as any).setText(employeeName); } catch { /* field type differs */ }
@@ -412,6 +418,19 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
         }
       }
     } catch { /* signature widget differs between documents */ }
+  }
+  if (employerRepresentativeName) {
+    try {
+      const employerSignatureField = form.getField("Signature_2") as any;
+      for (const widget of employerSignatureField.acroField.getWidgets()) {
+        const rect = widget.getRectangle();
+        const pageRef = widget.P();
+        const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
+        let size = Math.min(13, rect.height - 3);
+        while (size > 6 && signatureFont.widthOfTextAtSize(employerRepresentativeName, size) > rect.width - 6) size -= 0.5;
+        page.drawText(employerRepresentativeName, { x: rect.x + 3, y: rect.y + Math.max(2, (rect.height - size) / 2), size, font: signatureFont, color: rgb(0, 0, 0) });
+      }
+    } catch { /* employer signature field differs between documents */ }
   }
   try { form.updateFieldAppearances(regularFont); } catch { /* viewer regenerates */ }
 
