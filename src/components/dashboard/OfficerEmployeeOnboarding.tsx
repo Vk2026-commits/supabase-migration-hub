@@ -702,10 +702,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     const acknowledgement = data.policyAcknowledgements[key];
     return Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   }).length;
-  const activePolicy = activePolicyKey ? policyItems.find(([key]) => key === activePolicyKey) : null;
-  const activePolicyAcknowledgement = activePolicyKey ? data.policyAcknowledgements[activePolicyKey] : null;
   const openPolicy = (key: string) => {
-    setActivePolicyKey(key);
+    setActivePolicyKey((current) => current === key ? null : key);
     setData((current) => current.policyAcknowledgements[key] ? current : {
       ...current,
       policyAcknowledgements: {
@@ -720,11 +718,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         },
       },
     });
-    requestAnimationFrame(() => document.getElementById("company-document-editor")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
   const updatePolicyAcknowledgement = (key: string, changes: Partial<PolicyAcknowledgement>) => {
+    setPolicyPreview((current) => {
+      if (current?.key !== key) return current;
+      if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
+      return null;
+    });
     setData((current) => ({
       ...current,
+      policies: { ...current.policies, [key]: false },
       policyAcknowledgements: {
         ...current.policyAcknowledgements,
         [key]: { ...current.policyAcknowledgements[key], ...changes },
@@ -735,6 +738,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     const acknowledgement = data.policyAcknowledgements[key];
     if (!acknowledgement?.accepted || !acknowledgement.printedName || !acknowledgement.signatureDate || !acknowledgement.signatureImage) {
       toast.error("Accept the document, add your name and date, and sign before saving");
+      return;
+    }
+    if (policyPreview?.key !== key) {
+      toast.error("Wait for the updated PDF preview to finish, then save the document");
       return;
     }
     setData((current) => ({ ...current, policies: { ...current.policies, [key]: true } }));
@@ -1044,42 +1051,46 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <span className="text-sm font-medium">TrackTik password set</span>
                     </label>
                   </div>
-                  {activePolicy && activePolicyAcknowledgement && (
-                    <div id="company-document-editor" className="scroll-mt-4 space-y-6 rounded-2xl border-2 border-primary/30 bg-card p-5 sm:p-7">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Fill out this document</p><h3 className="mt-1 text-xl font-bold">{activePolicy[1]}</h3><p className="mt-1 text-sm text-muted-foreground">Your existing profile and onboarding information is filled in automatically where the PDF has matching fields.</p></div>
-                        <Button type="button" variant="ghost" onClick={() => setActivePolicyKey(null)}>Close</Button>
-                      </div>
-                      <div className="grid gap-5 md:grid-cols-2">
-                        <Field label="Employee legal name" value={activePolicyAcknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { printedName: value })} required />
-                        <Field label="Position or title" value={activePolicyAcknowledgement.employeeTitle} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { employeeTitle: value })} required />
-                        <Field label="Date signed" type="date" value={activePolicyAcknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { signatureDate: value })} required />
-                        <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={activePolicyAcknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(activePolicy[0], { notes: event.target.value })} placeholder="Optional" /></div>
-                      </div>
-                      <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
-                        <Checkbox checked={activePolicyAcknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { accepted: Boolean(value) })} />
-                        <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
-                      </label>
-                      <SignaturePad value={activePolicyAcknowledgement.signatureImage} suggestedName={activePolicyAcknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(activePolicy[0], { signatureImage: value })} />
-                      <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-900"><strong>Live PDF preview:</strong> the signed acknowledgment page and matching fields update automatically below.</div>
-                      <OfficialDocument title={activePolicy[1]} url={policyPreview?.key === activePolicy[0] ? policyPreview.url : activePolicy[2]} autoFilled initialPage={policyPreview?.key === activePolicy[0] ? policyPreview.page : 1} />
-                      <Button type="button" size="lg" className="w-full" onClick={() => savePolicyAcknowledgement(activePolicy[0])}><FileCheck2 className="mr-2 h-5 w-5" />{data.policies[activePolicy[0]] ? "Update saved document" : "Save signed document"}</Button>
-                    </div>
-                  )}
-                  {policyItems.map(([key, label, document]) => (
-                    <div key={key} className={`rounded-xl border p-4 ${data.policies[key] ? "border-green-200 bg-green-50/50" : ""}`}>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${data.policies[key] ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{data.policies[key] ? <Check className="h-4 w-4" /> : policyItems.findIndex(([itemKey]) => itemKey === key) + 1}</div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium">{label}</p>
-                          <p className="text-sm text-muted-foreground">{data.policies[key] ? "Signed and saved to your onboarding packet." : "Open, fill out, preview, and sign this document."}</p>
+                  {policyItems.map(([key, label, document], index) => {
+                    const acknowledgement = data.policyAcknowledgements[key];
+                    const expanded = activePolicyKey === key;
+                    const completed = Boolean(data.policies[key] && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+                    return (
+                      <div key={key} className={`overflow-hidden rounded-2xl border transition-colors ${completed ? "border-green-300 bg-green-50/50" : expanded ? "border-primary/40" : ""}`}>
+                        <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : index + 1}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{label}</p>{completed && <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Complete</span>}</div>
+                            <p className="text-sm text-muted-foreground">{completed ? "Verified, signed, and saved." : expanded ? "Complete the fields and preview directly below." : "Fill out, preview, sign, and save this document."}</p>
+                          </div>
+                          <Button type="button" variant={completed || expanded ? "outline" : "default"} size="sm" onClick={() => openPolicy(key)}>
+                            {expanded ? <><ChevronUp className="mr-2 h-4 w-4" />Close</> : completed ? <><ChevronDown className="mr-2 h-4 w-4" />Edit & preview</> : <><ChevronDown className="mr-2 h-4 w-4" />Fill out</>}
+                          </Button>
                         </div>
-                        <Button type="button" variant={data.policies[key] ? "outline" : "default"} size="sm" onClick={() => openPolicy(key)}>
-                          {data.policies[key] ? "Edit & preview" : "Fill out document"}
-                        </Button>
+                        {expanded && acknowledgement && (
+                          <div className="space-y-6 border-t bg-background p-4 sm:p-6">
+                            <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Fill and verify this document here.</strong> Existing profile information is added automatically, and the preview refreshes inside this same card.</div>
+                            <div className="grid gap-5 md:grid-cols-2">
+                              <Field label="Employee legal name" value={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { printedName: value })} required />
+                              <Field label="Position or title" value={acknowledgement.employeeTitle} onChange={(value) => updatePolicyAcknowledgement(key, { employeeTitle: value })} required />
+                              <Field label="Date signed" type="date" value={acknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(key, { signatureDate: value })} required />
+                              <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
+                            </div>
+                            <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
+                              <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
+                              <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
+                            </label>
+                            <SignaturePad value={acknowledgement.signatureImage} suggestedName={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { signatureImage: value })} />
+                            <div className={`rounded-xl border p-4 text-sm ${policyPreview?.key === key ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                              <strong>{policyPreview?.key === key ? "Preview verified:" : "Updating preview:"}</strong> {policyPreview?.key === key ? "the PDF below contains your latest information and signature." : "wait a moment for your latest changes to appear before saving."}
+                            </div>
+                            <OfficialDocument title={label} url={policyPreview?.key === key ? policyPreview.url : document} autoFilled initialPage={policyPreview?.key === key ? policyPreview.page : 1} />
+                            <Button type="button" size="lg" className="w-full" disabled={policyPreview?.key !== key} onClick={() => savePolicyAcknowledgement(key)}><FileCheck2 className="mr-2 h-5 w-5" />{completed ? "Update saved document" : "Verify and save document"}</Button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               {currentStep === 6 && (
