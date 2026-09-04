@@ -124,11 +124,15 @@ export type Database = {
         Row: {
           account_status: string | null
           company_name: string
+          company_address: string | null
+          company_address_unit: string | null
+          company_city: string | null
           company_number: string | null
           company_phone: string | null
           company_phone_ext: string | null
           company_size: string | null
           company_state: string | null
+          company_zip: string | null
           contact_cell_phone: string | null
           contact_email: string | null
           contact_person_name: string | null
@@ -164,11 +168,15 @@ export type Database = {
         Insert: {
           account_status?: string | null
           company_name: string
+          company_address?: string | null
+          company_address_unit?: string | null
+          company_city?: string | null
           company_number?: string | null
           company_phone?: string | null
           company_phone_ext?: string | null
           company_size?: string | null
           company_state?: string | null
+          company_zip?: string | null
           contact_cell_phone?: string | null
           contact_email?: string | null
           contact_person_name?: string | null
@@ -204,11 +212,15 @@ export type Database = {
         Update: {
           account_status?: string | null
           company_name?: string
+          company_address?: string | null
+          company_address_unit?: string | null
+          company_city?: string | null
           company_number?: string | null
           company_phone?: string | null
           company_phone_ext?: string | null
           company_size?: string | null
           company_state?: string | null
+          company_zip?: string | null
           contact_cell_phone?: string | null
           contact_email?: string | null
           contact_person_name?: string | null
