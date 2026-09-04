@@ -52,6 +52,10 @@ type OnboardingData = {
   paymentMethod: string;
   bankName: string;
   bankAccountType: string;
+  bankAuthorizationAccepted: boolean;
+  bankSignatureName: string;
+  bankSignatureDate: string;
+  bankSignatureImage: string;
   emergencyName: string;
   emergencyRelationship: string;
   emergencyPhone: string;
@@ -173,6 +177,10 @@ const initialData: OnboardingData = {
   paymentMethod: "direct_deposit",
   bankName: "",
   bankAccountType: "checking",
+  bankAuthorizationAccepted: false,
+  bankSignatureName: "",
+  bankSignatureDate: new Date().toISOString().slice(0, 10),
+  bankSignatureImage: "",
   emergencyName: "",
   emergencyRelationship: "",
   emergencyPhone: "",
@@ -457,7 +465,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const bankAccountsComplete = savedBankAccounts.length > 0 || (bankAccounts.length > 0 && bankAccounts.every((account, index) => Boolean(
     account.bankName && account.bankCity && account.bankState && /^\d{9}$/.test(account.routingNumber.replace(/\D/g, "")) && /^\d{4,17}$/.test(account.accountNumber.replace(/\D/g, "")) && (index === bankAccounts.length - 1 ? account.allocationType === "entire" : account.allocationType === "amount" && Number(account.allocationAmount) > 0)
   )));
-  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || bankAccountsComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
+  const directDepositComplete = bankAccountsComplete && data.bankAuthorizationAccepted && Boolean(data.bankSignatureName && data.bankSignatureDate && data.bankSignatureImage);
+  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.startDate) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
   const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, bankAccounts, savedBankAccounts, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
@@ -872,6 +881,21 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                         </div>
                       ))}
                       {bankAccounts.length > 0 && bankAccounts.length < 3 && <Button type="button" variant="outline" onClick={addBankAccount}><Plus className="mr-2 h-4 w-4" />Add another bank account</Button>}
+                      <div className="space-y-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-6">
+                        <div>
+                          <h3 className="font-semibold">Direct deposit authorization and signature</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">This signature applies only to your direct deposit enrollment form.</p>
+                        </div>
+                        <label className="flex items-start gap-3 rounded-xl border bg-background p-4">
+                          <Checkbox checked={data.bankAuthorizationAccepted} onCheckedChange={(value) => update("bankAuthorizationAccepted", Boolean(value))} />
+                          <span className="text-sm">I authorize my employer and its payroll provider to deposit pay into the accounts listed above and to correct an erroneous deposit up to the original amount.</span>
+                        </label>
+                        <div className="grid gap-5 md:grid-cols-2">
+                          <Field label="Full legal name for direct deposit" value={data.bankSignatureName} onChange={(v) => update("bankSignatureName", v)} required />
+                          <Field label="Direct deposit signature date" type="date" value={data.bankSignatureDate} onChange={(v) => update("bankSignatureDate", v)} required />
+                        </div>
+                        <SignaturePad value={data.bankSignatureImage} suggestedName={data.bankSignatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("bankSignatureImage", value)} />
+                      </div>
                     </div>
                   )}
                 </div>
