@@ -1330,7 +1330,7 @@ function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, vie
             return !value;
           })}>
             {expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-            {expanded ? "Hide document" : "Preview document"}
+            {expanded ? "Hide document" : "Click to view document"}
           </Button>
         </div>
         <Dialog onOpenChange={(open) => { if (open) onViewed?.(); }}>
