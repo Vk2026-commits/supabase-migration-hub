@@ -14,7 +14,12 @@ import { OfficerPhotos } from "./OfficerPhotos";
 import { CertificationsManager, type Certification } from "./CertificationsManager";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 
-interface Props { userId: string; officerId: string | null; onChanged?: () => void }
+interface Props {
+  userId: string;
+  officerId: string | null;
+  onChanged?: () => void;
+  onEnsureProfile?: () => Promise<any>;
+}
 type Schedule = Record<string, { start: string; end: string }>;
 type SharedData = { employmentTypes: string[]; shiftPreferences: string[]; schedule: Schedule };
 type WorkItem = Record<string, string>;
@@ -41,7 +46,7 @@ const initialForm: GuardApplicationData = {
 const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => <div className="space-y-2"><Label>{label}{required ? " *" : ""}</Label><Input className="h-12 text-base" type={type} value={value} onChange={e => onChange(e.target.value)} /></div>;
 const YesNo = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <div className="space-y-3"><Label>{label} *</Label><RadioGroup value={value} onValueChange={onChange} className="flex gap-8">{["Yes", "No"].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`${label}-${v}`} /><Label htmlFor={`${label}-${v}`}>{v}</Label></div>)}</RadioGroup></div>;
 
-export function GuardHiringApplication({ userId, officerId, onChanged }: Props) {
+export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureProfile }: Props) {
   const [form, setForm] = useState(initialForm);
   const [shared, setShared] = useState<SharedData>({ employmentTypes: [], shiftPreferences: [], schedule: {} });
   const [photos, setPhotos] = useState<Record<string, string>>({});
@@ -158,7 +163,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged }: Props) 
         {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional professional references (not relatives).</p>{form.references.map((r, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Reference {i + 1}</p><Field label="Name" value={r.name} onChange={v => updateList("references", i, "name", v)} /><Field label="Relationship" value={r.relationship} onChange={v => updateList("references", i, "relationship", v)} /><Field label="Phone" value={r.phone} onChange={v => updateList("references", i, "phone", v)} /><Field label="Email" type="email" value={r.email} onChange={v => updateList("references", i, "email", v)} /></div>)}</div>}
         {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
         {currentStep === 7 && <OfficerPhotos userId={userId} embedded onChanged={setPhotos} />}
-        {currentStep === 8 && officerId && <CertificationsManager officerId={officerId} userId={userId} onChanged={setCertifications} />}
+        {currentStep === 8 && <CertificationsManager officerId={officerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={setCertifications} />}
         {currentStep === 9 && <div className="space-y-8"><section><h3 className="mb-2 text-lg font-semibold">Official government forms</h3><p className="mb-4 text-sm text-muted-foreground">Open the official fillable PDF, complete it, then download or print it.</p><div className="grid gap-4 md:grid-cols-3"><GovernmentForm title="Form I-9" href="https://www.uscis.gov/sites/default/files/document/forms/i-9.pdf" /><GovernmentForm title="Form W-4" href="https://www.irs.gov/pub/irs-pdf/fw4.pdf" /><GovernmentForm title="Form W-9" href="https://www.irs.gov/pub/irs-pdf/fw9.pdf" /></div></section><section className="space-y-4 border-t pt-7"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Full legal name as signature" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Required onboarding check</p><p>{photosComplete ? "✓" : "○"} Headshot and full-body photo &nbsp; {availabilityComplete ? "✓" : "○"} Availability &nbsp; {certificationComplete ? "✓" : "○"} Certification front</p></div></section></div>}
       </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={form} /></main></div>
     <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"><Button type="button" variant="outline" size="lg" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="h-5 w-5" /></Button>{currentStep < 9 ? <Button type="button" size="lg" className="flex-1" onClick={next}>Continue<ArrowRight className="ml-2 h-5 w-5" /></Button> : <Button type="submit" size="lg" className="flex-1" disabled={submitting || !complete}><FileCheck2 className="mr-2 h-5 w-5" />{submitting ? "Submitting…" : "Submit application"}</Button>}</div>

@@ -902,7 +902,12 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             )}
 
             {activeTab === "hiring-application" && (
-              <GuardHiringApplication userId={userId} officerId={officerProfile?.id || null} onChanged={loadProfile} />
+              <GuardHiringApplication
+                userId={userId}
+                officerId={officerProfile?.id || null}
+                onEnsureProfile={ensureOfficerProfile}
+                onChanged={loadProfile}
+              />
             )}
 
             {activeTab === "find-jobs" && (
