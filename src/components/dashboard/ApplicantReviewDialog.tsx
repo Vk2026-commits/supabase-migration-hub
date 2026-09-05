@@ -85,15 +85,22 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
 
         const onboardingDocuments: ReviewData["onboardingDocuments"] = [];
         if (snapshotResult.data?.id) {
-          const onboardingResult = await (supabase as any).from("officer_onboarding_packets").select("i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle();
+          const onboardingResult = await (supabase as any).from("officer_onboarding_packets").select("id,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle();
           if (onboardingResult.error) throw onboardingResult.error;
-          if (onboardingResult.data?.i9_document_path && onboardingResult.data?.i9_submitted_at) {
-            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.i9_document_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form I-9", url: signed.data.signedUrl, submittedAt: onboardingResult.data.i9_submitted_at });
+          const records = onboardingResult.data?.id ? await (supabase as any).from("officer_compliance_documents").select("id,document_label,document_type,version,storage_path,sha256,signed_at,submitted_at").eq("packet_id", onboardingResult.data.id).order("submitted_at", { ascending: false }) : { data: [], error: null };
+          if (records.error) throw records.error;
+          for (const document of records.data || []) {
+            await (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: officerId } });
+            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(document.storage_path, 3600);
+            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: `${document.document_label} (v${document.version})`, url: signed.data.signedUrl, submittedAt: document.submitted_at });
           }
-          if (onboardingResult.data?.w4_document_path && onboardingResult.data?.w4_submitted_at) {
+          if (!(records.data || []).some((document: any) => document.document_type === "form-i9") && onboardingResult.data?.i9_document_path && onboardingResult.data?.i9_submitted_at) {
+            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.i9_document_path, 3600);
+            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form I-9 (legacy)", url: signed.data.signedUrl, submittedAt: onboardingResult.data.i9_submitted_at });
+          }
+          if (!(records.data || []).some((document: any) => document.document_type === "form-w4") && onboardingResult.data?.w4_document_path && onboardingResult.data?.w4_submitted_at) {
             const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.w4_document_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form W-4", url: signed.data.signedUrl, submittedAt: onboardingResult.data.w4_submitted_at });
+            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form W-4 (legacy)", url: signed.data.signedUrl, submittedAt: onboardingResult.data.w4_submitted_at });
           }
         }
 

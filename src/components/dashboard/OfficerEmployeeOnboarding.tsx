@@ -609,6 +609,36 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
   };
 
+  const archiveComplianceDocument = async (documentType: string, documentLabel: string, bytes: Uint8Array, signedAt?: string, metadata: Record<string, unknown> = {}) => {
+    if (!packetIdRef.current || !activeOfficerId) throw new Error("The onboarding file is not ready yet");
+    const existing = await (supabase as any).from("officer_compliance_documents").select("version").eq("packet_id", packetIdRef.current).eq("document_type", documentType).order("version", { ascending: false }).limit(1).maybeSingle();
+    if (existing.error) throw existing.error;
+    const version = Number(existing.data?.version || 0) + 1;
+    const submittedAt = new Date().toISOString();
+    const safeTime = submittedAt.replace(/[:.]/g, "-");
+    const storagePath = `${userId}/${packetIdRef.current}/compliance/${documentType}/v${version}-${safeTime}.pdf`;
+    const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+    const sha256 = Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
+    const upload = await supabase.storage.from("onboarding-documents").upload(storagePath, new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), { upsert: false, contentType: "application/pdf" });
+    if (upload.error) throw upload.error;
+    const record = await (supabase as any).from("officer_compliance_documents").insert({
+      packet_id: packetIdRef.current,
+      officer_id: activeOfficerId,
+      hiring_application_id: hiringApplicationId,
+      document_type: documentType,
+      document_label: documentLabel,
+      version,
+      storage_path: storagePath,
+      sha256,
+      signed_at: signedAt || null,
+      submitted_at: submittedAt,
+      metadata,
+      created_by: userId,
+    });
+    if (record.error) throw record.error;
+    return { storagePath, submittedAt, version };
+  };
+
   const go = async (nextStep: number) => {
     const destination = Math.max(0, Math.min(7, nextStep));
     try {
@@ -646,10 +676,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       await saveSensitiveForStep(1);
       if (!(await saveDraft(1)) || !packetIdRef.current) throw new Error("The I-9 draft could not be saved");
       const i9Bytes = await buildI9(data, formatSsn(ssn));
-      const i9Path = `${userId}/${packetIdRef.current}/form-i9.pdf`;
-      const upload = await supabase.storage.from("onboarding-documents").upload(i9Path, new Blob([i9Bytes as unknown as BlobPart], { type: "application/pdf" }), { upsert: true, contentType: "application/pdf" });
-      if (upload.error) throw upload.error;
-      const submittedAt = new Date().toISOString();
+      const archived = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureDate, { form: "USCIS I-9", employeeSection: 1 });
+      const i9Path = archived.storagePath;
+      const submittedAt = archived.submittedAt;
       const { error } = await (supabase as any).from("officer_onboarding_packets").update({ i9_document_path: i9Path, i9_submitted_at: submittedAt, form_data: data, signature_name: data.signatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" "), signature_date: data.signatureDate, updated_at: submittedAt }).eq("id", packetIdRef.current);
       if (error) throw error;
       setI9SubmittedAt(submittedAt);
@@ -676,10 +705,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       await saveSensitiveForStep(1);
       if (!(await saveDraft(2)) || !packetIdRef.current) throw new Error("The W-4 draft could not be saved");
       const w4Bytes = await buildW4(data, formatSsn(ssn));
-      const w4Path = `${userId}/${packetIdRef.current}/form-w4.pdf`;
-      const upload = await supabase.storage.from("onboarding-documents").upload(w4Path, new Blob([w4Bytes as unknown as BlobPart], { type: "application/pdf" }), { upsert: true, contentType: "application/pdf" });
-      if (upload.error) throw upload.error;
-      const submittedAt = new Date().toISOString();
+      const archived = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureDate, { form: "IRS W-4" });
+      const w4Path = archived.storagePath;
+      const submittedAt = archived.submittedAt;
       const { error } = await (supabase as any).from("officer_onboarding_packets").update({ w4_document_path: w4Path, w4_submitted_at: submittedAt, form_data: data, updated_at: submittedAt }).eq("id", packetIdRef.current);
       if (error) throw error;
       setW4SubmittedAt(submittedAt);
@@ -708,21 +736,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       await saveSensitiveForStep(currentStep);
       const normalizedSsn = formatSsn(ssn);
       const [i9Bytes, w4Bytes] = await Promise.all([buildI9(data, normalizedSsn), buildW4(data, normalizedSsn)]);
-      const basePath = `${userId}/${packetIdRef.current}`;
-      const i9Path = `${basePath}/form-i9.pdf`;
-      const w4Path = `${basePath}/form-w4.pdf`;
-      const [i9Upload, w4Upload] = await Promise.all([
-        supabase.storage.from("onboarding-documents").upload(i9Path, new Blob([i9Bytes as unknown as BlobPart], { type: "application/pdf" }), {
-          upsert: true,
-          contentType: "application/pdf",
-        }),
-        supabase.storage.from("onboarding-documents").upload(w4Path, new Blob([w4Bytes as unknown as BlobPart], { type: "application/pdf" }), {
-          upsert: true,
-          contentType: "application/pdf",
-        }),
-      ]);
-      if (i9Upload.error) throw i9Upload.error;
-      if (w4Upload.error) throw w4Upload.error;
+      const i9Archive = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureDate, { form: "USCIS I-9", packetSubmission: true });
+      const w4Archive = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureDate, { form: "IRS W-4", packetSubmission: true });
+      const i9Path = i9Archive.storagePath;
+      const w4Path = w4Archive.storagePath;
       const submittedAt = new Date().toISOString();
       const { error } = await (supabase as any)
         .from("officer_onboarding_packets")
@@ -802,6 +819,21 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
     if (policyPreview?.key !== key) {
       toast.error("Wait for the updated PDF preview to finish, then save the document");
+      return;
+    }
+    const policyItem = policyItems.find(([itemKey]) => itemKey === key);
+    if (!policyItem) return;
+    try {
+      const [, label, path] = policyItem;
+      const result = await buildPolicyAcknowledgement(path, { title: label, ...acknowledgement }, data);
+      await archiveComplianceDocument(`policy-${key}`, label, result.bytes, acknowledgement.signatureDate, {
+        viewedAt: acknowledgement.viewedAt,
+        accepted: acknowledgement.accepted,
+        employeeName: acknowledgement.printedName,
+        employerName: data.employerName,
+      });
+    } catch (error: any) {
+      toast.error(error.message || "The signed PDF could not be archived");
       return;
     }
     const nextData = { ...data, policies: { ...data.policies, [key]: true } };

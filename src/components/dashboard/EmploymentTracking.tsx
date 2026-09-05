@@ -11,7 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2 } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 
 interface EmploymentTrackingProps {
@@ -30,6 +30,9 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [offerSaving, setOfferSaving] = useState(false);
   const [offerAuthorized, setOfferAuthorized] = useState(false);
   const [offer, setOffer] = useState({ startDate: "", offeredPosition: "", hourlyRate: "", supervisorName: "", scheduledPost: "", scheduledShift: "", acceptanceDeadline: "", representativeName: "", representativeTitle: "Authorized Hiring Representative" });
+  const [complianceHire, setComplianceHire] = useState<any>(null);
+  const [complianceLoading, setComplianceLoading] = useState(false);
+  const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number; submittedAt: string; sha256: string; url: string }>>([]);
 
   useEffect(() => {
     loadHires();
@@ -93,6 +96,28 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
     toast.success("Offer prepared and sent to employee onboarding");
     setOfferHire(null);
     loadHires();
+  };
+
+  const openComplianceFile = async (hire: any) => {
+    setComplianceHire(hire);
+    setComplianceLoading(true);
+    setComplianceDocuments([]);
+    try {
+      const result = await (supabase as any).from("officer_compliance_documents").select("id,document_label,version,submitted_at,sha256,storage_path,document_type").eq("officer_id", hire.officer_id).order("submitted_at", { ascending: false });
+      if (result.error) throw result.error;
+      const documents = (await Promise.all((result.data || []).map(async (document: any) => {
+        await (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: hire.officer_id } });
+        const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(document.storage_path, 3600);
+        if (signed.error || !signed.data?.signedUrl) return null;
+        return { id: document.id, label: document.document_label, version: document.version, submittedAt: document.submitted_at, sha256: document.sha256, url: signed.data.signedUrl };
+      }))).filter(Boolean);
+      setComplianceDocuments(documents);
+    } catch (error) {
+      console.error("Compliance file failed to load", error);
+      toast.error("The officer compliance file could not be loaded");
+    } finally {
+      setComplianceLoading(false);
+    }
   };
 
   const periodNames: Record<string, string> = {
@@ -273,6 +298,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                   <div><strong className="block text-sm">{hire.offer_prepared_at ? "Offer prepared" : "Offer needs preparation"}</strong><span className="text-xs text-muted-foreground">{hire.offer_prepared_at ? "The officer can review and accept it in onboarding." : "Complete the hiring terms before the officer accepts."}</span></div>
                   <Button size="sm" variant={hire.offer_prepared_at ? "outline" : "default"} onClick={() => openOffer(hire)}>{hire.offer_prepared_at ? "Review offer" : "Prepare offer"}</Button>
                 </div>
+                <Button type="button" variant="outline" className="w-full" onClick={() => openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Open audit-ready officer file</Button>
 
                 {hire.evaluations && hire.evaluations.length > 0 && (
                   <div className="space-y-2 border-t pt-3">
@@ -376,6 +402,19 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
             <label className="sm:col-span-2 flex cursor-pointer items-start gap-3 rounded-xl border bg-muted/30 p-4"><Checkbox checked={offerAuthorized} onCheckedChange={(value) => setOfferAuthorized(Boolean(value))} /><span className="text-sm"><strong className="block">Approve and sign for the company</strong>I confirm these terms and authorize my typed name as the company representative signature.</span></label>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setOfferHire(null)}>Cancel</Button><Button onClick={saveOffer} disabled={offerSaving}>{offerSaving ? "Saving..." : "Save & Send Prepared Offer"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(complianceHire)} onOpenChange={(open) => !open && setComplianceHire(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} compliance file</DialogTitle><DialogDescription>Immutable signed documents are retained by version. Opening this file is recorded in the security audit log.</DialogDescription></DialogHeader>
+          {complianceLoading ? <p className="py-8 text-center text-muted-foreground">Loading compliance documents...</p> : complianceDocuments.length ? (
+            <div className="space-y-3 py-4">{complianceDocuments.map((document) => (
+              <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+                <div className="min-w-0"><strong className="block">{document.label} <Badge variant="secondary">Version {document.version}</Badge></strong><span className="block text-xs text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</span><span className="block truncate font-mono text-[10px] text-muted-foreground" title={document.sha256}>SHA-256: {document.sha256}</span></div>
+                <Button type="button" size="sm" onClick={() => window.open(document.url, "_blank", "noopener,noreferrer")}><Eye className="mr-2 h-4 w-4" />View PDF</Button>
+              </div>
+            ))}</div>
+          ) : <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong className="block">No archived compliance documents yet</strong>Documents will appear here as the officer verifies and saves each onboarding form.</div>}
         </DialogContent>
       </Dialog>
     </div>
