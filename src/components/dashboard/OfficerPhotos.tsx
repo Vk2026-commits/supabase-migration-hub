@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Upload, X } from "lucide-react";
+import { CheckCircle2, Save, Upload, X } from "lucide-react";
 
 interface OfficerPhotosProps {
   userId: string;
@@ -23,12 +23,16 @@ const PHOTO_TYPES = [
 export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPhotosProps) {
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
+  const [savingPhotos, setSavingPhotos] = useState(false);
+  const [photosConfirmed, setPhotosConfirmed] = useState(false);
+
+  const requiredPhotosComplete = Boolean(photos.headshot && photos["full-body"]);
 
   useEffect(() => {
-    loadPhotos();
+    void loadPhotos(true);
   }, [userId]);
 
-  const loadPhotos = async () => {
+  const loadPhotos = async (confirmExisting = false) => {
     try {
       const { data, error } = await supabase.storage
         .from("officer-photos")
@@ -54,9 +58,12 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
       }
 
       setPhotos(photoUrls);
+      if (confirmExisting) setPhotosConfirmed(Boolean(photoUrls.headshot && photoUrls["full-body"]));
       onChanged?.(photoUrls);
+      return photoUrls;
     } catch (error: any) {
       console.error("Error loading photos:", error);
+      return null;
     }
   };
 
@@ -69,6 +76,7 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
       }
 
       const file = event.target.files[0];
+      setPhotosConfirmed(false);
       
       // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
@@ -81,8 +89,9 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
 
       // Delete old photo if exists
       if (photos[photoType]) {
-        const oldPath = `${userId}/${photoType}.${fileExt}`;
-        await supabase.storage.from("officer-photos").remove([oldPath]);
+        const { data: existingFiles } = await supabase.storage.from("officer-photos").list(userId);
+        const oldPaths = (existingFiles || []).filter((item) => item.name.startsWith(`${photoType}.`)).map((item) => `${userId}/${item.name}`);
+        if (oldPaths.length) await supabase.storage.from("officer-photos").remove(oldPaths);
       }
 
       const { error: uploadError } = await supabase.storage
@@ -92,7 +101,7 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
       if (uploadError) throw uploadError;
 
       toast.success("Photo uploaded successfully!");
-      loadPhotos();
+      void loadPhotos();
     } catch (error: any) {
       toast.error("Error uploading photo: " + error.message);
     } finally {
@@ -102,6 +111,7 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
 
   const deletePhoto = async (photoType: string) => {
     try {
+      setPhotosConfirmed(false);
       const { data: files } = await supabase.storage
         .from("officer-photos")
         .list(userId);
@@ -116,10 +126,26 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
         if (error) throw error;
 
         toast.success("Photo deleted successfully!");
-        loadPhotos();
+        void loadPhotos();
       }
     } catch (error: any) {
       toast.error("Error deleting photo: " + error.message);
+    }
+  };
+
+  const savePhotos = async () => {
+    setSavingPhotos(true);
+    try {
+      const savedPhotos = await loadPhotos();
+      if (!savedPhotos?.headshot || !savedPhotos["full-body"]) {
+        setPhotosConfirmed(false);
+        toast.error("Upload both a professional headshot and a full-body photo to complete this step");
+        return;
+      }
+      setPhotosConfirmed(true);
+      toast.success("Photos saved. Step 8 is complete.");
+    } finally {
+      setSavingPhotos(false);
     }
   };
 
@@ -131,6 +157,13 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
       </CardHeader>}
       <CardContent className={embedded ? "px-0" : "px-5 py-7 sm:px-8 sm:py-9"}>
         {embedded && <p className="mb-5 text-sm text-muted-foreground">Your headshot and full-body photo are required. Action photos are optional.</p>}
+        <div className={`mb-6 flex items-start gap-3 rounded-xl border p-4 ${requiredPhotosComplete ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+          <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${requiredPhotosComplete ? "text-green-600" : "text-amber-500"}`} />
+          <div>
+            <p className="font-semibold">{requiredPhotosComplete ? "Minimum photo requirement complete" : "Two required photos needed"}</p>
+            <p className="text-sm">{requiredPhotosComplete ? "Your headshot and full-body photo are stored. Select Save photos to confirm this step." : "Upload one professional headshot and one full-body photo."}</p>
+          </div>
+        </div>
         <div className="grid gap-6 md:grid-cols-2">
           {PHOTO_TYPES.map((photoType) => (
             <div key={photoType.id} className={`space-y-3 rounded-2xl border p-5 transition-shadow hover:shadow-sm ${photos[photoType.id] ? "border-green-500/40 bg-green-500/5" : "bg-card"}`}>
@@ -156,6 +189,18 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
               )}
             </div>
           ))}
+        </div>
+        <div className={`mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${photosConfirmed && requiredPhotosComplete ? "border-green-300 bg-green-50" : "bg-muted/30"}`}>
+          <div className="flex items-center gap-3">
+            {photosConfirmed && requiredPhotosComplete && <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600" />}
+            <div>
+              <p className="font-semibold">{photosConfirmed && requiredPhotosComplete ? "Step 8 photos saved" : "Save your photo progress"}</p>
+              <p className="text-sm text-muted-foreground">{requiredPhotosComplete ? "Both required photos are ready." : "You can save after uploading the two required photos."}</p>
+            </div>
+          </div>
+          <Button type="button" size="lg" onClick={savePhotos} disabled={savingPhotos || Boolean(uploading) || !requiredPhotosComplete} className="shrink-0">
+            <Save className="mr-2 h-5 w-5" />{savingPhotos ? "Saving photos…" : photosConfirmed ? "Photos saved" : "Save photos"}
+          </Button>
         </div>
       </CardContent>
     </>
