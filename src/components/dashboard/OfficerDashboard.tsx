@@ -24,11 +24,14 @@ import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { GuardHiringApplication } from "./GuardHiringApplication";
 import { OfficerEmployeeOnboarding } from "./OfficerEmployeeOnboarding";
+import { useSearchParams } from "@/lib/router-compat";
 
 interface OfficerDashboardProps {
   userId: string;
   initialTab?: string;
 }
+
+const officerTabs = new Set(["hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "videos", "find-jobs", "messages"]);
 
 const guidedSections: Record<string, { title: string; description: string; step: number }> = {
   profile: { title: "Your professional profile", description: "Keep your contact details and professional introduction current.", step: 2 },
@@ -60,7 +63,9 @@ const getPrivateFilePath = (value: string | null | undefined, bucket: string) =>
 };
 
 const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardProps) => {
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(requestedTab && officerTabs.has(requestedTab) ? requestedTab : initialTab);
   const dashboardTopRef = useRef<HTMLDivElement>(null);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -99,6 +104,13 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [quickSetStart, setQuickSetStart] = useState("");
   const [quickSetEnd, setQuickSetEnd] = useState("");
   const ensureOfficerProfilePromise = useRef<Promise<any> | null>(null);
+
+  const selectTab = (tab: string) => {
+    setActiveTab(tab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     loadProfile();
@@ -217,7 +229,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
         if (!choseInitialExperience.current) {
           choseInitialExperience.current = true;
-          if (initialTab === "profile" && applicationResult.data?.status !== "submitted") setActiveTab("hiring-application");
+          if (!requestedTab && initialTab === "profile" && applicationResult.data?.status !== "submitted") selectTab("hiring-application");
         }
       }
     }
@@ -371,7 +383,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const onboardingComplete = onboardingItems.every((item) => item.complete);
 
   const handleTabChange = (tab: string) => {
-    setActiveTab(tab);
+    selectTab(tab);
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "auto" });
       dashboardTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });

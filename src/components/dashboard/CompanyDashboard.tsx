@@ -26,12 +26,15 @@ interface CompanyDashboardProps {
   userName: string;
 }
 
+const companyTabs = new Set(["profile", "jobs", "applicants", "interested", "employment", "subscriptions"]);
+
 const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "profile");
+  const [activeTab, setActiveTab] = useState(requestedTab && companyTabs.has(requestedTab) ? requestedTab : "profile");
   const [formData, setFormData] = useState<CompanyProfileForm>({
     company_name: "",
     company_address: "",
@@ -74,6 +77,13 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     formData.contact_person_name.trim() &&
     formData.contact_email.trim(),
   );
+
+  const selectTab = (tab: string) => {
+    setActiveTab(tab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   useEffect(() => {
     loadProfile();
@@ -216,7 +226,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   return (
     <SidebarProvider>
       <div className="flex min-h-[calc(100vh-4rem)] w-full">
-        <CompanySidebar activeTab={activeTab} onTabChange={setActiveTab} profileComplete={companyProfileComplete} />
+        <CompanySidebar activeTab={activeTab} onTabChange={selectTab} profileComplete={companyProfileComplete} />
         
         <div className="flex-1 flex flex-col min-w-0">
           <div className="border-b bg-background sticky top-0 z-10">
@@ -261,7 +271,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                           {companyProfile && getTierBadge(companyProfile.subscription_tier)}
                         </div>
                         {companyProfile?.subscription_tier === "free" && (
-                          <Button size="sm" onClick={() => setActiveTab("subscriptions")}>
+                          <Button size="sm" onClick={() => selectTab("subscriptions")}>
                             Upgrade
                           </Button>
                         )}
@@ -728,7 +738,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
               <JobApplicants
                 companyId={companyProfile.id}
                 subscriptionTier={companyProfile.subscription_tier}
-                onNavigateToSubscriptions={() => setActiveTab("subscriptions")}
+                onNavigateToSubscriptions={() => selectTab("subscriptions")}
               />
             )}
 
