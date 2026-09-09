@@ -396,12 +396,13 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         return;
       }
 
-      const [hiringResult, existing, maskedResult] = await Promise.all([
+      const [hiringResult, packetResult, maskedResult] = await Promise.all([
         (supabase as any).from("guard_hiring_applications").select("id,company_name,position,applicant_name,applicant_email,application_data").eq("id", hire.hiring_application_id).eq("officer_id", resolved).eq("application_type", "employer_copy").eq("status", "submitted").maybeSingle(),
-        (supabase as any).from("officer_onboarding_packets").select("*").eq("officer_id", resolved).eq("hire_id", hire.id).maybeSingle(),
+        (supabase as any).rpc("ensure_officer_onboarding_packet", { _hire_id: hire.id }),
         supabase.functions.invoke("manage-sensitive-data", { body: { action: "get_masked_data", data: {} } }),
       ]);
       if (hiringResult.error) throw hiringResult.error;
+      if (packetResult.error) throw packetResult.error;
       const hiring = hiringResult.data;
       if (!hiring?.id) {
         if (!mounted) return;
@@ -411,9 +412,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         return;
       }
       if (!mounted) return;
+      const existing = packetResult.data;
       const snapshot = (hiring.application_data || {}) as Record<string, any>;
       const fullName = (snapshot.applicantName || hiring.applicant_name || profileResult.data?.full_name || "").trim().split(/\s+/).filter(Boolean);
-      const saved = existing.data?.form_data || {};
+      const saved = existing?.form_data || {};
       const offer = (hire?.offer_terms || {}) as Record<string, string>;
       setData({
         ...initialData,
@@ -443,11 +445,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       });
       setHireId(hire.id);
       setHiringApplicationId(hiring.id);
-      setPacketId(existing.data?.id || null);
-      setCurrentStep(Math.min(Number(existing.data?.current_step || 0), 7));
-      setStatus(existing.data?.status === "submitted" ? "submitted" : "draft");
-      setI9SubmittedAt(existing.data?.i9_submitted_at || null);
-      setW4SubmittedAt(existing.data?.w4_submitted_at || null);
+      setPacketId(existing?.id || null);
+      setCurrentStep(Math.min(Number(existing?.current_step || 0), 7));
+      setStatus(existing?.status === "submitted" ? "submitted" : "draft");
+      setI9SubmittedAt(existing?.i9_submitted_at || null);
+      setW4SubmittedAt(existing?.w4_submitted_at || null);
       setSsnMasked(maskedResult.data?.data?.ssn_last_four || "");
       const maskedBankData = maskedResult.data?.data;
       const maskedAccounts = Array.isArray(maskedBankData?.bank_accounts) ? maskedBankData.bank_accounts : maskedBankData?.bank_account_last_four ? [{

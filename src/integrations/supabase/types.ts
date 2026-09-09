@@ -1630,6 +1630,10 @@ export type Database = {
         Returns: boolean
       }
       get_officer_user_id: { Args: { _officer_id: string }; Returns: string }
+      ensure_officer_onboarding_packet: {
+        Args: { _hire_id: string }
+        Returns: Database["public"]["Tables"]["officer_onboarding_packets"]["Row"]
+      }
       get_company_onboarding_progress: {
         Args: { _company_id: string }
         Returns: {
