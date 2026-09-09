@@ -67,6 +67,10 @@ type OnboardingData = {
   uniformShoes: string;
   scheduledPost: string;
   scheduledShift: string;
+  worksiteAddress: string;
+  worksiteCity: string;
+  worksiteState: string;
+  worksiteZip: string;
   startDate: string;
   offeredPosition: string;
   hourlyRate: string;
@@ -182,6 +186,33 @@ const uniformChecklistRows = [
 
 const scheduleDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 
+const normalizeOfferTime = (value: string) => {
+  const match = value.trim().toLowerCase().replace(/\./g, "").match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!match) return "";
+  let hour = Number(match[1]);
+  const minute = match[2] || "00";
+  if (match[3] === "pm" && hour < 12) hour += 12;
+  if (match[3] === "am" && hour === 12) hour = 0;
+  return `${String(hour).padStart(2, "0")}:${minute}`;
+};
+
+const scheduleFromOffer = (description: string) => {
+  const result: OnboardingData["availabilitySchedule"] = {};
+  const range = description.match(/(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?)\s*(?:-|–|—|\bto\b)\s*(\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?)/i);
+  if (!range) return result;
+  const start = normalizeOfferTime(range[1]);
+  const end = normalizeOfferTime(range[2]);
+  if (!start || !end) return result;
+  const lower = description.toLowerCase();
+  const selected = /weekdays|monday\s*(?:-|–|—|through|to)\s*friday/.test(lower)
+    ? scheduleDays.slice(0, 5)
+    : /weekends/.test(lower)
+      ? scheduleDays.slice(5)
+      : scheduleDays.filter((day) => lower.includes(day));
+  (selected.length ? selected : scheduleDays).forEach((day) => { result[day] = { start, end }; });
+  return result;
+};
+
 const steps = [
   ["Welcome", "Confirm your hiring company"],
   ["Form I-9", "Complete the employee section in the app"],
@@ -240,6 +271,10 @@ const initialData: OnboardingData = {
   uniformShoes: "",
   scheduledPost: "",
   scheduledShift: "",
+  worksiteAddress: "",
+  worksiteCity: "",
+  worksiteState: "",
+  worksiteZip: "",
   startDate: "",
   policies: {},
   policyAcknowledgements: {},
@@ -445,8 +480,15 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         offeredPosition: offer.positionTitle || offer.offeredPosition || hire.position_title || hiring.position || snapshot.position || officerResult.data?.title || "Security Officer",
         hourlyRate: offer.hourlyRate || "",
         supervisorName: offer.supervisorName || "",
-        scheduledPost: offer.worksiteName ? `${offer.worksiteName}, ${offer.worksiteAddress || ""}, ${offer.worksiteCity || ""}, ${offer.worksiteState || ""} ${offer.worksiteZip || ""}`.replace(/,\s*,/g, ",").trim() : offer.scheduledPost || "",
+        scheduledPost: offer.worksiteName || offer.scheduledPost || "",
         scheduledShift: offer.expectedSchedule || offer.scheduledShift || "",
+        worksiteAddress: offer.worksiteAddress || "",
+        worksiteCity: offer.worksiteCity || "",
+        worksiteState: offer.worksiteState || "",
+        worksiteZip: offer.worksiteZip || "",
+        availabilitySchedule: Object.keys(scheduleFromOffer(offer.expectedSchedule || offer.scheduledShift || "")).length
+          ? scheduleFromOffer(offer.expectedSchedule || offer.scheduledShift || "")
+          : saved.availabilitySchedule || snapshot.availability?.schedule || (officerResult.data as any)?.availability_schedule || {},
         acceptanceDeadline: offer.acceptanceDeadline || "",
         employerRepresentativeName: offer.representativeName || "",
         employerRepresentativeTitle: offer.representativeTitle || "",
@@ -609,8 +651,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       return fields.uniformNone === "true" || uniformChecklistRows.some((_, index) => fields[`uniformReceived:${index}`] === "true" || fields[`uniformReturned:${index}`] === "true");
     }
     if (key === "schedule") {
-      const fields = data.policyAcknowledgements[key]?.documentFields || {};
-      return Boolean(data.scheduledPost && fields.schedulePostAddress && fields.schedulePostCity && fields.schedulePostState && fields.schedulePostZip && data.startDate && scheduleDays.some((day) => data.availabilitySchedule[day]?.start || data.availabilitySchedule[day]?.end));
+      return Boolean(data.scheduledPost && data.worksiteAddress && data.worksiteCity && data.worksiteState && data.worksiteZip && data.startDate && data.scheduledShift);
     }
     return true;
   };
@@ -857,14 +898,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     });
     setData((current) => ({ ...current, [field]: value, policies: { ...current.policies, trackTik: false } }));
   };
-  const updateScheduleDocument = (field: "startDate" | "scheduledPost" | "availabilitySchedule", value: string | OnboardingData["availabilitySchedule"]) => {
-    setPolicyPreview((current) => {
-      if (current?.key !== "schedule") return current;
-      if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
-      return null;
-    });
-    setData((current) => ({ ...current, [field]: value, policies: { ...current.policies, schedule: false } }));
-  };
   const savePolicyAcknowledgement = async (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
     if (!acknowledgement?.viewedAt) {
@@ -876,7 +909,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       return;
     }
     if (!policyDetailsComplete(key)) {
-      toast.error(key === "trackTik" ? "Add the TrackTik username and employee number, then confirm the password was set" : key === "uniform" ? "Check the uniform items received or returned, or confirm that no items were issued" : "Add the complete post address, start date, and at least one scheduled shift");
+      toast.error(key === "trackTik" ? "Add the TrackTik username and employee number, then confirm the password was set" : key === "uniform" ? "Check the uniform items received or returned, or confirm that no items were issued" : "The company must provide the complete worksite, start date, and expected schedule in the offer");
       return;
     }
     if (policyPreview?.key !== key) {
@@ -1297,12 +1330,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                                   <UniformDocumentFields acknowledgement={acknowledgement} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
                                 )}
                                 {key === "schedule" && (
-                                  <ScheduleDocumentFields
-                                    acknowledgement={acknowledgement}
-                                    data={data}
-                                    onFieldChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })}
-                                    onDataChange={updateScheduleDocument}
-                                  />
+                                  <ScheduleDocumentFields data={data} />
                                 )}
                                 <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
                                   <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
@@ -1507,40 +1535,20 @@ function UniformDocumentFields({ acknowledgement, onChange }: { acknowledgement:
   );
 }
 
-function ScheduleDocumentFields({ acknowledgement, data, onFieldChange, onDataChange }: {
-  acknowledgement: PolicyAcknowledgement;
-  data: OnboardingData;
-  onFieldChange: (field: string, value: string) => void;
-  onDataChange: (field: "startDate" | "scheduledPost" | "availabilitySchedule", value: string | OnboardingData["availabilitySchedule"]) => void;
-}) {
-  const fields = acknowledgement.documentFields || {};
+function ScheduleDocumentFields({ data }: { data: OnboardingData }) {
+  const address = [data.worksiteAddress, data.worksiteCity, data.worksiteState, data.worksiteZip].filter(Boolean).join(", ");
   return (
     <section className="space-y-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Initial work schedule</p>
-        <h4 className="mt-1 text-lg font-semibold">Complete the assignment details shown on the PDF</h4>
-        <p className="mt-1 text-sm text-muted-foreground">These details populate the post address, weekly schedule, and start date on the official schedule.</p>
+        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company-provided assignment</p>
+        <h4 className="mt-1 text-lg font-semibold">Your offer already supplies this schedule</h4>
+        <p className="mt-1 text-sm text-muted-foreground">The officer cannot change these terms here. The worksite, start date, and expected schedule come directly from the accepted company offer.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Post or worksite name" value={data.scheduledPost} onChange={(value) => onDataChange("scheduledPost", value)} required />
-        <Field label="Start date" type="date" value={data.startDate} onChange={(value) => onDataChange("startDate", value)} required />
-        <div className="sm:col-span-2"><Field label="Post street address" value={fields.schedulePostAddress || ""} onChange={(value) => onFieldChange("schedulePostAddress", value)} required /></div>
-        <Field label="Post city" value={fields.schedulePostCity || ""} onChange={(value) => onFieldChange("schedulePostCity", value)} />
-        <Field label="Post state" value={fields.schedulePostState || ""} onChange={(value) => onFieldChange("schedulePostState", value)} />
-        <Field label="Post ZIP code" value={fields.schedulePostZip || ""} onChange={(value) => onFieldChange("schedulePostZip", value)} />
-      </div>
-      <div className="space-y-3">
-        <p className="font-semibold">Scheduled shifts</p>
-        {scheduleDays.map((day) => {
-          const hours = data.availabilitySchedule[day] || {};
-          return (
-            <div key={day} className="grid items-end gap-3 rounded-xl border bg-background p-3 sm:grid-cols-[130px_1fr_1fr]">
-              <span className="pb-2 text-sm font-medium capitalize">{day}</span>
-              <Field label="From" type="time" value={hours.start || ""} onChange={(value) => onDataChange("availabilitySchedule", { ...data.availabilitySchedule, [day]: { ...hours, start: value } })} />
-              <Field label="To" type="time" value={hours.end || ""} onChange={(value) => onDataChange("availabilitySchedule", { ...data.availabilitySchedule, [day]: { ...hours, end: value } })} />
-            </div>
-          );
-        })}
+        <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">Worksite</p><p className="font-semibold">{data.scheduledPost || "Not provided"}</p></div>
+        <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">Start date</p><p className="font-semibold">{data.startDate || "Not provided"}</p></div>
+        <div className="rounded-xl border bg-background p-4 sm:col-span-2"><p className="text-xs text-muted-foreground">Complete worksite address</p><p className="font-semibold">{address || "Not provided"}</p></div>
+        <div className="rounded-xl border bg-background p-4 sm:col-span-2"><p className="text-xs text-muted-foreground">Expected schedule</p><p className="font-semibold">{data.scheduledShift || "Not provided"}</p></div>
       </div>
     </section>
   );

@@ -84,6 +84,10 @@ export type PolicyAutofillValues = OfficialOnboardingValues & {
   availabilitySchedule?: Record<string, { start?: string; end?: string }>;
   scheduledPost?: string;
   scheduledShift?: string;
+  worksiteAddress?: string;
+  worksiteCity?: string;
+  worksiteState?: string;
+  worksiteZip?: string;
   uniformShirt?: string;
   uniformPants?: string;
   uniformShoes?: string;
@@ -552,9 +556,9 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   }
   if (isSocialPolicy) {
     const page = document.getPages()[2];
-    drawValue(page, employeeName, 86, 558, 260, 9);
-    drawSignature(page, 86, 501, 260, 22);
-    drawValue(page, formattedDate, 86, 468, 130, 9);
+    drawValue(page, employeeName, 74, 559, 250, 9);
+    drawSignature(page, 72, 519, 180, 18);
+    drawValue(page, formattedDate, 74, 478, 130, 9);
   }
   if (isUniformChecklist) {
     const page = document.getPages()[0];
@@ -566,22 +570,22 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   }
   if (isWorkSchedule) {
     const page = document.getPages()[0];
-    const fields = acknowledgement.documentFields || {};
-    drawValue(page, formattedDate, 119, 630, 120, 8);
-    drawValue(page, employeeName, 156, 602, 210, 8);
-    drawValue(page, fields.schedulePostAddress || values.scheduledPost || "", 180, 520, 270, 8);
-    drawValue(page, fields.schedulePostCity || "", 115, 494, 130, 8);
-    drawValue(page, fields.schedulePostState || "", 292, 494, 70, 8);
-    drawValue(page, fields.schedulePostZip || "", 420, 494, 70, 8);
-    drawValue(page, employeeName.split(/\s+/)[0] || employeeName, 112, 459, 140, 8);
-    const dayXs = [202, 253, 304, 355, 406, 457, 508];
+    drawValue(page, formattedDate, 102, 625, 105, 8);
+    drawValue(page, employeeName, 164, 597, 205, 8);
+    drawValue(page, values.worksiteAddress || "", 145, 516, 285, 8);
+    drawValue(page, values.worksiteCity || "", 112, 491, 95, 8);
+    drawValue(page, values.worksiteState || "", 245, 491, 95, 8);
+    drawValue(page, values.worksiteZip || "", 375, 491, 62, 8);
+    drawValue(page, employeeName.split(/\s+/)[0] || employeeName, 100, 458, 135, 8);
+    const dayXs = [171, 225, 282, 346, 399, 451, 504];
     const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
     dayKeys.forEach((day, index) => {
       drawValue(page, schedule[day]?.start || "", dayXs[index], 340, 45, 6.5);
       drawValue(page, schedule[day]?.end || "", dayXs[index], 325, 45, 6.5);
     });
-    drawValue(page, date(values.startDate || ""), 220, 239, 100, 8);
-    drawSignature(page, 72, 108, 132, 24);
+    drawValue(page, `Company schedule: ${values.scheduledShift || ""}`, 108, 300, 420, 7);
+    drawValue(page, date(values.startDate || ""), 162, 240, 90, 8);
+    drawSignature(page, 72, 118, 145, 18);
   }
 
   // The TrackTik template's interactive widgets sit one row below their printed
@@ -634,6 +638,19 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
         if (formattedDate) page.drawText(formattedDate, { x: rect.x + rect.width * 0.81, y: rect.y + 4, size: 7, font: regularFont, color: rgb(0, 0, 0) });
       }
     } catch { /* combined employee signature field differs between editions */ }
+    try {
+      const supervisorField = form.getTextField("Supervisors Signature Date") as any;
+      supervisorField.setText("");
+      for (const widget of supervisorField.acroField.getWidgets()) {
+        const rect = widget.getRectangle();
+        const pageRef = widget.P();
+        const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
+        const entryHeight = Math.min(15, rect.height * 0.52);
+        page.drawRectangle({ x: rect.x + 1, y: rect.y + 1, width: rect.width - 2, height: entryHeight, color: rgb(1, 1, 1) });
+        drawSignature(page, rect.x + 3, rect.y + 1, rect.width * 0.72, entryHeight, employerRepresentativeName, null);
+        drawValue(page, employerSignedDate, rect.x + rect.width * 0.78, rect.y + 4, rect.width * 0.2, 7);
+      }
+    } catch { /* combined supervisor signature field differs between editions */ }
   }
 
   const receipt = document.addPage([612, 792]);
