@@ -20,6 +20,12 @@ interface OfficerSidebarProps {
 export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboardingAvailable = false, onboardingOfferLoaded = false }: OfficerSidebarProps) {
   const { open } = useSidebar();
 
+  const completionKeyFor = (value: string) => {
+    if (value === "work-history") return "workHistory";
+    if (value === "employee-onboarding") return "employeeOnboarding";
+    return value;
+  };
+
   const items = [
     { title: "Hiring Application", value: "hiring-application", icon: ClipboardList },
     { title: "Employee Onboarding", value: "employee-onboarding", icon: ClipboardCheck },
@@ -42,7 +48,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
       return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
     }
     
-    const completionKey = value === "employee-onboarding" ? "employeeOnboarding" : value;
+    const completionKey = completionKeyFor(value);
     const isComplete = completionStatus?.[completionKey as keyof typeof completionStatus];
     const baseClasses = activeTab === value ? "font-medium" : "hover:bg-muted/50";
     const statusColor = isComplete ? "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20" : "bg-red-500/10 text-red-600 hover:bg-red-500/20";
@@ -51,7 +57,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
 
   const isTabComplete = (value: string) => {
     if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'hiring-application') return false;
-    const completionKey = value === "employee-onboarding" ? "employeeOnboarding" : value;
+    const completionKey = completionKeyFor(value);
     return completionStatus?.[completionKey as keyof typeof completionStatus];
   };
 
