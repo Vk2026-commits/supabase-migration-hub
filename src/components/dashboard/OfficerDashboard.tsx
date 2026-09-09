@@ -454,7 +454,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           offerNeedsResponse={Boolean(pendingEmploymentOffer)}
         />
         <div className="flex min-w-0 flex-1">
-          <div className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+          <div className={`min-w-0 flex-1 p-4 sm:p-6 ${activeTab === "employee-onboarding" ? "lg:px-6 lg:py-8" : "lg:p-8"}`}>
             <div className="mb-4">
               <SidebarTrigger />
             </div>
@@ -464,7 +464,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
             {guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
-            {!onboardingComplete && activeTab !== "hiring-application" && (
+            {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="h-5 w-5 text-primary" />Finish your onboarding</CardTitle><CardDescription>You can use the dashboard now. Complete these items so employers can review your profile.</CardDescription></CardHeader>
                 <CardContent className="grid gap-2 sm:grid-cols-2">{onboardingItems.map((item) => <button key={item.label} type="button" disabled={item.locked} onClick={() => handleTabChange(item.tab)} className="flex items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70">{item.locked ? <LockKeyhole className="h-5 w-5 shrink-0 text-amber-600" /> : item.complete ? <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" /> : <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />}<span className={item.complete ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{item.label}</span></button>)}</CardContent>
@@ -482,7 +482,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               </Alert>
             )}
 
-          <div className="mx-auto max-w-6xl space-y-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12">
+          <div className={`${activeTab === "employee-onboarding" ? "w-full max-w-none" : "mx-auto max-w-6xl"} space-y-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12`}>
             {activeTab === "profile" && (
               <div className="grid md:grid-cols-5 gap-4">
         <Card>
@@ -1043,7 +1043,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           </div>
           
           {/* Right Side Chat Panel and Interested Jobs */}
-          {officerProfile?.id && (
+          {officerProfile?.id && activeTab !== "employee-onboarding" && (
             <div className="hidden w-96 shrink-0 border-l bg-muted/20 p-4 overflow-y-auto space-y-4 xl:block">
               <div className="h-[250px]">
                 <OfficerChatPanel 

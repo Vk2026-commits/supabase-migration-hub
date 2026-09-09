@@ -894,7 +894,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     );
 
   return (
-    <form id="employee-onboarding-top" onSubmit={submit} className="mx-auto w-full max-w-6xl scroll-mt-4 pb-24 lg:pb-8">
+    <form id="employee-onboarding-top" onSubmit={submit} className="w-full max-w-none scroll-mt-4 pb-24 lg:pb-8">
       <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
         <div className="flex items-center gap-3 px-5 py-5 sm:px-8">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
@@ -924,7 +924,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           </div>
         </div>
       )}
-      <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[230px_minmax(0,1fr)] 2xl:grid-cols-[250px_minmax(0,1fr)]">
         <aside className="hidden lg:block">
           <nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">
             {steps.map((step, index) => (
@@ -943,7 +943,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Step {currentStep + 1} of 8</span>
             <span className="text-sm text-muted-foreground">{progress}% complete</span>
           </div>
-          <Card className="rounded-2xl shadow-sm">
+          <Card className="min-w-0 rounded-2xl shadow-sm">
             <CardHeader className="border-b px-5 py-6 sm:px-8">
               <CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle>
               <CardDescription className="text-base">{steps[currentStep][1]}</CardDescription>
@@ -971,15 +971,19 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   <div className="rounded-xl bg-primary/5 p-4 text-sm">
                     <strong>Official USCIS Form I-9 — Section 1.</strong> This is the actual government document. Complete the guided fields below and the official form preview updates in place. Your employer completes Section 2.
                   </div>
-                  <OfficialDocument title="Official Form I-9" url={i9Url} />
-                  <div className="grid gap-5 md:grid-cols-3">
+                  <div className="grid items-start gap-6 2xl:grid-cols-[minmax(430px,0.8fr)_minmax(620px,1.2fr)]">
+                    <div className="2xl:sticky 2xl:top-4 2xl:order-2">
+                      <OfficialDocument title="Official Form I-9" url={i9Url} initiallyExpanded />
+                    </div>
+                    <div className="space-y-6 2xl:order-1">
+                      <div className="grid gap-5 md:grid-cols-3 2xl:grid-cols-2">
                     <Field label="Legal first name" value={data.legalFirstName} onChange={(v) => update("legalFirstName", v)} required />
                     <Field label="Middle initial" value={data.middleInitial} onChange={(v) => update("middleInitial", v)} />
                     <Field label="Legal last name" value={data.legalLastName} onChange={(v) => update("legalLastName", v)} required />
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-3 2xl:col-span-2">
                       <Field label="Other last names used" value={data.otherLastNames} onChange={(v) => update("otherLastNames", v)} />
                     </div>
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-2 2xl:col-span-1">
                       <Field label="Street address" value={data.address} onChange={(v) => update("address", v)} required />
                     </div>
                     <Field label="Apartment number" value={data.apartmentNumber} onChange={(v) => update("apartmentNumber", v)} />
@@ -989,7 +993,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <Field label="Date of birth" type="date" value={data.dateOfBirth} onChange={(v) => update("dateOfBirth", v)} required />
                     <Field label="Email" type="email" value={data.email} onChange={(v) => update("email", v)} required />
                     <Field label="Phone" type="tel" value={data.phone} onChange={(v) => update("phone", v)} required />
-                  </div>
+                      </div>
                   <div className="rounded-xl border p-4">
                     <div className="space-y-2">
                       <Label htmlFor="employee-onboarding-ssn">{ssnMasked ? `Social Security number (encrypted copy saved as ${ssnMasked})` : "Social Security number"} *</Label>
@@ -1027,6 +1031,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <Button type="button" size="lg" onClick={submitI9} disabled={submittingI9 || saving} className="shrink-0"><FileCheck2 className="mr-2 h-5 w-5" />{submittingI9 ? "Submitting I-9…" : i9SubmittedAt ? "Update submitted I-9" : "Submit Form I-9"}</Button>
                     </div>
                   </div>
+                    </div>
+                  </div>
                 </div>
               )}
               {currentStep === 2 && (
@@ -1034,7 +1040,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   <div className="rounded-xl bg-primary/5 p-4 text-sm">
                     <strong>Official IRS Form W-4 — Employee’s Withholding Certificate.</strong> The actual government form appears below and updates from the answers you enter in We Find Guards.
                   </div>
-                  <OfficialDocument title="Official Form W-4" url={w4Url} />
+                  <div className="grid items-start gap-6 2xl:grid-cols-[minmax(430px,0.8fr)_minmax(620px,1.2fr)]">
+                    <div className="2xl:sticky 2xl:top-4 2xl:order-2">
+                      <OfficialDocument title="Official Form W-4" url={w4Url} initiallyExpanded />
+                    </div>
+                    <div className="space-y-7 2xl:order-1">
                   <Choice label="Federal filing status" value={data.filingStatus} onChange={(v) => update("filingStatus", v)} options={["Single or Married filing separately", "Married filing jointly or Qualifying surviving spouse", "Head of household"]} />
                   <label className="flex items-start gap-3 rounded-xl border p-4">
                     <Checkbox checked={data.multipleJobs} onCheckedChange={(value) => update("multipleJobs", Boolean(value))} />
@@ -1076,6 +1086,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">We Find Guards does not provide tax advice. If you are unsure what to enter, consult the official IRS instructions or a tax professional.</p>
+                    </div>
+                  </div>
                 </div>
               )}
               {currentStep === 3 && (
@@ -1496,8 +1508,8 @@ function SignaturePad({ value, suggestedName, onChange }: { value: string; sugge
   );
 }
 
-function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, viewed = false, onViewed }: { title: string; url: string; autoFilled?: boolean; initialPage?: number; viewed?: boolean; onViewed?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
+function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, viewed = false, onViewed, initiallyExpanded = false }: { title: string; url: string; autoFilled?: boolean; initialPage?: number; viewed?: boolean; onViewed?: () => void; initiallyExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const updatesFromAnswers = autoFilled || title.startsWith("Official Form");
   const helpText = updatesFromAnswers ? "Your answers automatically update this official PDF. You can preview it at any time." : "Review this document here without leaving your onboarding application.";
   const previewUrl = `${url}#page=${initialPage}&view=FitH&toolbar=1`;
@@ -1528,9 +1540,9 @@ function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, vie
         </div>
         <Dialog onOpenChange={(open) => { if (open) onViewed?.(); }}>
           <DialogTrigger asChild>
-            <Button type="button" className="w-full md:hidden">
+            <Button type="button" variant="outline" className="w-full md:w-auto">
               <Maximize2 className="mr-2 h-4 w-4" />
-              View document full screen
+              Open full screen
             </Button>
           </DialogTrigger>
           <DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none">
@@ -1545,7 +1557,10 @@ function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, vie
       {onViewed && <div className={`border-t px-4 py-2 text-xs font-semibold ${viewed ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"}`}>{viewed ? "Viewed — acknowledgment unlocked" : "Open this document to unlock the acknowledgment"}</div>}
       {expanded && (
         <div className="hidden border-t md:block">
-          <iframe key={url} title={title} src={previewUrl} className="h-[min(760px,75vh)] w-full bg-white" />
+          <div className="border-b bg-primary/5 px-4 py-2 text-xs font-medium text-muted-foreground">
+            The document is shown at page width. Use the PDF controls to zoom further, move between pages, print, or download.
+          </div>
+          <iframe key={url} title={title} src={previewUrl} className="h-[calc(100vh-10rem)] min-h-[760px] max-h-[1100px] w-full bg-white" />
         </div>
       )}
     </section>
