@@ -356,8 +356,13 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       if (error) throw error;
 
+      // Reflect the successful save immediately so sidebar completion does not
+      // wait for a second network round trip. loadProfile below remains the
+      // source-of-truth refresh and keeps the status correct after a reload.
+      setOfficerProfile((current: any) => ({ ...current, ...profileData }));
+      setProfile((current: any) => ({ ...current, full_name: fullName }));
       toast.success("Profile updated successfully!");
-      loadProfile();
+      await loadProfile();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -366,9 +371,13 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   };
 
   // Calculate completion status for each tab
+  const savedFullName = (profile?.full_name || `${formData.first_name} ${formData.last_name}`).trim();
   const completionStatus = {
-    profile: !!(officerProfile?.title && officerProfile?.bio && officerProfile?.phone && 
-                officerProfile?.address_city && officerProfile?.address_state),
+    // Title, bio, LinkedIn, salary, and resume are optional enhancements. A
+    // saved profile is complete once its core identity, contact, and address
+    // information are present.
+    profile: !!(savedFullName && officerProfile?.phone && officerProfile?.address_street &&
+                officerProfile?.address_city && officerProfile?.address_state && officerProfile?.address_zip),
     availability: !!(officerProfile?.employment_type?.length && 
                      officerProfile?.shift_preference?.length &&
                      Object.keys(formData.availability_schedule).length > 0),
