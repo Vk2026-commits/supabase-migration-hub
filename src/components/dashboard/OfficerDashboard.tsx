@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck } from "lucide-react";
+import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { OfficerPhotos } from "./OfficerPhotos";
@@ -80,6 +80,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [videoInterviewCount, setVideoInterviewCount] = useState(0);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
   const [employeeOnboardingSubmitted, setEmployeeOnboardingSubmitted] = useState(false);
+  const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
+  const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
   const choseInitialExperience = useRef(false);
@@ -207,7 +209,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
@@ -215,6 +217,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           (supabase as any).from("guard_hiring_applications").select("status").eq("officer_id", data.id).eq("application_type", "master").maybeSingle(),
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("hires").select("id,hiring_application_id,offer_prepared_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
         
         setCertCount(certsResult.count || 0);
@@ -224,6 +227,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
         setApplicationSubmitted(applicationResult.data?.status === "submitted");
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
+        setOnboardingOfferAvailable(Boolean(preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id));
+        setOnboardingOfferLoaded(true);
         const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
         setPhotoCount(photoNames.length);
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
@@ -375,7 +380,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
   const onboardingItems = [
     { label: "Submit hiring application", complete: applicationSubmitted, tab: "hiring-application" },
-    { label: "Complete employee onboarding after hire", complete: employeeOnboardingSubmitted, tab: "employee-onboarding" },
+    { label: onboardingOfferAvailable ? "Complete employee onboarding for your offer" : "Employee onboarding unlocks after a company offer", complete: employeeOnboardingSubmitted, tab: "employee-onboarding", locked: !onboardingOfferAvailable },
     { label: "Set availability", complete: completionStatus.availability, tab: "availability" },
     { label: "Add headshot and full-body photo", complete: requiredPhotosComplete, tab: "photos" },
     { label: "Upload a certification front document", complete: certificationDocumentComplete, tab: "certifications" },
@@ -383,6 +388,10 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const onboardingComplete = onboardingItems.every((item) => item.complete);
 
   const handleTabChange = (tab: string) => {
+    if (tab === "employee-onboarding" && onboardingOfferLoaded && !onboardingOfferAvailable) {
+      toast.info("Employee onboarding will unlock after a company sends you a completed offer");
+      return;
+    }
     selectTab(tab);
     requestAnimationFrame(() => {
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -397,6 +406,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           activeTab={activeTab} 
           onTabChange={handleTabChange}
           completionStatus={completionStatus}
+          onboardingAvailable={onboardingOfferAvailable}
+          onboardingOfferLoaded={onboardingOfferLoaded}
         />
         <div className="flex min-w-0 flex-1">
           <div className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
@@ -412,7 +423,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             {!onboardingComplete && activeTab !== "hiring-application" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="h-5 w-5 text-primary" />Finish your onboarding</CardTitle><CardDescription>You can use the dashboard now. Complete these items so employers can review your profile.</CardDescription></CardHeader>
-                <CardContent className="grid gap-2 sm:grid-cols-2">{onboardingItems.map((item) => <button key={item.label} type="button" onClick={() => handleTabChange(item.tab)} className="flex items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors hover:bg-muted">{item.complete ? <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" /> : <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />}<span className={item.complete ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{item.label}</span></button>)}</CardContent>
+                <CardContent className="grid gap-2 sm:grid-cols-2">{onboardingItems.map((item) => <button key={item.label} type="button" disabled={item.locked} onClick={() => handleTabChange(item.tab)} className="flex items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70">{item.locked ? <LockKeyhole className="h-5 w-5 shrink-0 text-amber-600" /> : item.complete ? <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" /> : <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />}<span className={item.complete ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{item.label}</span></button>)}</CardContent>
               </Card>
             )}
 
@@ -950,7 +961,17 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               />
             )}
 
-            {activeTab === "employee-onboarding" && (
+            {activeTab === "employee-onboarding" && onboardingOfferLoaded && !onboardingOfferAvailable && (
+              <Card className="mx-auto max-w-2xl rounded-2xl border-amber-200 bg-amber-50">
+                <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+                  <div className="rounded-2xl bg-amber-100 p-4 text-amber-800"><LockKeyhole className="h-8 w-8" /></div>
+                  <div><h2 className="text-2xl font-bold">Employee onboarding is locked</h2><p className="mt-2 text-amber-950/75">A company must send you a completed offer with pay and assignment details before these forms become available.</p></div>
+                  <Button type="button" onClick={() => handleTabChange("hiring-application")}>View hiring application</Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {activeTab === "employee-onboarding" && (!onboardingOfferLoaded || onboardingOfferAvailable) && (
               <OfficerEmployeeOnboarding
                 userId={userId}
                 officerId={officerProfile?.id || null}

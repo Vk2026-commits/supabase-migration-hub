@@ -315,7 +315,10 @@ function Choice({ label, value, onChange, options, optionLabels = {}, stacked = 
 export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, onChanged }: Props) {
   const [activeOfficerId, setActiveOfficerId] = useState(officerId);
   const [packetId, setPacketId] = useState<string | null>(null);
+  const [hireId, setHireId] = useState<string | null>(null);
   const [hiringApplicationId, setHiringApplicationId] = useState<string | null>(null);
+  const [accessState, setAccessState] = useState<"loading" | "locked" | "ready">("loading");
+  const [lockedReason, setLockedReason] = useState("A company must send you a completed offer before employee onboarding is available.");
   const [data, setData] = useState(initialData);
   const [currentStep, setCurrentStep] = useState(0);
   const [status, setStatus] = useState<"draft" | "submitted">("draft");
@@ -380,57 +383,67 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       if (!resolved && onEnsureProfile) resolved = (await onEnsureProfile())?.id || null;
       if (!mounted || !resolved) return;
       setActiveOfficerId(resolved);
-      const [profileResult, officerResult, hiringResult, hireResult, maskedResult] = await Promise.all([
+      const [profileResult, officerResult, hireResult] = await Promise.all([
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
         supabase.from("officer_profiles").select("phone,address_street,address_city,address_state,address_zip,availability_schedule,title").eq("id", resolved).maybeSingle(),
-        (supabase as any).from("guard_hiring_applications").select("id,company_name,application_data").eq("officer_id", resolved).eq("application_type", "employer_copy").eq("status", "submitted").order("submitted_at", { ascending: false }).limit(1).maybeSingle(),
-        supabase.from("hires").select("hire_date,position_title,offer_terms,offer_prepared_at,company_profiles(company_name)").eq("officer_id", resolved).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-        supabase.functions.invoke("manage-sensitive-data", {
-          body: { action: "get_masked_data", data: {} },
-        }),
+        supabase.from("hires").select("id,hiring_application_id,hire_date,position_title,offer_terms,offer_prepared_at,company_profiles(company_name)").eq("officer_id", resolved).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
-      const hiring = hiringResult.data;
-      const existing = await (supabase as any)
-        .from("officer_onboarding_packets")
-        .select("*")
-        .eq("officer_id", resolved)
-        .eq("hiring_application_id", hiring?.id || null)
-        .maybeSingle();
-      if (!mounted) return;
-      const fullName = (profileResult.data?.full_name || "").trim().split(/\s+/);
-      const saved = existing.data?.form_data || {};
+      if (hireResult.error) throw hireResult.error;
       const hire = hireResult.data as any;
+      if (!hire?.id || !hire?.hiring_application_id || !hire?.offer_prepared_at) {
+        if (!mounted) return;
+        setAccessState("locked");
+        setLoaded(true);
+        return;
+      }
+
+      const [hiringResult, existing, maskedResult] = await Promise.all([
+        (supabase as any).from("guard_hiring_applications").select("id,company_name,position,applicant_name,applicant_email,application_data").eq("id", hire.hiring_application_id).eq("officer_id", resolved).eq("application_type", "employer_copy").eq("status", "submitted").maybeSingle(),
+        (supabase as any).from("officer_onboarding_packets").select("*").eq("officer_id", resolved).eq("hire_id", hire.id).maybeSingle(),
+        supabase.functions.invoke("manage-sensitive-data", { body: { action: "get_masked_data", data: {} } }),
+      ]);
+      if (hiringResult.error) throw hiringResult.error;
+      const hiring = hiringResult.data;
+      if (!hiring?.id) {
+        if (!mounted) return;
+        setLockedReason("Your offer is not connected to a submitted application. Ask the company to resend the offer from its Applicants page.");
+        setAccessState("locked");
+        setLoaded(true);
+        return;
+      }
+      if (!mounted) return;
+      const snapshot = (hiring.application_data || {}) as Record<string, any>;
+      const fullName = (snapshot.applicantName || hiring.applicant_name || profileResult.data?.full_name || "").trim().split(/\s+/).filter(Boolean);
+      const saved = existing.data?.form_data || {};
       const offer = (hire?.offer_terms || {}) as Record<string, string>;
       setData({
         ...initialData,
         legalFirstName: fullName[0] || "",
-        legalLastName: fullName.slice(1).join(" "),
-        email: profileResult.data?.email || "",
-        phone: officerResult.data?.phone || "",
-        address: officerResult.data?.address_street || "",
-        city: officerResult.data?.address_city || "",
-        state: officerResult.data?.address_state || "",
-        zip: officerResult.data?.address_zip || "",
-        offeredPosition: hiring?.position || hiring?.application_data?.position || officerResult.data?.title || "Security Officer",
-        availabilitySchedule: (officerResult.data as any)?.availability_schedule || {},
-        employerName: hiring?.company_name || hiring?.application_data?.companyName || "Your hiring company",
+        middleInitial: fullName.length > 2 ? fullName.slice(1, -1).map((part: string) => part[0]).join("") : "",
+        legalLastName: fullName.length > 1 ? fullName[fullName.length - 1] : "",
+        email: snapshot.email || hiring.applicant_email || profileResult.data?.email || "",
+        phone: snapshot.phone || officerResult.data?.phone || "",
+        address: snapshot.address || officerResult.data?.address_street || "",
+        city: snapshot.city || officerResult.data?.address_city || "",
+        state: snapshot.state || officerResult.data?.address_state || "",
+        zip: snapshot.zip || officerResult.data?.address_zip || "",
+        availabilitySchedule: snapshot.availability?.schedule || (officerResult.data as any)?.availability_schedule || {},
         ...saved,
-        ...(hire?.offer_prepared_at ? {
-          employerName: hire.company_profiles?.company_name || hiring?.company_name || saved.employerName || "Your hiring company",
-          startDate: offer.startDate || hire.hire_date || "",
-          offeredPosition: offer.offeredPosition || hire.position_title || "Security Officer",
-          hourlyRate: offer.hourlyRate || "",
-          supervisorName: offer.supervisorName || "",
-          scheduledPost: offer.scheduledPost || "",
-          scheduledShift: offer.scheduledShift || "",
-          acceptanceDeadline: offer.acceptanceDeadline || "",
-          employerRepresentativeName: offer.representativeName || "",
-          employerRepresentativeTitle: offer.representativeTitle || "",
-          employerSignatureName: offer.employerSignatureName || offer.representativeName || "",
-          offerPreparedAt: hire.offer_prepared_at,
-        } : {}),
+        employerName: hire.company_profiles?.company_name || hiring.company_name || snapshot.companyName || "Your hiring company",
+        startDate: offer.startDate || hire.hire_date || snapshot.startDate || "",
+        offeredPosition: offer.offeredPosition || hire.position_title || hiring.position || snapshot.position || officerResult.data?.title || "Security Officer",
+        hourlyRate: offer.hourlyRate || "",
+        supervisorName: offer.supervisorName || "",
+        scheduledPost: offer.scheduledPost || "",
+        scheduledShift: offer.scheduledShift || "",
+        acceptanceDeadline: offer.acceptanceDeadline || "",
+        employerRepresentativeName: offer.representativeName || "",
+        employerRepresentativeTitle: offer.representativeTitle || "",
+        employerSignatureName: offer.employerSignatureName || offer.representativeName || "",
+        offerPreparedAt: hire.offer_prepared_at,
       });
-      setHiringApplicationId(hiring?.id || null);
+      setHireId(hire.id);
+      setHiringApplicationId(hiring.id);
       setPacketId(existing.data?.id || null);
       setCurrentStep(Math.min(Number(existing.data?.current_step || 0), 7));
       setStatus(existing.data?.status === "submitted" ? "submitted" : "draft");
@@ -450,6 +463,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       }] : [];
       setSavedBankAccounts(maskedAccounts);
       if (maskedAccounts.length) setBankAccounts([]);
+      setAccessState("ready");
       setLoaded(true);
     })().catch((error) => {
       console.error(error);
@@ -461,13 +475,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   }, [userId, officerId]);
 
   const saveDraft = async (step = currentStep, dataOverride?: OnboardingData) => {
-    if (!loaded || !activeOfficerId) return false;
+    if (!loaded || accessState !== "ready" || !activeOfficerId || !hireId || !hiringApplicationId) return false;
     setSaving(true);
     try {
       const draftData = dataOverride || data;
       const payload: any = {
         user_id: userId,
         officer_id: activeOfficerId,
+        hire_id: hireId,
         hiring_application_id: hiringApplicationId,
         company_name: draftData.employerName,
         status,
@@ -505,7 +520,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [data, currentStep, loaded, activeOfficerId, status]);
+  }, [data, currentStep, loaded, accessState, activeOfficerId, hireId, hiringApplicationId, status]);
 
   useEffect(() => {
     if (![1, 2, 7].includes(currentStep)) return;
@@ -585,8 +600,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     account.bankName && account.bankCity && account.bankState && /^\d{9}$/.test(account.routingNumber.replace(/\D/g, "")) && /^\d{4,17}$/.test(account.accountNumber.replace(/\D/g, "")) && (index === bankAccounts.length - 1 ? account.allocationType === "entire" : account.allocationType === "amount" && Number(account.allocationAmount) > 0)
   )));
   const directDepositComplete = bankAccountsComplete && data.bankAuthorizationAccepted && Boolean(data.bankSignatureName && data.bankSignatureDate && data.bankSignatureImage);
-  const completeStep = (step: number) => (step === 0 ? Boolean(hiringApplicationId) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.offerPreparedAt && data.startDate && data.scheduledPost && data.scheduledShift && data.supervisorName) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
-  const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, bankAccounts, savedBankAccounts, hiringApplicationId]);
+  const completeStep = (step: number) => (step === 0 ? Boolean(accessState === "ready" && hireId && hiringApplicationId && data.offerPreparedAt) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.offerPreparedAt && data.startDate && data.scheduledPost && data.scheduledShift && data.supervisorName) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
+  const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, bankAccounts, savedBankAccounts, accessState, hireId, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
     if (step === 1 && ssn) {
@@ -861,6 +876,19 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return (
       <Card className="rounded-2xl">
         <CardContent className="p-8 text-center text-muted-foreground">Loading employee onboarding…</CardContent>
+      </Card>
+    );
+
+  if (accessState === "locked")
+    return (
+      <Card className="mx-auto max-w-2xl rounded-2xl border-amber-200 bg-amber-50">
+        <CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+          <div className="rounded-2xl bg-amber-100 p-4 text-amber-800"><LockKeyhole className="h-8 w-8" /></div>
+          <div>
+            <h2 className="text-2xl font-bold">Employee onboarding is locked</h2>
+            <p className="mt-2 text-amber-950/75">{lockedReason}</p>
+          </div>
+        </CardContent>
       </Card>
     );
 

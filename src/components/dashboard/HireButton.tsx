@@ -21,9 +21,10 @@ interface HireButtonProps {
   officerId: string;
   officerName: string;
   companyId: string;
+  hiringApplicationId?: string | null;
 }
 
-const HireButton = ({ officerId, officerName, companyId }: HireButtonProps) => {
+const HireButton = ({ officerId, officerName, companyId, hiringApplicationId }: HireButtonProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hireDate, setHireDate] = useState(new Date().toISOString().split('T')[0]);
@@ -59,11 +60,32 @@ const HireButton = ({ officerId, officerName, companyId }: HireButtonProps) => {
         return;
       }
 
+      let linkedApplicationId = hiringApplicationId || null;
+      if (!linkedApplicationId) {
+        const { data: applications, error: applicationError } = await (supabase as any)
+          .from("guard_hiring_applications")
+          .select("id,submitted_at,job_application:job_applications!inner(job_posting:job_postings!inner(company_id))")
+          .eq("officer_id", officerId)
+          .eq("application_type", "employer_copy")
+          .eq("status", "submitted")
+          .eq("job_application.job_posting.company_id", companyId)
+          .order("submitted_at", { ascending: false })
+          .limit(1);
+        if (applicationError) throw applicationError;
+        linkedApplicationId = applications?.[0]?.id || null;
+      }
+
+      if (!linkedApplicationId) {
+        toast.error(`${officerName} must submit an application to your company before you can send an offer`);
+        return;
+      }
+
       const { error } = await supabase.from("hires").insert({
         officer_id: officerId,
         company_id: companyId,
         hired_by_user_id: session.user.id,
         hire_date: hireDate,
+        hiring_application_id: linkedApplicationId,
         position_title: positionTitle,
         status: "active",
         offer_prepared_at: new Date().toISOString(),
@@ -83,7 +105,7 @@ const HireButton = ({ officerId, officerName, companyId }: HireButtonProps) => {
 
       if (error) throw error;
 
-      toast.success(`Successfully hired ${officerName}!`);
+      toast.success(`Offer sent to ${officerName}. Employee onboarding is now available.`);
       setOpen(false);
     } catch (error) {
       console.error("Error hiring officer:", error);
@@ -96,14 +118,14 @@ const HireButton = ({ officerId, officerName, companyId }: HireButtonProps) => {
   return (
     <Dialog open={open} onOpenChange={prepareDialog}>
       <DialogTrigger asChild>
-        <Button className="w-full">
+        <Button className="w-full sm:w-auto">
           <Briefcase className="h-4 w-4 mr-2" />
-          Mark as Hired
+          Send Offer
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Mark Officer as Hired</DialogTitle>
+          <DialogTitle>Prepare Employment Offer</DialogTitle>
           <DialogDescription>
             Prepare the offer before {officerName} receives employee onboarding. The officer will review and accept these locked company terms.
           </DialogDescription>
@@ -138,7 +160,7 @@ const HireButton = ({ officerId, officerName, companyId }: HireButtonProps) => {
             Cancel
           </Button>
           <Button onClick={handleHire} disabled={loading}>
-            {loading ? "Preparing offer..." : "Prepare Offer & Confirm Hire"}
+            {loading ? "Sending offer..." : "Send Offer & Unlock Onboarding"}
           </Button>
         </DialogFooter>
       </DialogContent>

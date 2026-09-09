@@ -544,6 +544,7 @@ export type Database = {
           hire_date: string
           hired_by_user_id: string
           id: string
+          hiring_application_id: string | null
           officer_id: string
           offer_prepared_at: string | null
           offer_terms: Json
@@ -557,6 +558,7 @@ export type Database = {
           hire_date: string
           hired_by_user_id: string
           id?: string
+          hiring_application_id?: string | null
           officer_id: string
           offer_prepared_at?: string | null
           offer_terms?: Json
@@ -570,6 +572,7 @@ export type Database = {
           hire_date?: string
           hired_by_user_id?: string
           id?: string
+          hiring_application_id?: string | null
           officer_id?: string
           offer_prepared_at?: string | null
           offer_terms?: Json
@@ -583,6 +586,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "company_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hires_hiring_application_id_fkey"
+            columns: ["hiring_application_id"]
+            isOneToOne: false
+            referencedRelation: "guard_hiring_applications"
             referencedColumns: ["id"]
           },
           {
