@@ -134,7 +134,7 @@ const JobListings = () => {
       // Get job details for message
       const job = jobs.find(j => j.id === jobId);
       
-      const { error } = await supabase
+      const { data: jobApplication, error } = await supabase
         .from("job_applications")
         .upsert({
           job_posting_id: jobId,
@@ -142,7 +142,9 @@ const JobListings = () => {
           status,
         }, {
           onConflict: 'job_posting_id,officer_id'
-        });
+        })
+        .select("id")
+        .single();
 
       if (error) throw error;
 
@@ -159,6 +161,7 @@ const JobListings = () => {
           .insert({
             company_id: job.company_id,
             officer_id: officerProfile.id,
+            job_application_id: jobApplication.id,
             sender_type: 'officer',
             message: `${profileData?.full_name || 'An officer'} is interested in your "${job.title}" position.`,
             is_read: false

@@ -708,9 +708,14 @@ export type Database = {
           created_at: string
           id: string
           is_read: boolean
+          job_application_id: string | null
+          legal_hold: boolean
           message: string
           officer_id: string
+          read_at: string | null
+          retention_until: string | null
           sender_type: string
+          sender_user_id: string | null
           updated_at: string
         }
         Insert: {
@@ -718,9 +723,14 @@ export type Database = {
           created_at?: string
           id?: string
           is_read?: boolean
+          job_application_id?: string | null
+          legal_hold?: boolean
           message: string
           officer_id: string
+          read_at?: string | null
+          retention_until?: string | null
           sender_type: string
+          sender_user_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -728,9 +738,14 @@ export type Database = {
           created_at?: string
           id?: string
           is_read?: boolean
+          job_application_id?: string | null
+          legal_hold?: boolean
           message?: string
           officer_id?: string
+          read_at?: string | null
+          retention_until?: string | null
           sender_type?: string
+          sender_user_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -746,6 +761,54 @@ export type Database = {
             columns: ["officer_id"]
             isOneToOne: false
             referencedRelation: "officer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_job_application_id_fkey"
+            columns: ["job_application_id"]
+            isOneToOne: false
+            referencedRelation: "job_applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_audit_events: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          company_id: string
+          id: string
+          message_id: string
+          metadata: Json
+          occurred_at: string
+          officer_id: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          company_id: string
+          id?: string
+          message_id: string
+          metadata?: Json
+          occurred_at?: string
+          officer_id: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          company_id?: string
+          id?: string
+          message_id?: string
+          metadata?: Json
+          occurred_at?: string
+          officer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_audit_events_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
         ]

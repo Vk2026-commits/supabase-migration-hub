@@ -164,6 +164,7 @@ const JobSearch = ({ officerId }: JobSearchProps) => {
             .insert({
               company_id: job.company_id,
               officer_id: officerId,
+              job_application_id: jobApplication.id,
               sender_type: 'officer',
               message: `${profileData?.full_name || 'An officer'} is interested in your "${job.title}" position.`,
               is_read: false

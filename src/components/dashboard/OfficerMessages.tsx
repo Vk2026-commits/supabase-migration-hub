@@ -25,26 +25,32 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
   const loadConversations = async () => {
     try {
       // Get all unique companies that have messaged this officer
-      const { data: messages, error } = await supabase
+      const { data: messages, error } = await (supabase as any)
         .from("messages")
         .select(`
           *,
-          company_profiles!inner(id, company_name, logo_url)
+          company_profiles!inner(id, company_name, logo_url),
+          job_applications(job_postings(title))
         `)
         .eq("officer_id", officerId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      // Group by company and get latest message for each
+      // Keep separate hiring conversations for separate applications while
+      // preserving legacy/general company conversations.
       const companyMap = new Map();
-      messages?.forEach((msg) => {
+      messages?.forEach((msg: any) => {
         const companyId = msg.company_profiles.id;
-        if (!companyMap.has(companyId)) {
-          companyMap.set(companyId, {
+        const conversationKey = `${companyId}:${msg.job_application_id || "general"}`;
+        if (!companyMap.has(conversationKey)) {
+          companyMap.set(conversationKey, {
+            conversationKey,
             companyId,
             companyName: msg.company_profiles.company_name,
             logoUrl: msg.company_profiles.logo_url,
+            jobApplicationId: msg.job_application_id,
+            jobTitle: msg.job_applications?.job_postings?.title || null,
             latestMessage: msg.message,
             latestMessageTime: msg.created_at,
             isRead: msg.is_read,
@@ -67,7 +73,7 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "messages",
           filter: `officer_id=eq.${officerId}`,
@@ -111,7 +117,7 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
           ) : (
             <div className="space-y-3">
               {conversations.map((conv) => (
-                <Card key={conv.companyId} className="cursor-pointer hover:bg-accent/50 transition-colors">
+                <Card key={conv.conversationKey} className="cursor-pointer hover:bg-accent/50 transition-colors">
                   <CardContent className="p-4" onClick={() => handleOpenChat(conv)}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
@@ -121,6 +127,11 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
                             <Badge variant="default" className="text-xs">New</Badge>
                           )}
                         </div>
+                        {conv.jobTitle && (
+                          <p className="text-xs font-medium text-primary truncate">
+                            Regarding: {conv.jobTitle}
+                          </p>
+                        )}
                         <p className="text-sm text-muted-foreground truncate">
                           {conv.latestMessage}
                         </p>
@@ -149,6 +160,8 @@ export function OfficerMessages({ officerId, officerName }: OfficerMessagesProps
           officerId={officerId}
           officerName={officerName}
           currentUserType="officer"
+          jobApplicationId={selectedChat.jobApplicationId}
+          jobTitle={selectedChat.jobTitle}
         />
       )}
     </>
