@@ -67,6 +67,7 @@ const initialApplicationStep = (userId: string, urlStep: string | null) => {
 };
 
 const initialPhotoCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-photos-complete:${userId}`) === "true";
+const initialCertificationCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-certification-complete:${userId}`) === "true";
 
 const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => {
   const id = `application-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -85,6 +86,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [photosSaved, setPhotosSaved] = useState(() => initialPhotoCompletion(userId));
   const [certifications, setCertifications] = useState<Certification[]>([]);
+  const [certificationSaved, setCertificationSaved] = useState(() => initialCertificationCompletion(userId));
   const [masterId, setMasterId] = useState<string | null>(null);
   const [masterStatus, setMasterStatus] = useState<"draft" | "submitted">("draft");
   const [currentStep, setCurrentStep] = useState(() => initialApplicationStep(userId, searchParams.get("applicationStep")));
@@ -105,6 +107,31 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   useEffect(() => {
     if (officerId) setResolvedOfficerId(officerId);
   }, [officerId]);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
+      activeOfficerId ? supabase.from("certifications").select("*").eq("officer_id", activeOfficerId) : Promise.resolve({ data: [], error: null }),
+    ]).then(([photoResult, certificationResult]) => {
+      if (!mounted) return;
+      if (!photoResult.error) {
+        const photoTypes = (photoResult.data || []).map((file) => file.name.split(".")[0]);
+        const photoComplete = photoTypes.includes("headshot") && photoTypes.includes("full-body");
+        setPhotos(Object.fromEntries(photoTypes.map((type) => [type, "stored"])));
+        setPhotosSaved(photoComplete);
+        window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(photoComplete));
+      }
+      if (!certificationResult.error) {
+        const storedCertifications = (certificationResult.data || []) as Certification[];
+        const certificationComplete = storedCertifications.some((certification) => Boolean(certification.document_front_url));
+        setCertifications(storedCertifications);
+        setCertificationSaved(certificationComplete);
+        window.localStorage.setItem(`guard-application-certification-complete:${userId}`, String(certificationComplete));
+      }
+    }).catch((error) => console.error("Application completion status could not be loaded", error));
+    return () => { mounted = false; };
+  }, [userId, activeOfficerId]);
 
   useEffect(() => {
     masterIdRef.current = masterId;
@@ -134,8 +161,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
       const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
-      setPhotosSaved(savedPhotoCompletion);
-      window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(savedPhotoCompletion));
+      if (savedPhotoCompletion) {
+        setPhotosSaved(true);
+        window.localStorage.setItem(`guard-application-photos-complete:${userId}`, "true");
+      }
+      const savedCertificationCompletion = Boolean((draft as any).certificationRequirementsComplete);
+      if (savedCertificationCompletion) {
+        setCertificationSaved(true);
+        window.localStorage.setItem(`guard-application-certification-complete:${userId}`, "true");
+      }
       const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
       setForm({
         ...initialForm,
@@ -205,7 +239,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setSaving(true);
     const performSave = async () => {
       try {
-        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, jobPostingId: selectedJobId, availability: shared, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved } };
+        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, jobPostingId: selectedJobId, availability: shared, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved, canonicalCertificationIds: certifications.filter((certification) => certification.document_front_url).map((certification) => certification.id), certificationRequirementsComplete: certificationSaved } };
         const savedMasterId = masterIdRef.current;
         const query = savedMasterId ? (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).select("id").single() : (supabase as any).from("guard_hiring_applications").insert(payload).select("id").single();
         const { data, error } = await query;
@@ -245,17 +279,23 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { void saveDraft(); }, 250);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [form, shared, photos, photosSaved, currentStep, loaded, activeOfficerId, selectedJobId]);
+  }, [form, shared, photos, photosSaved, certifications, certificationSaved, currentStep, loaded, activeOfficerId, selectedJobId]);
 
   const availabilityComplete = shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule).some(v => v.start && v.end);
   const photosComplete = photosSaved;
-  const certificationComplete = certifications.some(c => Boolean(c.document_front_url));
+  const certificationComplete = certificationSaved;
   const stepComplete = (step: number) => step === 0 ? Boolean(selectedJobId && form.position) : step === 1 ? Boolean(form.applicantName && form.email && form.phone && form.address && form.city && form.state && form.zip) : step === 2 ? Boolean(form.isAdult && form.eligibleToWork) : step === 6 ? availabilityComplete : step === 7 ? photosComplete : step === 8 ? certificationComplete : step === 9 ? Boolean(form.signature && form.signatureDate && acknowledged) : true;
   const complete = useMemo(() => [0, 1, 2, 6, 7, 8, 9].every(stepComplete), [form, shared, photos, certifications, acknowledged, selectedJobId]);
   const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
   const updatePhotoCompletion = (complete: boolean) => {
     setPhotosSaved(complete);
     window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(complete));
+  };
+  const updateCertifications = (items: Certification[]) => {
+    const complete = items.some((certification) => Boolean(certification.document_front_url));
+    setCertifications(items);
+    setCertificationSaved(complete);
+    window.localStorage.setItem(`guard-application-certification-complete:${userId}`, String(complete));
   };
   const updateList = (key: "workHistory" | "references", index: number, field: string, value: string) => setForm(current => ({ ...current, [key]: current[key].map((item, i) => i === index ? { ...item, [field]: value } : item) }));
   const go = async (step: number) => {
@@ -326,7 +366,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional professional references (not relatives).</p>{form.references.map((r, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Reference {i + 1}</p><Field label="Name" value={r.name} onChange={v => updateList("references", i, "name", v)} /><Field label="Relationship" value={r.relationship} onChange={v => updateList("references", i, "relationship", v)} /><Field label="Phone" value={r.phone} onChange={v => updateList("references", i, "phone", v)} /><Field label="Email" type="email" value={r.email} onChange={v => updateList("references", i, "email", v)} /></div>)}</div>}
         {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
         {currentStep === 7 && <OfficerPhotos userId={userId} embedded onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
-        {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={setCertifications} />}
+        {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={updateCertifications} />}
         {currentStep === 9 && <div className="space-y-8"><section><h3 className="mb-2 text-lg font-semibold">Official government forms</h3><p className="mb-4 text-sm text-muted-foreground">Open the official fillable PDF, complete it, then download or print it.</p><div className="grid gap-4 md:grid-cols-3"><GovernmentForm title="Form I-9" href="https://www.uscis.gov/sites/default/files/document/forms/i-9.pdf" /><GovernmentForm title="Form W-4" href="https://www.irs.gov/pub/irs-pdf/fw4.pdf" /><GovernmentForm title="Form W-9" href="https://www.irs.gov/pub/irs-pdf/fw9.pdf" /></div></section><section className="space-y-4 border-t pt-7"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Full legal name as signature" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Required onboarding check</p><p>{photosComplete ? "✓" : "○"} Headshot and full-body photo &nbsp; {availabilityComplete ? "✓" : "○"} Availability &nbsp; {certificationComplete ? "✓" : "○"} Certification front</p></div></section></div>}
       </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={form} /></main></div>
     <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"><Button type="button" variant="outline" size="lg" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="h-5 w-5" /></Button>{currentStep < 9 ? <Button type="button" size="lg" className="flex-1" onClick={next}>Continue<ArrowRight className="ml-2 h-5 w-5" /></Button> : <Button type="submit" size="lg" className="flex-1" disabled={submitting || !complete}><FileCheck2 className="mr-2 h-5 w-5" />{submitting ? "Submitting…" : "Submit application"}</Button>}</div>

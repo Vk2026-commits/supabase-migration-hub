@@ -44,26 +44,26 @@ export function OfficerPhotos({ userId, embedded = false, onChanged, onSaved }: 
 
       if (error) throw error;
 
-      const photoUrls: Record<string, string> = {};
-      
-      // Use signed URLs for private bucket access
-      for (const file of data || []) {
+      const files = data || [];
+      if (confirmExisting) {
+        const storedTypes = files.map((file) => file.name.split(".")[0]);
+        const complete = storedTypes.includes("headshot") && storedTypes.includes("full-body");
+        setPhotosConfirmed(complete);
+        onSaved?.(complete);
+      }
+
+      // Generate private photo URLs in parallel so completion does not wait on
+      // several sequential storage requests.
+      const signedPhotos = await Promise.all(files.map(async (file) => {
         const photoType = file.name.split(".")[0];
         const { data: signedData, error: signedError } = await supabase.storage
           .from("officer-photos")
           .createSignedUrl(`${userId}/${file.name}`, 3600); // 1 hour expiry
-        
-        if (!signedError && signedData) {
-          photoUrls[photoType] = signedData.signedUrl;
-        }
-      }
+        return !signedError && signedData ? [photoType, signedData.signedUrl] as const : null;
+      }));
+      const photoUrls = Object.fromEntries(signedPhotos.filter((photo): photo is readonly [string, string] => Boolean(photo)));
 
       setPhotos(photoUrls);
-      if (confirmExisting) {
-        const complete = Boolean(photoUrls.headshot && photoUrls["full-body"]);
-        setPhotosConfirmed(complete);
-        onSaved?.(complete);
-      }
       onChanged?.(photoUrls);
       return photoUrls;
     } catch (error: any) {
