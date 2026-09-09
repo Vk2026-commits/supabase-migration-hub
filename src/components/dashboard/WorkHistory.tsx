@@ -173,6 +173,17 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile, onChanged }: W
     }
 
     setWorkHistory(savedEntries);
+
+    // The tab is an editor for the same records captured by the hiring
+    // application. Show the most recent saved employer in the form instead
+    // of presenting an empty "Add" form above it, which made successfully
+    // synchronized work history look missing until the officer scrolled.
+    setCurrentEntry((entryBeingEdited) => {
+      if (entryBeingEdited.id || entryBeingEdited.company_name || savedEntries.length === 0) {
+        return entryBeingEdited;
+      }
+      return savedEntries[0];
+    });
   };
 
   const resetForm = () => {
