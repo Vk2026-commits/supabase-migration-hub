@@ -60,15 +60,18 @@ async function buildOfferPdf(input: {
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
-  const blue = rgb(0.04, 0.25, 0.65);
-  const brightBlue = rgb(0.08, 0.36, 0.78);
-  const dark = rgb(0.06, 0.09, 0.16);
-  const gray = rgb(0.36, 0.4, 0.48);
+  const navy = rgb(0.035, 0.12, 0.28);
+  const blue = rgb(0.04, 0.27, 0.68);
+  const ink = rgb(0.08, 0.1, 0.15);
+  const gray = rgb(0.38, 0.42, 0.5);
+  const lightGray = rgb(0.85, 0.87, 0.9);
+  const green = rgb(0.02, 0.46, 0.29);
   let page = pdf.addPage([612, 792]);
-  let y = 742;
+  let y = 730;
   const margin = 52;
   const width = 508;
-  const lineHeight = 14;
+  const lineHeight = 13.5;
+  let pageNumber = 1;
   const wrap = (text: string, font = regular, size = 9.5, maxWidth = width) => {
     const words = clean(text).split(/\s+/).filter(Boolean);
     const lines: string[] = [];
@@ -82,130 +85,165 @@ async function buildOfferPdf(input: {
     return lines.length ? lines : [""];
   };
   const footer = () => {
-    page.drawLine({ start: { x: margin, y: 35 }, end: { x: margin + width, y: 35 }, thickness: 0.5, color: rgb(0.8, 0.82, 0.86) });
-    page.drawText(`Offer ${input.offerId} - Version ${input.version}`, { x: margin, y: 20, size: 7, font: regular, color: gray });
-    page.drawText(`Page ${pdf.getPageCount()}`, { x: 520, y: 20, size: 7, font: regular, color: gray });
+    page.drawLine({ start: { x: margin, y: 34 }, end: { x: margin + width, y: 34 }, thickness: 0.55, color: lightGray });
+    page.drawText(`EMPLOYMENT OFFER  |  ID ${input.offerId}  |  VERSION ${input.version}`, { x: margin, y: 19, size: 6.7, font: bold, color: gray });
+    page.drawText(`PAGE ${pageNumber}`, { x: 520, y: 19, size: 6.7, font: bold, color: gray });
+  };
+  const continuationHeader = () => {
+    page.drawLine({ start: { x: margin, y: 754 }, end: { x: margin + width, y: 754 }, thickness: 2.2, color: blue });
+    page.drawText(clean(input.company.company_name).toUpperCase(), { x: margin, y: 735, size: 8.5, font: bold, color: navy });
+    page.drawText(`EMPLOYMENT OFFER - ${input.officerName.toUpperCase()}`, { x: 338, y: 735, size: 7.4, font: bold, color: gray });
   };
   const ensure = (height: number) => {
     if (y - height > 52) return;
     footer();
     page = pdf.addPage([612, 792]);
-    y = 742;
+    pageNumber += 1;
+    continuationHeader();
+    y = 706;
   };
-  const text = (value: string, options: { font?: typeof regular; size?: number; color?: typeof dark; indent?: number; gap?: number } = {}) => {
+  const text = (value: string, options: { font?: typeof regular; size?: number; color?: typeof ink; indent?: number; gap?: number; maxWidth?: number } = {}) => {
     const font = options.font || regular;
     const size = options.size || 9.5;
     const indent = options.indent || 0;
-    const lines = wrap(value, font, size, width - indent);
+    const lines = wrap(value, font, size, options.maxWidth || width - indent);
     ensure(lines.length * lineHeight + (options.gap ?? 5));
-    lines.forEach((line) => { page.drawText(line, { x: margin + indent, y, size, font, color: options.color || dark }); y -= lineHeight; });
+    lines.forEach((line) => { page.drawText(line, { x: margin + indent, y, size, font, color: options.color || ink }); y -= lineHeight; });
     y -= options.gap ?? 5;
   };
   const section = (title: string) => {
-    ensure(30);
-    y -= 4;
-    page.drawRectangle({ x: margin, y: y - 5, width, height: 22, color: rgb(0.93, 0.96, 1) });
-    page.drawText(title, { x: margin + 9, y: y + 2, size: 10, font: bold, color: blue });
-    y -= 27;
+    ensure(34);
+    y -= 6;
+    page.drawText(title.toUpperCase(), { x: margin, y, size: 8.4, font: bold, color: blue });
+    page.drawLine({ start: { x: margin, y: y - 7 }, end: { x: margin + width, y: y - 7 }, thickness: 0.8, color: lightGray });
+    y -= 25;
   };
-  const field = (name: string, value: unknown) => {
-    text(name.toUpperCase(), { font: bold, size: 7.5, color: gray, gap: 0 });
-    text(clean(value) || "None", { font: bold, size: 10.5, gap: 8 });
+  const paragraph = (value: string, gap = 10) => text(value, { size: 10.2, gap });
+  const detail = (name: string, value: unknown, x: number, top: number, detailWidth: number) => {
+    page.drawText(name.toUpperCase(), { x, y: top, size: 7.1, font: bold, color: gray });
+    const lines = wrap(clean(value) || "Not specified", bold, 9.7, detailWidth).slice(0, 3);
+    lines.forEach((line, index) => page.drawText(line, { x, y: top - 17 - (index * 12), size: 9.7, font: bold, color: ink }));
   };
-
-  const summaryCard = (x: number, top: number, cardWidth: number, name: string, value: string) => {
-    page.drawRectangle({ x, y: top - 58, width: cardWidth, height: 58, color: rgb(0.965, 0.977, 1), borderColor: rgb(0.82, 0.87, 0.96), borderWidth: 0.7 });
-    page.drawText(name.toUpperCase(), { x: x + 12, y: top - 18, size: 7.5, font: bold, color: brightBlue });
-    const lines = wrap(value, bold, 10.5, cardWidth - 24).slice(0, 2);
-    lines.forEach((line, index) => page.drawText(line, { x: x + 12, y: top - 37 - (index * 12), size: 10.5, font: bold, color: dark }));
+  const bullet = (value: string) => {
+    const lines = wrap(value, regular, 9.8, width - 24);
+    ensure(lines.length * lineHeight + 5);
+    page.drawCircle({ x: margin + 4, y: y + 3, size: 2.2, color: blue });
+    lines.forEach((line, index) => page.drawText(line, { x: margin + 16, y: y - (index * lineHeight), size: 9.8, font: regular, color: ink }));
+    y -= lines.length * lineHeight + 5;
+  };
+  const meaningful = (value: unknown) => {
+    const normalized = clean(value).toLowerCase();
+    return normalized && !["none", "n/a", "not applicable", "tbd"].includes(normalized);
   };
 
   const companyAddress = [input.company.company_address, input.company.company_address_unit, input.company.company_city, input.company.company_state, input.company.company_zip].filter(Boolean).join(", ");
-  page.drawRectangle({ x: 0, y: 652, width: 612, height: 140, color: blue });
-  page.drawText(clean(input.company.company_name).toUpperCase(), { x: margin, y: 752, size: 10, font: bold, color: rgb(0.75, 0.85, 1) });
-  page.drawText("Employment Offer Letter", { x: margin, y: 714, size: 26, font: bold, color: rgb(1, 1, 1) });
-  page.drawText(`Prepared for ${input.officerName}`, { x: margin, y: 687, size: 12, font: regular, color: rgb(0.9, 0.94, 1) });
-  page.drawText(`Company signed | Offer date: ${new Date().toLocaleDateString("en-US")} | Version ${input.version}`, { x: margin, y: 668, size: 8.5, font: bold, color: rgb(0.75, 0.85, 1) });
-  y = 622;
-  text(`Dear ${input.officerName},`, { font: bold, size: 11, gap: 7 });
-  text(`${clean(input.company.company_name)} is pleased to offer you the position described below. This summary highlights the terms that matter most. The complete conditions and company authorization follow.`, { size: 10.5, gap: 14 });
+  const worksiteAddress = [input.terms.worksiteAddress, input.terms.worksiteCity, input.terms.worksiteState, input.terms.worksiteZip].filter(Boolean).join(", ");
+  const offerDate = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  page.drawLine({ start: { x: margin, y: 754 }, end: { x: margin + width, y: 754 }, thickness: 3, color: blue });
+  page.drawText(clean(input.company.company_name).toUpperCase(), { x: margin, y: 731, size: 9.5, font: bold, color: navy });
+  page.drawText("EMPLOYMENT OFFER", { x: margin, y: 691, size: 25, font: bold, color: navy });
+  page.drawText(`Prepared exclusively for ${input.officerName}`, { x: margin, y: 669, size: 10.5, font: regular, color: gray });
+  page.drawText(offerDate, { x: 447, y: 731, size: 8.5, font: bold, color: gray });
+  y = 628;
 
-  summaryCard(margin, y, 246, "Position", clean(input.terms.positionTitle));
-  summaryCard(314, y, 246, "Hourly pay", `$${Number(input.terms.hourlyRate).toFixed(2)} per hour`);
-  y -= 70;
-  summaryCard(margin, y, 246, "Start date", formatDate(input.terms.startDate));
-  summaryCard(314, y, 246, "Expected hours", `${input.terms.expectedWeeklyHours} hours/week - ${label(clean(input.terms.hoursType))}`);
-  y -= 77;
+  text(`Dear ${input.officerName},`, { font: bold, size: 11, gap: 8 });
+  paragraph(`${clean(input.company.company_name)} is pleased to offer you employment as a ${clean(input.terms.positionTitle)}. We believe your experience will be a valuable addition to our team. This letter brings the essential terms of the offer together in one clear record so you can understand the role, compensation, expectations, and conditions before making your decision.`, 14);
 
-  section("Your role and assignment");
-  text(`You are being offered a ${label(clean(input.terms.employmentType)).toLowerCase()} ${clean(input.terms.positionTitle)} position, classified as ${label(clean(input.terms.classification)).toLowerCase()}, reporting to ${clean(input.terms.supervisorName)}.`, { size: 10.5, gap: 9 });
-  field("Primary responsibilities", input.terms.duties);
-  field("Expected schedule", `${input.terms.expectedSchedule}; approximately ${input.terms.expectedWeeklyHours} hours per week (${label(clean(input.terms.hoursType))})`);
-  field("Primary worksite", `${input.terms.worksiteName} - ${[input.terms.worksiteAddress, input.terms.worksiteCity, input.terms.worksiteState, input.terms.worksiteZip].filter(Boolean).join(", ")}`);
+  page.drawRectangle({ x: margin, y: y - 102, width, height: 102, color: rgb(0.985, 0.989, 0.997), borderColor: lightGray, borderWidth: 0.7 });
+  page.drawRectangle({ x: margin, y: y - 102, width: 4, height: 102, color: blue });
+  detail("Position", input.terms.positionTitle, margin + 18, y - 20, 205);
+  detail("Hourly pay", `$${Number(input.terms.hourlyRate).toFixed(2)} per hour`, margin + 274, y - 20, 205);
+  detail("Anticipated start", formatDate(input.terms.startDate), margin + 18, y - 65, 205);
+  detail("Expected hours", `${input.terms.expectedWeeklyHours} per week - ${label(clean(input.terms.hoursType))}`, margin + 274, y - 65, 205);
+  y -= 124;
 
-  section("Compensation");
-  text(`Your base rate will be $${Number(input.terms.hourlyRate).toFixed(2)} per hour. Pay is issued ${label(clean(input.terms.payFrequency)).toLowerCase()}, with the regular payday described as ${clean(input.terms.regularPayday)}.`, { size: 10.5, gap: 9 });
-  field("Overtime", input.terms.overtimeTerms);
-  field("Additional compensation", `Shift differential: ${clean(input.terms.shiftDifferential)} | Bonus: ${clean(input.terms.bonusCompensation)} | Other: ${clean(input.terms.additionalCompensation)}`);
+  section("The position");
+  paragraph(`You will serve as a ${label(clean(input.terms.employmentType)).toLowerCase()} ${clean(input.terms.positionTitle)} and will report to ${clean(input.terms.supervisorName)}. The position is classified as ${label(clean(input.terms.classification)).toLowerCase()} under the company's stated classification. Your primary responsibilities will include ${clean(input.terms.duties).replace(/[.]+$/, "")}.`);
+  paragraph(`Your expected schedule is ${clean(input.terms.expectedSchedule)}, totaling approximately ${input.terms.expectedWeeklyHours} hours per week. These hours are ${input.terms.hoursType === "guaranteed" ? "guaranteed as described in this offer" : "expected to vary based on operational needs and are not guaranteed"}. Your primary worksite will be ${clean(input.terms.worksiteName)} at ${worksiteAddress}.`, 12);
 
-  section("Benefits and time off");
-  field("Benefits eligibility", `${label(clean(input.terms.benefitsEligibility))}${input.terms.benefitsEligibility === "eligible" ? ` - effective ${formatDate(input.terms.benefitsEffectiveDate)}` : ""}`);
-  field("Benefits provided", input.terms.benefitsSummary);
-  field("Paid time off and holidays", `PTO: ${clean(input.terms.ptoSummary)} | Holidays: ${clean(input.terms.holidaySummary)}`);
-  field("Policies that apply", input.terms.policyReferences);
+  section("Compensation and payroll");
+  page.drawRectangle({ x: margin, y: y - 74, width, height: 74, color: rgb(0.965, 0.99, 0.978), borderColor: rgb(0.62, 0.84, 0.72), borderWidth: 0.8 });
+  page.drawText("BASE COMPENSATION", { x: margin + 15, y: y - 19, size: 7.4, font: bold, color: green });
+  page.drawText(`$${Number(input.terms.hourlyRate).toFixed(2)} PER HOUR`, { x: margin + 15, y: y - 45, size: 18, font: bold, color: navy });
+  const payrollLines = wrap(`Paid ${label(clean(input.terms.payFrequency)).toLowerCase()} | Regular payday: ${clean(input.terms.regularPayday)}`, regular, 8.8, 232);
+  payrollLines.forEach((line, index) => page.drawText(line, { x: margin + 260, y: y - 27 - (index * 12), size: 8.8, font: regular, color: ink }));
+  y -= 91;
+  paragraph(`Because this position is ${label(clean(input.terms.classification)).toLowerCase()}, overtime will be handled as follows: ${clean(input.terms.overtimeTerms)}`);
+  const extras = [
+    meaningful(input.terms.shiftDifferential) && `shift differential of ${clean(input.terms.shiftDifferential)}`,
+    meaningful(input.terms.bonusCompensation) && `bonus compensation of ${clean(input.terms.bonusCompensation)}`,
+    meaningful(input.terms.additionalCompensation) && clean(input.terms.additionalCompensation),
+  ].filter(Boolean).join("; ");
+  paragraph(extras ? `Additional compensation included with this offer: ${extras}.` : "No additional shift differential, bonus, or other compensation is included unless later confirmed in a written amendment signed by the company.", 12);
 
-  section("Conditions of this offer");
+  ensure(112);
+  section("Benefits and time away from work");
+  if (input.terms.benefitsEligibility === "eligible") {
+    paragraph(`You are eligible for the benefits described by the company beginning ${formatDate(input.terms.benefitsEffectiveDate)}: ${clean(input.terms.benefitsSummary)}.`);
+  } else {
+    paragraph("This position is not eligible for company-sponsored benefits under the terms of this offer.");
+  }
+  paragraph(`${meaningful(input.terms.ptoSummary) ? `Paid time off: ${clean(input.terms.ptoSummary)}.` : "No paid time off is specified in this offer."} ${meaningful(input.terms.holidaySummary) ? `Holiday terms: ${clean(input.terms.holidaySummary)}.` : "No paid holidays are specified in this offer."} The employment policies that apply include ${clean(input.terms.policyReferences)}.`, 12);
+
+  section("Requirements before your first day");
   const contingencies = [
-    input.terms.backgroundCheckRequired && "satisfactory background check",
-    input.terms.drugTestRequired && "drug screening",
-    input.terms.licenseVerificationRequired && "required license verification",
-    input.terms.workAuthorizationRequired && "employment eligibility verification",
-  ].filter(Boolean).join(", ");
-  text(contingencies ? `Before employment begins, you must successfully complete: ${contingencies}.` : "The company listed no pre-employment contingencies.", { size: 10.5, gap: 8 });
-  if (clean(input.terms.otherContingencies).toLowerCase() !== "none") field("Other conditions", input.terms.otherContingencies);
-  if (clean(input.terms.specialTerms).toLowerCase() !== "none") field("Special terms", input.terms.specialTerms);
-  ensure(72);
-  page.drawRectangle({ x: margin, y: y - 60, width, height: 60, color: rgb(1, 0.97, 0.89), borderColor: rgb(0.94, 0.73, 0.24), borderWidth: 0.7 });
-  page.drawText("IMPORTANT EMPLOYMENT NOTICE", { x: margin + 12, y: y - 18, size: 8, font: bold, color: rgb(0.58, 0.35, 0.02) });
-  const atWillLines = wrap("This is at-will employment with no fixed duration. You or the company may end employment at any time, subject to applicable law.", regular, 9.5, width - 24);
-  atWillLines.forEach((line, index) => page.drawText(line, { x: margin + 12, y: y - 36 - (index * 12), size: 9.5, font: regular, color: dark }));
-  y -= 72;
-  field("Your response is due", formatDate(input.terms.acceptanceDeadline));
+    input.terms.backgroundCheckRequired && "Successful completion of the company's background-screening requirements.",
+    input.terms.drugTestRequired && "Successful completion of the required drug screening.",
+    input.terms.licenseVerificationRequired && "Verification of every license or certification required for the assignment.",
+    input.terms.workAuthorizationRequired && "Verification of identity and authorization to work in the United States.",
+  ].filter(Boolean) as string[];
+  if (contingencies.length) contingencies.forEach(bullet);
+  else paragraph("The company listed no pre-employment contingencies for this offer.");
+  if (meaningful(input.terms.otherContingencies)) bullet(`Additional condition: ${clean(input.terms.otherContingencies)}`);
+  if (meaningful(input.terms.specialTerms)) bullet(`Special term: ${clean(input.terms.specialTerms)}`);
+  y -= 4;
 
-  section("Company authorization");
-  text(`This offer was prepared and approved on behalf of ${clean(input.company.company_name)} by ${clean(input.terms.representativeName)}, ${clean(input.terms.representativeTitle)}.`, { size: 10.5, gap: 10 });
-  field("Company address", companyAddress);
-  ensure(98);
+  section("Employment relationship and acceptance");
+  ensure(96);
+  page.drawRectangle({ x: margin, y: y - 79, width, height: 79, color: rgb(0.985, 0.975, 0.945), borderColor: rgb(0.87, 0.74, 0.42), borderWidth: 0.8 });
+  page.drawText("IMPORTANT AT-WILL NOTICE", { x: margin + 15, y: y - 20, size: 7.6, font: bold, color: rgb(0.52, 0.32, 0.03) });
+  const atWillLines = wrap("Employment has no fixed duration. You or the company may end the employment relationship at any time, with or without cause or advance notice, subject to applicable law. Nothing in this offer creates a contract for a guaranteed term.", regular, 9.3, width - 30);
+  atWillLines.forEach((line, index) => page.drawText(line, { x: margin + 15, y: y - 39 - (index * 12), size: 9.3, font: regular, color: ink }));
+  y -= 96;
+  paragraph(`Please review the complete offer carefully and respond no later than ${formatDate(input.terms.acceptanceDeadline)}. Acceptance is completed in We Find Guards by viewing this company-signed document and applying your electronic signature.`, 14);
+
+  section("Company approval");
+  paragraph(`For ${clean(input.company.company_name)}, ${clean(input.terms.representativeName)}, ${clean(input.terms.representativeTitle)}, confirms that the terms in this letter are authorized and complete as of ${offerDate}.`);
+  text(companyAddress, { size: 8.8, color: gray, gap: 11 });
+  ensure(110);
   const signatureTop = y;
   const employerSignature = dataUrlBytes(input.employerSignature);
   if (employerSignature) {
     const image = await pdf.embedPng(employerSignature);
-    const scale = Math.min(230 / image.width, 55 / image.height);
-    page.drawImage(image, { x: margin, y: signatureTop - image.height * scale, width: image.width * scale, height: image.height * scale });
+    const scale = Math.min(220 / image.width, 58 / image.height);
+    page.drawImage(image, { x: margin + 8, y: signatureTop - image.height * scale, width: image.width * scale, height: image.height * scale });
   } else {
-    page.drawText(clean(input.terms.representativeName), { x: margin + 8, y: signatureTop - 36, size: 18, font: italic, color: dark });
+    page.drawText(clean(input.terms.representativeName), { x: margin + 8, y: signatureTop - 38, size: 18, font: italic, color: ink });
   }
-  page.drawLine({ start: { x: margin, y: signatureTop - 60 }, end: { x: margin + 260, y: signatureTop - 60 }, thickness: 0.8, color: gray });
-  page.drawText(`${clean(input.terms.representativeName)}, ${clean(input.terms.representativeTitle)}`, { x: margin, y: signatureTop - 75, size: 8.5, font: bold, color: dark });
-  page.drawText(`Signed ${new Date().toLocaleDateString("en-US")}`, { x: margin, y: signatureTop - 89, size: 8, font: regular, color: gray });
-  y = signatureTop - 104;
+  page.drawLine({ start: { x: margin, y: signatureTop - 62 }, end: { x: margin + 246, y: signatureTop - 62 }, thickness: 0.8, color: gray });
+  page.drawText("AUTHORIZED COMPANY SIGNATURE", { x: margin, y: signatureTop - 77, size: 6.8, font: bold, color: gray });
+  page.drawText(`${clean(input.terms.representativeName)}  |  ${clean(input.terms.representativeTitle)}`, { x: margin, y: signatureTop - 94, size: 8.6, font: bold, color: ink });
+  page.drawText(`SIGNED ${offerDate.toUpperCase()}`, { x: margin + 336, y: signatureTop - 77, size: 6.8, font: bold, color: gray });
+  y = signatureTop - 118;
 
   if (input.officerPrintedName) {
-    section("Employee acceptance");
-    text("I have reviewed this complete offer, understand the terms shown above, and accept the offer of employment.");
-    field("Accepted by", input.officerPrintedName);
-    field("Accepted at", formatDate(input.officerSignedAt || new Date().toISOString()));
+    section("Employee acceptance record");
+    paragraph(`I, ${input.officerPrintedName}, confirm that I reviewed this complete offer and accept the employment terms stated in this document. My electronic signature below is attached to this exact offer version.`);
     const officerSignature = dataUrlBytes(input.officerSignature);
     if (officerSignature) {
       const image = await pdf.embedPng(officerSignature);
-      const scale = Math.min(280 / image.width, 70 / image.height);
-      ensure(88);
-      page.drawImage(image, { x: margin, y: y - image.height * scale + 8, width: image.width * scale, height: image.height * scale });
-      y -= 78;
+      const scale = Math.min(230 / image.width, 60 / image.height);
+      ensure(104);
+      page.drawImage(image, { x: margin + 8, y: y - image.height * scale, width: image.width * scale, height: image.height * scale });
+      page.drawLine({ start: { x: margin, y: y - 64 }, end: { x: margin + 246, y: y - 64 }, thickness: 0.8, color: gray });
+      page.drawText("EMPLOYEE SIGNATURE", { x: margin, y: y - 79, size: 6.8, font: bold, color: gray });
+      page.drawText(input.officerPrintedName, { x: margin, y: y - 96, size: 8.6, font: bold, color: ink });
+      page.drawText(`ACCEPTED ${formatDate(input.officerSignedAt || new Date().toISOString()).toUpperCase()}`, { x: margin + 336, y: y - 79, size: 6.8, font: bold, color: gray });
+      y -= 112;
     }
   } else {
-    section("Employee response");
-    text("Review this offer in We Find Guards. Acceptance requires viewing this document and applying your electronic signature by the deadline shown above.");
+    section("Employee decision");
+    text("To accept, review this company-signed offer in We Find Guards and apply your electronic signature by the deadline above. The system will archive your signature and timestamp with this exact offer version.", { size: 9.2, gap: 5 });
   }
   footer();
   return pdf.save();
