@@ -222,24 +222,13 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   }
 
   ensureSpace(34);
-  section("Required Supporting Records");
-  row("Were the required headshot and full-body photos provided?", photosProvided ? "Yes" : "No", "Was a license or certification front document provided?", certificationProvided ? "Yes" : "No");
-
-  if (data.attachmentManifest?.length) {
-    section("Submitted Attachment Index");
-    field(
-      "How are the supporting files preserved?",
-      data.attachmentManifest[0].archiveKind === "legacy"
-        ? `Legacy attachment archive created ${new Date(data.attachmentManifest[0].archivedAt).toLocaleString()}. These were the officer's available files on the archive date and are not represented as the original submission files.`
-        : `The files below were preserved with this employer application on ${new Date(data.attachmentManifest[0].archivedAt).toLocaleString()}.`,
-    );
-    data.attachmentManifest.forEach((attachment, index) => {
-      field(
-        `${index + 1}. ${attachment.label}`,
-        `${attachment.filename}\nCategory: ${attachment.kind === "photo" ? "Photo" : "License or certification"}\nSHA-256: ${attachment.sha256}`,
-      );
-    });
-  }
+  section("Photos and Certifications");
+  field(
+    "Where are the applicant's photos and certification documents?",
+    photosProvided && certificationProvided
+      ? "The required applicant photos and certification documents were uploaded to We Find Guards and are securely stored separately from this PDF. Authorized company users can view or download the preserved files from the applicant record."
+      : "Applicant photos and certification documents are managed separately from this PDF. Check the applicant record in We Find Guards for availability, preview, and download options.",
+  );
 
   ensureSpace(86);
   section("Applicant Certification");

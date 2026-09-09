@@ -56,7 +56,8 @@ const formatTime = (item: string) => {
 export function ApplicantReviewDialog({ open, onOpenChange, application }: ApplicantReviewDialogProps) {
   const [loading, setLoading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
-  const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string } | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string; attachment?: EvidenceAttachment } | null>(null);
   const [review, setReview] = useState<ReviewData>({ applicationId: null, snapshot: null, officer: null, snapshotStatus: "pending", snapshotKind: null, snapshotCompletedAt: null, attachments: [], onboardingDocuments: [] });
 
   useEffect(() => {
@@ -148,9 +149,29 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
   const logEvidenceAction = (action: string, recordId: string, details: Record<string, unknown>) => {
     void (supabase as any).rpc("log_sensitive_access", { _action: action, _table_name: "application_evidence_files", _record_id: recordId, _details: details });
   };
+  const downloadEvidence = async (attachment: EvidenceAttachment) => {
+    setDownloadingAttachmentId(attachment.id);
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) throw new Error(`Could not download ${attachment.label}`);
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = safeFilename(attachment.original_filename || attachment.label);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      logEvidenceAction("download", attachment.id, { hiring_application_id: review.applicationId, evidence_kind: attachment.evidence_kind });
+    } catch (error: any) {
+      toast.error(error.message || "Could not download this file");
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  };
   const previewEvidence = (attachment: EvidenceAttachment) => {
     logEvidenceAction("preview", attachment.id, { hiring_application_id: review.applicationId, evidence_kind: attachment.evidence_kind });
-    setPreviewDocument({ label: attachment.label, url: attachment.url });
+    setPreviewDocument({ label: attachment.label, url: attachment.url, attachment });
   };
   const downloadAll = async () => {
     if (!review.attachments.length) return;
@@ -200,7 +221,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" disabled={!applicationReady} onClick={() => download("print")}><Printer className="mr-2 h-4 w-4" />Print PDF</Button>
             <Button disabled={!applicationReady} onClick={() => download("download")}><Download className="mr-2 h-4 w-4" />Download PDF</Button>
-            <Button variant="outline" disabled={!review.attachments.length || downloadingAll} onClick={downloadAll}><Archive className="mr-2 h-4 w-4" />{downloadingAll ? "Preparing ZIP…" : "Download all attachments"}</Button>
+            <Button variant="outline" disabled={!review.attachments.length || downloadingAll} onClick={downloadAll}><Archive className="mr-2 h-4 w-4" />{downloadingAll ? "Preparing ZIP…" : "Download photos & certificates"}</Button>
           </div>
         </div>
       </DialogHeader>
@@ -210,6 +231,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           {review.snapshotKind === "legacy" && review.snapshotStatus === "complete" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Legacy attachment archive</p><p className="mt-1">These are the officer files available when this archive was created{review.snapshotCompletedAt ? ` on ${new Date(review.snapshotCompletedAt).toLocaleString()}` : ""}. They are not represented as the original files from the earlier application date.</p></div>}
           {review.snapshotStatus === "legacy_unavailable" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">No legacy attachments were available</p><p className="mt-1">This older application has no preserved photo or certification files. Current profile files are intentionally not substituted.</p></div>}
           {review.snapshotStatus !== "complete" && review.snapshotKind !== "legacy" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Attachment archive is not complete</p><p className="mt-1">The officer must finish preserving the required photos and certification before this submission can be treated as complete.</p></div>}
+          {review.attachments.length > 0 && <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">Photos and certificates are stored separately</p><p className="mt-1">They are not embedded in the application PDF. Preview them below, download files individually, or use “Download photos & certificates” to save the complete set for your records.</p></div>}
           <Card className="overflow-hidden border-primary/20 bg-primary/5">
             <CardContent className="grid gap-5 p-5 sm:grid-cols-[140px_1fr] sm:p-6">
               <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border bg-background sm:w-36">
@@ -240,7 +262,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </div>
 
           <Section title="Applicant photos" icon={ImageIcon}>
-            {photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{photos.map(photo => <div key={photo.id} className="overflow-hidden rounded-xl border bg-card"><button type="button" className="group block w-full" onClick={() => previewEvidence(photo)}><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /></button><div className="space-y-2 p-3"><p className="text-sm font-semibold">{photo.label}</p><p className="text-xs text-muted-foreground">{formatBytes(photo.byte_size)}</p><div className="flex gap-2"><Button type="button" size="sm" className="flex-1" onClick={() => previewEvidence(photo)}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={photo.url} download={photo.original_filename} target="_blank" rel="noreferrer" onClick={() => logEvidenceAction("download", photo.id, { hiring_application_id: review.applicationId })}><Download className="mr-2 h-4 w-4" />Download</a></Button></div></div></div>)}</div> : <Empty text="No preserved applicant photos are available" />}
+            {photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{photos.map(photo => <div key={photo.id} className="overflow-hidden rounded-xl border bg-card"><button type="button" className="group block w-full" onClick={() => previewEvidence(photo)}><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /></button><div className="space-y-2 p-3"><p className="text-sm font-semibold">{photo.label}</p><p className="text-xs text-muted-foreground">{formatBytes(photo.byte_size)}</p><div className="flex gap-2"><Button type="button" size="sm" className="flex-1" onClick={() => previewEvidence(photo)}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === photo.id} onClick={() => void downloadEvidence(photo)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === photo.id ? "Saving…" : "Download"}</Button></div></div></div>)}</div> : <Empty text="No preserved applicant photos are available" />}
           </Section>
 
           {review.onboardingDocuments.length > 0 && <Section title="Submitted employee documents" icon={FileText}>
@@ -248,7 +270,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </Section>}
 
           <Section title="Licenses and certifications" icon={FileText}>
-            {certifications.length ? <div className="grid gap-4 md:grid-cols-2">{certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.metadata?.name || cert.label}</p><p className="text-sm text-muted-foreground">{cert.metadata?.certificationNumber || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.metadata?.side || "document")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.metadata?.issueDate} /><Info label="Expires" content={cert.metadata?.expiryDate} /></div><p className="mb-3 break-all text-xs text-muted-foreground">SHA-256: {cert.sha256}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => previewEvidence(cert)}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={cert.url} download={cert.original_filename} target="_blank" rel="noreferrer" onClick={() => logEvidenceAction("download", cert.id, { hiring_application_id: review.applicationId })}><Download className="mr-2 h-4 w-4" />Download</a></Button></div></div>)}</div> : <Empty text="No preserved license or certification documents are available" />}
+            {certifications.length ? <div className="grid gap-4 md:grid-cols-2">{certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.metadata?.name || cert.label}</p><p className="text-sm text-muted-foreground">{cert.metadata?.certificationNumber || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.metadata?.side || "document")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.metadata?.issueDate} /><Info label="Expires" content={cert.metadata?.expiryDate} /></div><p className="mb-3 break-all text-xs text-muted-foreground">SHA-256: {cert.sha256}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => previewEvidence(cert)}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === cert.id} onClick={() => void downloadEvidence(cert)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === cert.id ? "Saving…" : "Download"}</Button></div></div>)}</div> : <Empty text="No preserved license or certification documents are available" />}
           </Section>
 
           <Section title="Work history" icon={Briefcase}>
@@ -269,7 +291,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
                 <DialogTitle className="truncate">{previewDocument?.label}</DialogTitle>
                 <DialogDescription>View the submitted document without leaving the applicant review.</DialogDescription>
               </div>
-              {previewDocument && <Button asChild size="sm" variant="outline"><a href={previewDocument.url} download target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />Download</a></Button>}
+              {previewDocument?.attachment ? <Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === previewDocument.attachment.id} onClick={() => void downloadEvidence(previewDocument.attachment!)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === previewDocument.attachment.id ? "Saving…" : "Download"}</Button> : previewDocument && <Button asChild size="sm" variant="outline"><a href={previewDocument.url} download target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />Download</a></Button>}
             </div>
           </DialogHeader>
           {previewDocument && <iframe src={previewDocument.url} title={previewDocument.label} className="min-h-0 flex-1 bg-muted" />}
