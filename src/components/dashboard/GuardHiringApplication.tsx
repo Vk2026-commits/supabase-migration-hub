@@ -14,6 +14,7 @@ import { OfficerPhotos } from "./OfficerPhotos";
 import { CertificationsManager, type Certification } from "./CertificationsManager";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { DatePicker } from "@/components/ui/date-picker";
+import { useSearchParams } from "@/lib/router-compat";
 
 interface Props {
   userId: string;
@@ -53,6 +54,20 @@ const initialForm: GuardApplicationData = {
   signature: "", signatureDate: new Date().toISOString().slice(0, 10),
 };
 
+const parseApplicationStep = (value: string | null) => {
+  const step = Number(value);
+  return Number.isInteger(step) && step >= 1 && step <= 10 ? step - 1 : null;
+};
+
+const initialApplicationStep = (userId: string, urlStep: string | null) => {
+  const fromUrl = parseApplicationStep(urlStep);
+  if (fromUrl !== null) return fromUrl;
+  if (typeof window === "undefined") return 0;
+  return parseApplicationStep(window.localStorage.getItem(`guard-application-step:${userId}`)) ?? 0;
+};
+
+const initialPhotoCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-photos-complete:${userId}`) === "true";
+
 const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => {
   const id = `application-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   if (type === "date") {
@@ -63,15 +78,16 @@ const Field = ({ label, value, onChange, type = "text", required = false }: { la
 const YesNo = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <div className="space-y-3"><Label>{label} *</Label><RadioGroup value={value} onValueChange={onChange} className="flex gap-8">{["Yes", "No"].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`${label}-${v}`} /><Label htmlFor={`${label}-${v}`}>{v}</Label></div>)}</RadioGroup></div>;
 
 export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureProfile }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [resolvedOfficerId, setResolvedOfficerId] = useState<string | null>(officerId);
   const [form, setForm] = useState(initialForm);
   const [shared, setShared] = useState<SharedData>({ employmentTypes: [], shiftPreferences: [], schedule: {} });
   const [photos, setPhotos] = useState<Record<string, string>>({});
-  const [photosSaved, setPhotosSaved] = useState(false);
+  const [photosSaved, setPhotosSaved] = useState(() => initialPhotoCompletion(userId));
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [masterId, setMasterId] = useState<string | null>(null);
   const [masterStatus, setMasterStatus] = useState<"draft" | "submitted">("draft");
-  const [currentStep, setCurrentStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(() => initialApplicationStep(userId, searchParams.get("applicationStep")));
   const [jobs, setJobs] = useState<HiringDestination[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -117,7 +133,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       if (!mounted) return;
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
-      setPhotosSaved(Boolean((draft as any).photoRequirementsComplete));
+      const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
+      setPhotosSaved(savedPhotoCompletion);
+      window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(savedPhotoCompletion));
       const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
       setForm({
         ...initialForm,
@@ -133,7 +151,11 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       });
       const savedAvailability = (draft as any).availability as SharedData | undefined;
       setShared(savedAvailability || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} });
-      setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(Math.min(Number(master?.current_step || 0), 9));
+      const savedStep = Math.min(Number(master?.current_step || 0), 9);
+      const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
+      const restoredStep = urlStep ?? savedStep;
+      setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
+      window.localStorage.setItem(`guard-application-step:${userId}`, String(restoredStep + 1));
       const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({
         id: item.id,
         companyId: item.company_id,
@@ -231,6 +253,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const stepComplete = (step: number) => step === 0 ? Boolean(selectedJobId && form.position) : step === 1 ? Boolean(form.applicantName && form.email && form.phone && form.address && form.city && form.state && form.zip) : step === 2 ? Boolean(form.isAdult && form.eligibleToWork) : step === 6 ? availabilityComplete : step === 7 ? photosComplete : step === 8 ? certificationComplete : step === 9 ? Boolean(form.signature && form.signatureDate && acknowledged) : true;
   const complete = useMemo(() => [0, 1, 2, 6, 7, 8, 9].every(stepComplete), [form, shared, photos, certifications, acknowledged, selectedJobId]);
   const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
+  const updatePhotoCompletion = (complete: boolean) => {
+    setPhotosSaved(complete);
+    window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(complete));
+  };
   const updateList = (key: "workHistory" | "references", index: number, field: string, value: string) => setForm(current => ({ ...current, [key]: current[key].map((item, i) => i === index ? { ...item, [field]: value } : item) }));
   const go = async (step: number) => {
     const nextStep = Math.max(0, Math.min(9, step));
@@ -241,6 +267,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       return;
     }
     setCurrentStep(nextStep);
+    window.localStorage.setItem(`guard-application-step:${userId}`, String(nextStep + 1));
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("applicationStep", String(nextStep + 1));
+    setSearchParams(nextParams, { replace: true });
     requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
   };
   const next = async () => {
@@ -295,7 +325,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         {currentStep === 4 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional. Entries save to Work History and can be edited there later.</p>{form.workHistory.map((j, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Employer {i + 1}</p><Field label="Employer" value={j.employer || ""} onChange={v => updateList("workHistory", i, "employer", v)} /><Field label="Job title" value={j.title || ""} onChange={v => updateList("workHistory", i, "title", v)} /><Field label="Start date" type="date" value={j.startDate || ""} onChange={v => updateList("workHistory", i, "startDate", v)} /><Field label="End date" type="date" value={j.endDate || ""} onChange={v => updateList("workHistory", i, "endDate", v)} /><Field label="Supervisor" value={j.supervisor || ""} onChange={v => updateList("workHistory", i, "supervisor", v)} /><Field label="Supervisor phone" value={j.phone || ""} onChange={v => updateList("workHistory", i, "phone", v)} /></div>)}</div>}
         {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional professional references (not relatives).</p>{form.references.map((r, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Reference {i + 1}</p><Field label="Name" value={r.name} onChange={v => updateList("references", i, "name", v)} /><Field label="Relationship" value={r.relationship} onChange={v => updateList("references", i, "relationship", v)} /><Field label="Phone" value={r.phone} onChange={v => updateList("references", i, "phone", v)} /><Field label="Email" type="email" value={r.email} onChange={v => updateList("references", i, "email", v)} /></div>)}</div>}
         {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
-        {currentStep === 7 && <OfficerPhotos userId={userId} embedded onChanged={setPhotos} onSaved={setPhotosSaved} />}
+        {currentStep === 7 && <OfficerPhotos userId={userId} embedded onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
         {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={setCertifications} />}
         {currentStep === 9 && <div className="space-y-8"><section><h3 className="mb-2 text-lg font-semibold">Official government forms</h3><p className="mb-4 text-sm text-muted-foreground">Open the official fillable PDF, complete it, then download or print it.</p><div className="grid gap-4 md:grid-cols-3"><GovernmentForm title="Form I-9" href="https://www.uscis.gov/sites/default/files/document/forms/i-9.pdf" /><GovernmentForm title="Form W-4" href="https://www.irs.gov/pub/irs-pdf/fw4.pdf" /><GovernmentForm title="Form W-9" href="https://www.irs.gov/pub/irs-pdf/fw9.pdf" /></div></section><section className="space-y-4 border-t pt-7"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Full legal name as signature" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Required onboarding check</p><p>{photosComplete ? "✓" : "○"} Headshot and full-body photo &nbsp; {availabilityComplete ? "✓" : "○"} Availability &nbsp; {certificationComplete ? "✓" : "○"} Certification front</p></div></section></div>}
       </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={form} /></main></div>
