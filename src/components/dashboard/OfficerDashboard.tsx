@@ -950,6 +950,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               officerId={officerProfile?.id || ""} 
               userId={userId}
               onEnsureProfile={ensureOfficerProfile}
+              onChanged={loadProfile}
             />
             )}
 

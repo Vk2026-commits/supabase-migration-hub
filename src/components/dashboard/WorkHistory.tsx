@@ -14,6 +14,7 @@ interface WorkHistoryProps {
   officerId: string;
   userId: string;
   onEnsureProfile?: () => Promise<any>;
+  onChanged?: () => void;
 }
 
 interface WorkHistoryEntry {
@@ -35,7 +36,7 @@ interface WorkHistoryEntry {
   may_contact: boolean;
 }
 
-export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryProps) => {
+export const WorkHistory = ({ officerId, userId, onEnsureProfile, onChanged }: WorkHistoryProps) => {
   const [workHistory, setWorkHistory] = useState<WorkHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentOfficerId, setCurrentOfficerId] = useState(officerId);
@@ -80,18 +81,98 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
     const id = await ensureOfficerId();
     if (!id) return;
 
-    const { data, error } = await supabase
-      .from("work_history")
-      .select("*")
-      .eq("officer_id", id)
-      .order("start_date", { ascending: false });
+    const [historyResult, applicationResult] = await Promise.all([
+      supabase
+        .from("work_history")
+        .select("*")
+        .eq("officer_id", id)
+        .order("start_date", { ascending: false }),
+      (supabase as any)
+        .from("guard_hiring_applications")
+        .select("id,application_data")
+        .eq("officer_id", id)
+        .eq("application_type", "master")
+        .eq("status", "submitted")
+        .maybeSingle(),
+    ]);
 
-    if (error) {
+    if (historyResult.error) {
       toast.error("Failed to load work history");
       return;
     }
 
-    setWorkHistory((data || []) as WorkHistoryEntry[]);
+    let savedEntries = (historyResult.data || []) as WorkHistoryEntry[];
+    const applicationData = applicationResult.data?.application_data || {};
+    const applicationEntries = Array.isArray(applicationData.workHistory)
+      ? applicationData.workHistory
+      : [];
+
+    // Backfill applications submitted before the canonical synchronization
+    // fix. Matching stable employment details prevents duplicate records when
+    // this page is opened or refreshed repeatedly.
+    const normalized = (value: unknown) => String(value || "").trim().toLowerCase();
+    const entryKey = (entry: any) => [
+      normalized(entry.company_name ?? entry.employer),
+      normalized(entry.position_title ?? entry.title),
+      normalized(entry.start_date ?? entry.startDate),
+      normalized(entry.end_date ?? entry.endDate),
+    ].join("|");
+    const existingKeys = new Set(savedEntries.map(entryKey));
+    const missingApplicationEntries: any[] = [];
+    if (!applicationData.workHistoryCanonicalizedAt) {
+      applicationEntries.forEach((entry: any) => {
+        const key = entryKey(entry);
+        if (!normalized(entry.employer) || existingKeys.has(key)) return;
+        existingKeys.add(key);
+        missingApplicationEntries.push(entry);
+      });
+    }
+    const missingEntries = missingApplicationEntries.map((entry: any) => ({
+        officer_id: id,
+        company_name: String(entry.employer).trim(),
+        position_title: entry.title || null,
+        start_date: entry.startDate || null,
+        end_date: entry.endDate || null,
+        supervisor_name: entry.supervisor || null,
+        supervisor_phone: entry.phone || null,
+        reason_for_leaving: entry.reason || null,
+      }));
+
+    let canonicalizationSucceeded = missingEntries.length === 0;
+    if (missingEntries.length) {
+      const { data: importedEntries, error: importError } = await supabase
+        .from("work_history")
+        .insert(missingEntries)
+        .select("*");
+
+      if (importError) {
+        console.error("Submitted application work history could not be imported", importError);
+        toast.error("Your application is saved, but its work history could not be loaded here yet");
+      } else {
+        savedEntries = [...((importedEntries || []) as WorkHistoryEntry[]), ...savedEntries]
+          .sort((a, b) => (b.start_date || "").localeCompare(a.start_date || ""));
+        canonicalizationSucceeded = true;
+        onChanged?.();
+      }
+    }
+
+    // Reconcile a legacy submission only once. Later edits and deletions in
+    // this tab should remain intentional rather than being recreated from the
+    // immutable submitted application on every refresh.
+    if (applicationEntries.length && !applicationData.workHistoryCanonicalizedAt && canonicalizationSucceeded) {
+      const { error: markerError } = await (supabase as any)
+        .from("guard_hiring_applications")
+        .update({
+          application_data: {
+            ...applicationData,
+            workHistoryCanonicalizedAt: new Date().toISOString(),
+          },
+        })
+        .eq("id", applicationResult.data.id);
+      if (markerError) console.warn("Work history reconciliation marker could not be saved", markerError);
+    }
+
+    setWorkHistory(savedEntries);
   };
 
   const resetForm = () => {
@@ -165,7 +246,8 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
       }
 
       resetForm();
-      loadWorkHistory();
+      await loadWorkHistory();
+      onChanged?.();
     } catch (error: any) {
       toast.error("Failed to save work history");
     } finally {
@@ -187,7 +269,8 @@ export const WorkHistory = ({ officerId, userId, onEnsureProfile }: WorkHistoryP
       if (error) throw error;
 
       toast.success("Work history deleted successfully");
-      loadWorkHistory();
+      await loadWorkHistory();
+      onChanged?.();
     } catch (error: any) {
       toast.error("Failed to delete work history");
     }

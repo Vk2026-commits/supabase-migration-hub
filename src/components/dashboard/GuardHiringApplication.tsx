@@ -329,7 +329,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     event.preventDefault(); if (!complete || !activeOfficerId) { toast.error("Complete every required onboarding item before submitting"); return; }
     setSubmitting(true);
     try {
-      await syncShared();
+      // Final submission must also persist application work history into the
+      // canonical records used by the Work History tab. Step navigation does
+      // this too, but applicants can submit after restoring a saved draft.
+      await syncShared(true);
       const selectedJob = jobs.find(j => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
       const snapshot = { ...form, jobPostingId: selectedJob.id, availability: shared, photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
