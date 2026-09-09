@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, Briefcase, FileCheck2 } from "lucide-react";
+import { AlertCircle, Briefcase, FileCheck2, RefreshCw } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SignaturePad } from "./SignaturePad";
 import { emptyEmploymentOffer, employmentOfferFieldLabels, validateEmploymentOffer, type EmploymentOfferTerms } from "@/lib/employmentOffer";
@@ -25,6 +25,24 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
   const [previousOffer, setPreviousOffer] = useState<any>(null);
   const [invalidFields, setInvalidFields] = useState<Array<keyof EmploymentOfferTerms>>([]);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const offerIsAccepted = ["accepted", "legacy_accepted"].includes(previousOffer?.status);
+  const offerCanBeRevised = previousOffer && !offerIsAccepted;
+
+  useEffect(() => {
+    let active = true;
+    (supabase as any)
+      .from("employment_offers")
+      .select("id,version,status,terms")
+      .eq("company_id", companyId)
+      .eq("officer_id", officerId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }: { data: any }) => {
+        if (active) setPreviousOffer(data || null);
+      });
+    return () => { active = false; };
+  }, [companyId, officerId]);
   const update = <K extends keyof EmploymentOfferTerms>(key: K, value: EmploymentOfferTerms[K]) => {
     setTerms((current) => ({ ...current, [key]: value }));
     setInvalidFields((current) => current.filter((field) => field !== key));
@@ -78,7 +96,8 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     try {
       const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 30000, body: { action: "send", company_id: companyId, officer_id: officerId, hiring_application_id: hiringApplicationId, job_application_id: jobApplicationId, terms, company_signature: companySignature, idempotency_key: idempotencyKey } });
       if (error) throw error; if (data?.error) throw new Error(data.error);
-      toast.success(`Offer sent to ${officerName}. Onboarding unlocks only after acceptance.`); setOpen(false); onChanged?.();
+      setPreviousOffer(data?.offer || data || { ...previousOffer, status: "sent", version: Number(previousOffer?.version || 0) + 1 });
+      toast.success(previousOffer ? `Revised offer sent to ${officerName}. The earlier version remains archived.` : `Offer sent to ${officerName}. Onboarding unlocks only after acceptance.`); setOpen(false); onChanged?.();
     } catch (error: any) { toast.error(error?.name === "AbortError" || error?.context?.name === "AbortError" || /timeout|aborted/i.test(error?.message || "") ? "The secure offer service took too long. Nothing was duplicated—please try again." : error?.message || "The offer could not be securely generated and sent"); } finally { setLoading(false); }
   };
   const offerAction = async (action: "preview" | "withdraw") => {
@@ -93,8 +112,8 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
   const area = (label: string, key: keyof EmploymentOfferTerms, placeholder = "") => <div className="space-y-2"><Label className={invalidFields.includes(key) ? "text-destructive" : ""} htmlFor={`offer-${key}`}>{label} *</Label><Textarea aria-invalid={invalidFields.includes(key)} className={invalidFields.includes(key) ? "border-destructive ring-destructive/20" : ""} id={`offer-${key}`} value={String(terms[key] ?? "")} onChange={(e) => update(key as any, e.target.value as any)} placeholder={placeholder} /></div>;
 
   return <Dialog open={open} onOpenChange={prepareDialog}>
-    <DialogTrigger asChild><Button className="w-full sm:w-auto"><Briefcase className="mr-2 h-4 w-4" />Send Offer</Button></DialogTrigger>
-    <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl"><DialogHeader><DialogTitle>Prepare complete hourly employment offer</DialogTitle><DialogDescription>The exact terms below are archived in a company-signed PDF. Sending does not mark {officerName} as hired.</DialogDescription></DialogHeader>
+    <DialogTrigger asChild><Button className="w-full sm:w-auto" disabled={offerIsAccepted}>{offerCanBeRevised ? <RefreshCw className="mr-2 h-4 w-4" /> : <Briefcase className="mr-2 h-4 w-4" />}{offerIsAccepted ? "Offer Accepted" : offerCanBeRevised ? "Revise & Resend Offer" : "Send Offer"}</Button></DialogTrigger>
+    <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl"><DialogHeader><DialogTitle>{offerCanBeRevised ? `Revise and resend offer to ${officerName}` : "Prepare complete hourly employment offer"}</DialogTitle><DialogDescription>{offerCanBeRevised ? `This creates offer version ${Number(previousOffer.version) + 1}. Version ${previousOffer.version} remains archived and unchanged for your records.` : `The exact terms below are archived in a company-signed PDF. Sending does not mark ${officerName} as hired.`}</DialogDescription></DialogHeader>
       {initializing ? <p className="py-10 text-center text-muted-foreground">Loading offer details…</p> : <div className="space-y-7 py-2">
         {previousOffer && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-4"><div><strong className="block">Latest offer: version {previousOffer.version}</strong><span className="text-sm capitalize text-muted-foreground">Status: {String(previousOffer.status).replace(/_/g, " ")}</span></div><div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => offerAction("preview")}>View PDF</Button>{["sent","viewed"].includes(previousOffer.status) && <Button type="button" size="sm" variant="destructive" onClick={() => offerAction("withdraw")}>Withdraw</Button>}</div></div>}
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Role and classification</h3><div className="grid gap-4 sm:grid-cols-2">{field("Position", "positionTitle", "Security Officer")}<Choice label="Employment type" value={terms.employmentType} onChange={(v) => update("employmentType", v as any)} options={[["full_time","Full-time"],["part_time","Part-time"],["temporary","Temporary"],["seasonal","Seasonal"]]} /><Choice label="Overtime classification" value={terms.classification} onChange={(v) => update("classification", v as any)} options={[["nonexempt","Nonexempt — overtime eligible"],["exempt","Exempt"]]} /></div>{area("Duties and responsibilities", "duties", "Describe the role's primary duties")}</section>
@@ -105,7 +124,7 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
         {invalidFields.length > 0 && <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="block">Finish these fields before sending:</strong><div className="mt-2 flex flex-wrap gap-2">{invalidFields.map((key) => <button className="rounded-full border border-destructive/30 bg-background px-3 py-1 hover:bg-destructive/10" key={key} onClick={() => document.getElementById(elementId(key))?.scrollIntoView({ behavior: "smooth", block: "center" })} type="button">{employmentOfferFieldLabels[key] || key}</button>)}</div></div></div></div>}
         <section className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-4"><h3 className="flex items-center gap-2 font-semibold"><FileCheck2 className="h-5 w-5 text-primary" />Company authorization</h3><div className="grid gap-4 sm:grid-cols-2">{field("Hiring representative", "representativeName")}{field("Representative title", "representativeTitle")}</div><SignaturePad value={companySignature} suggestedName={terms.representativeName} onChange={setCompanySignature} /><label className="flex items-start gap-3 rounded-xl border bg-background p-4"><Checkbox checked={authorized} onCheckedChange={(v) => setAuthorized(Boolean(v))} /><span className="text-sm"><strong className="block">I am authorized to make this offer *</strong>I confirm the terms are complete and accurate and adopt the signature above on behalf of the company.</span></label></section>
       </div>}
-      <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={sendOffer} disabled={loading || initializing || ["accepted","legacy_accepted"].includes(previousOffer?.status)}>{loading ? "Generating and archiving…" : ["accepted","legacy_accepted"].includes(previousOffer?.status) ? "Offer already accepted" : previousOffer ? "Sign and send revised offer" : "Sign and send offer"}</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={sendOffer} disabled={loading || initializing || offerIsAccepted}>{loading ? "Generating and archiving…" : offerIsAccepted ? "Offer already accepted" : previousOffer ? `Sign and send version ${Number(previousOffer.version) + 1}` : "Sign and send offer"}</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
 };
