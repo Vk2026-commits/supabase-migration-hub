@@ -7,6 +7,7 @@ import { Download, Lock, User, MessageCircle } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
+import HireButton from "./HireButton";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -137,7 +138,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                 </div>
 
                 {isPaidSubscriber ? (
-                  <div className="flex gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2 mt-3">
                     <Button 
                       size="sm"
                       onClick={() => setReviewApplication(app)}
@@ -167,6 +168,14 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         <Download className="h-3 w-3 mr-2" />
                         Application PDF
                       </Button>
+                    )}
+                    {app.hiring_application?.[0]?.id && (
+                      <HireButton
+                        officerId={app.officer.id}
+                        officerName={app.officerName}
+                        companyId={companyId}
+                        hiringApplicationId={app.hiring_application[0].id}
+                      />
                     )}
                   </div>
                 ) : (

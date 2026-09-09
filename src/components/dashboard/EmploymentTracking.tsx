@@ -85,8 +85,27 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       return;
     }
     setOfferSaving(true);
+    let linkedApplicationId = offerHire.hiring_application_id || null;
+    if (!linkedApplicationId) {
+      const { data: applications, error: applicationError } = await (supabase as any)
+        .from("guard_hiring_applications")
+        .select("id,submitted_at,job_application:job_applications!inner(job_posting:job_postings!inner(company_id))")
+        .eq("officer_id", offerHire.officer_id)
+        .eq("application_type", "employer_copy")
+        .eq("status", "submitted")
+        .eq("job_application.job_posting.company_id", companyId)
+        .order("submitted_at", { ascending: false })
+        .limit(1);
+      if (applicationError || !applications?.[0]?.id) {
+        setOfferSaving(false);
+        toast.error("This officer must submit an application to your company before you can send the offer");
+        return;
+      }
+      linkedApplicationId = applications[0].id;
+    }
     const { error } = await supabase.from("hires").update({
       hire_date: offer.startDate,
+      hiring_application_id: linkedApplicationId,
       position_title: offer.offeredPosition.trim(),
       offer_prepared_at: new Date().toISOString(),
       offer_terms: { ...offer, employerSignatureName: offer.representativeName.trim() },
