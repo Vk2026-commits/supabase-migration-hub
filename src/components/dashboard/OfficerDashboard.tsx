@@ -26,6 +26,7 @@ import { GuardHiringApplication } from "./GuardHiringApplication";
 import { OfficerEmployeeOnboarding } from "./OfficerEmployeeOnboarding";
 import { OfficerOfferReview } from "./OfficerOfferReview";
 import { useSearchParams } from "@/lib/router-compat";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -84,6 +85,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
+  const [showOfferPrompt, setShowOfferPrompt] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
   const choseInitialExperience = useRef(false);
@@ -119,6 +121,10 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   useEffect(() => {
     loadProfile();
   }, [userId]);
+
+  useEffect(() => {
+    if (pendingEmploymentOffer?.id) setShowOfferPrompt(true);
+  }, [pendingEmploymentOffer?.id]);
 
   const ensureOfficerProfile = async () => {
     if (officerProfile) return officerProfile;
@@ -416,6 +422,25 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   return (
     <SidebarProvider>
       <div ref={dashboardTopRef} className="flex w-full min-h-screen scroll-mt-0">
+        <Dialog open={showOfferPrompt && Boolean(pendingEmploymentOffer)} onOpenChange={setShowOfferPrompt}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                <FileText className="h-6 w-6" />
+              </div>
+              <DialogTitle className="text-2xl">You have an offer to review</DialogTitle>
+              <DialogDescription className="text-base">
+                A company sent you an employment offer{pendingEmploymentOffer?.terms?.positionTitle ? ` for ${pendingEmploymentOffer.terms.positionTitle}` : ""}. Review the complete terms and PDF before accepting or declining.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => setShowOfferPrompt(false)}>Review later</Button>
+              <Button type="button" onClick={() => { setShowOfferPrompt(false); handleTabChange("employee-onboarding"); }}>
+                Review offer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <OfficerSidebar 
           activeTab={activeTab} 
           onTabChange={handleTabChange}
