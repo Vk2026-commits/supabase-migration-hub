@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Lock, User, MessageCircle } from "lucide-react";
+import { Download, Lock, User, MessageCircle, ClipboardCheck } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -15,6 +15,15 @@ interface JobApplicantsProps {
   onNavigateToSubscriptions?: () => void;
 }
 
+const onboardingSteps = ["Offer accepted", "Form I-9", "Form W-4", "Pay setup", "Emergency contact", "Company policies", "Uniform and schedule", "Review and sign"];
+
+const getOnboardingStatus = (progress: any) => {
+  if (!progress || progress.status === "not_started") return { label: "Onboarding not started", detail: "Offer accepted; waiting for the officer to begin.", percent: 0 };
+  if (progress.status === "submitted") return { label: "Onboarding complete", detail: "The officer submitted the full onboarding packet.", percent: 100 };
+  const step = Math.max(0, Math.min(7, Number(progress.current_step || 0)));
+  return { label: `Onboarding: step ${step + 1} of 8`, detail: onboardingSteps[step], percent: Math.round(((step + 1) / 8) * 100) };
+};
+
 const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions }: JobApplicantsProps) => {
   const [applications, setApplications] = useState<any[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
@@ -23,8 +32,10 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [reviewApplication, setReviewApplication] = useState<any>(null);
 
   useEffect(() => {
-    loadApplications();
-    loadCompanyProfile();
+    void loadApplications();
+    void loadCompanyProfile();
+    const refresh = window.setInterval(() => void loadApplications(), 15000);
+    return () => window.clearInterval(refresh);
   }, [companyId]);
 
   const loadCompanyProfile = async () => {
@@ -54,24 +65,22 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       return;
     }
 
-    // Get profile data for all officers
+    // Get display names and non-sensitive onboarding progress for accepted offers.
     const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
-    
-    if (officerUserIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", officerUserIds);
-
-      const applicationsWithNames = data?.map((app: any) => ({
-        ...app,
-        officerName: profiles?.find((p) => p.id === app.officer?.user_id)?.full_name || "Unknown",
-      }));
-
-      setApplications(applicationsWithNames || []);
-    } else {
-      setApplications(data || []);
-    }
+    const [profilesResult, offersResult, progressResult] = await Promise.all([
+      officerUserIds.length ? supabase.from("profiles").select("id, full_name").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
+      (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
+      (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
+    ]);
+    if (offersResult.error) console.error("Failed to match accepted offers", offersResult.error);
+    if (progressResult.error) console.error("Failed to load onboarding progress", progressResult.error);
+    const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
+    const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
+    setApplications((data || []).map((app: any) => ({
+      ...app,
+      officerName: profilesResult.data?.find((profile: any) => profile.id === app.officer?.user_id)?.full_name || "Unknown",
+      onboardingProgress: progressByHire.get(hireByApplication.get(app.id)) || null,
+    })));
   };
 
   const getMaskedName = (fullName: string) => {
@@ -120,7 +129,9 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
               No applications yet. Post jobs to attract security officers.
             </p>
           ) : (
-            applications.map((app) => (
+            applications.map((app) => {
+              const onboarding = getOnboardingStatus(app.onboardingProgress);
+              return (
               <div key={app.id} className="border rounded-lg p-4">
                 <div className="flex justify-between items-start mb-2">
                   <div className="space-y-1">
@@ -136,6 +147,11 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                   </div>
                   <Badge variant="secondary">{app.status}</Badge>
                 </div>
+
+                {app.status === "accepted" && <div className={`mt-3 rounded-xl border p-3 ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
+                  <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-2"><ClipboardCheck className={`mt-0.5 h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div><strong className="block text-sm">{onboarding.label}</strong><span className="text-xs text-muted-foreground">{onboarding.detail}</span></div></div><Badge variant="outline" className="shrink-0 bg-background">{onboarding.percent}%</Badge></div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
+                </div>}
 
                 {isPaidSubscriber ? (
                   <div className="flex flex-wrap gap-2 mt-3">
@@ -191,7 +207,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                   </Button>
                 )}
               </div>
-            ))
+            )})
           )}
         </div>
       </CardContent>

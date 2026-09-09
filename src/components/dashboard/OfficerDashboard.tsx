@@ -85,6 +85,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
+  const [acceptedEmploymentOffer, setAcceptedEmploymentOffer] = useState<any>(null);
   const [showOfferPrompt, setShowOfferPrompt] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
@@ -217,7 +218,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult, acceptedOfferResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
@@ -227,6 +228,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           (supabase as any).from("officer_onboarding_packets").select("status").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
         
         setCertCount(certsResult.count || 0);
@@ -238,6 +240,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
+        setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
         setOnboardingOfferAvailable(Boolean(pendingOfferResult.data?.id || (preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id)));
         setOnboardingOfferLoaded(true);
         const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
@@ -400,7 +403,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
   const onboardingItems = [
     { label: "Submit hiring application", complete: applicationSubmitted, tab: "hiring-application" },
-    { label: onboardingOfferAvailable ? "Complete employee onboarding for your offer" : "Employee onboarding unlocks after a company offer", complete: employeeOnboardingSubmitted, tab: "employee-onboarding", locked: !onboardingOfferAvailable },
+    { label: acceptedEmploymentOffer ? "Offer accepted and signed" : pendingEmploymentOffer ? "Review and sign company offer" : "Await company offer", complete: Boolean(acceptedEmploymentOffer), tab: "employee-onboarding", locked: !onboardingOfferAvailable },
+    { label: employeeOnboardingSubmitted ? "Employee onboarding submitted" : acceptedEmploymentOffer ? "Complete employee onboarding" : "Employee onboarding unlocks after acceptance", complete: employeeOnboardingSubmitted, tab: "employee-onboarding", locked: !acceptedEmploymentOffer },
     { label: "Set availability", complete: completionStatus.availability, tab: "availability" },
     { label: "Add headshot and full-body photo", complete: requiredPhotosComplete, tab: "photos" },
     { label: "Upload a certification front document", complete: certificationDocumentComplete, tab: "certifications" },

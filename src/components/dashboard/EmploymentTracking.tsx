@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2 } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 
 interface EmploymentTrackingProps {
@@ -28,7 +28,9 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number; submittedAt: string; sha256: string; url: string }>>([]);
 
   useEffect(() => {
-    loadHires();
+    void loadHires();
+    const refresh = window.setInterval(() => void loadHires(), 15000);
+    return () => window.clearInterval(refresh);
   }, [companyId]);
 
   const loadHires = async () => {
@@ -46,7 +48,10 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setHires(data || []);
+      const progressResult = await (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId });
+      if (progressResult.error) throw progressResult.error;
+      const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
+      setHires((data || []).map((hire: any) => ({ ...hire, onboarding_progress: progressByHire.get(hire.id) || null })));
     } catch (error) {
       console.error("Error loading hires:", error);
       toast.error("Failed to load employment data");
@@ -101,6 +106,15 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       return { label: "Overdue", color: "bg-red-100 text-red-800", icon: Calendar };
     }
     return { label: "Pending", color: "bg-gray-100 text-gray-800", icon: Calendar };
+  };
+
+  const onboardingSteps = ["Offer accepted", "Form I-9", "Form W-4", "Pay setup", "Emergency contact", "Company policies", "Uniform and schedule", "Review and sign"];
+  const onboardingStatus = (hire: any) => {
+    const progress = hire.onboarding_progress;
+    if (!progress || progress.status === "not_started") return { label: "Onboarding not started", detail: "The officer accepted the offer but has not started the onboarding packet.", percent: 0 };
+    if (progress.status === "submitted") return { label: "Onboarding complete", detail: "The complete onboarding packet has been submitted.", percent: 100 };
+    const step = Math.max(0, Math.min(7, Number(progress.current_step || 0)));
+    return { label: `Onboarding: step ${step + 1} of 8`, detail: onboardingSteps[step], percent: Math.round(((step + 1) / 8) * 100) };
   };
 
   const handleSubmitUpdate = async () => {
@@ -240,7 +254,9 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {hires.map((hire) => (
+            {hires.map((hire) => {
+              const onboarding = onboardingStatus(hire);
+              return (
               <div key={hire.id} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-start">
                   <div>
@@ -261,6 +277,13 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-3">
                   <div><strong className="block text-sm">Offer accepted</strong><span className="text-xs text-muted-foreground">Accepted terms are immutable and retained with this hire.</span></div>
                   <Button size="sm" variant="outline" onClick={() => openAcceptedOffer(hire)}>{hire.offer_id ? "View signed offer" : "Legacy record"}</Button>
+                </div>
+                <div className={`rounded-xl border p-4 ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3"><ClipboardCheck className={`mt-0.5 h-5 w-5 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div><strong className="block text-sm">{onboarding.label}</strong><span className="text-xs text-muted-foreground">{onboarding.detail}</span>{hire.onboarding_progress?.updated_at && <span className="mt-1 block text-[11px] text-muted-foreground">Last saved {new Date(hire.onboarding_progress.updated_at).toLocaleString()}</span>}</div></div>
+                    <Badge variant="outline" className="shrink-0 bg-background">{onboarding.percent}%</Badge>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
                 </div>
                 <Button type="button" variant="outline" className="w-full" onClick={() => openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Open audit-ready officer file</Button>
 
@@ -341,7 +364,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                   </div>
                 )}
               </div>
-            ))}
+            )})}
             {hires.length === 0 && (
               <p className="text-center text-muted-foreground py-8">
                 No officers hired yet

@@ -1630,6 +1630,18 @@ export type Database = {
         Returns: boolean
       }
       get_officer_user_id: { Args: { _officer_id: string }; Returns: string }
+      get_company_onboarding_progress: {
+        Args: { _company_id: string }
+        Returns: {
+          current_step: number
+          hire_id: string
+          officer_id: string
+          packet_id: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string | null
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
