@@ -354,20 +354,35 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const isConfidentialityAgreement = path.includes("09-confidentialityagreement");
   const isTrackTikDocument = path.includes("11-track-tik-login-info-sheet");
   const isTemporaryAcknowledgement = path.includes("12-temporary-employeement-acknowldgement");
+  const isAppearancePolicy = path.includes("13-personal-appearance");
+  const isAttendancePolicy = path.includes("14-attendance-punctuality");
+  const isDisciplinePolicy = path.includes("15-disciplinary-action");
+  const isDrugPolicy = path.includes("16-drug-abuse");
+  const isDrugTestingConsent = path.includes("17-drug-free-policy");
+  const isAvailabilityForm = path.includes("18-employee-availability");
+  const isSocialPolicy = path.includes("21-social-and-digital-media");
+  const isUniformChecklist = path.includes("23-uniform-check-list");
+  const isWorkSchedule = path.includes("24-kairos-schedule");
+  const isHandbookAcknowledgement = path.includes("06-acknowledgement-of-handbook");
   const confidentialityDate = isConfidentialityAgreement && formattedDate ? formattedDate.slice(0, 5) : formattedDate;
   const confidentialityYear = isConfidentialityAgreement && formattedDate ? formattedDate.slice(-2) : "";
   const isOfferLetter = path.includes("10-offer-letter-per-hour");
-  const employerRepresentativeName = isKairosConfidentialityAgreement ? "Erika Garces" : "";
-  const employerRepresentativeTitle = isKairosConfidentialityAgreement ? "Authorized Hiring Representative" : "";
+  const employerRepresentativeName = values.employerSignatureName || values.employerRepresentativeName || (isKairosConfidentialityAgreement ? "Erika Garces" : "");
+  const employerRepresentativeTitle = values.employerRepresentativeTitle || (isKairosConfidentialityAgreement ? "Authorized Hiring Representative" : "");
+  const employerSignedDate = date(values.offerPreparedAt?.slice(0, 10) || acknowledgement.signatureDate);
   const schedule = values.availabilitySchedule || {};
   const fieldValues: Record<string, string> = {
-    "Employee Name": employeeName,
-    "Employees Name Printed": employeeName,
+    "Employee Name": isDrugTestingConsent ? values.employerName : employeeName,
     Employee: isTrackTikDocument ? values.employeeIdNumber || "" : employeeName,
     "Printed Name": employeeName,
     "Print Name": employeeName,
     "Print Name_2": employerRepresentativeName,
+    "Employees Name Printed": employeeName,
+    "Company Representative": employerRepresentativeName,
+    "Employer Representative": employerRepresentativeName,
+    "Manager Initials": employerRepresentativeName.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 3).toUpperCase(),
     Date: formattedDate,
+    Date_2: employerSignedDate,
     "Todays Date": formattedDate,
     "This Confidentiality Agreement the Agreement dated as of": confidentialityDate,
     Title: acknowledgement.employeeTitle || values.offeredPosition || "Security Officer",
@@ -379,7 +394,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     "User Name  for Track Tik": values.trackTikUsername || "",
     "Password  for  Track Tik": values.trackTikPasswordSet ? "Set privately" : "",
     Position: values.offeredPosition || "Security Officer",
-    Text1: isConfidentialityAgreement ? confidentialityYear : employeeName,
+    Text1: isConfidentialityAgreement ? confidentialityYear : isDrugTestingConsent ? "" : employeeName,
     Text2: date(values.startDate) || formattedDate,
     Text3: values.employeeIdNumber || "",
     Text4: "Security",
@@ -420,8 +435,33 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
       textField.setFontSize(/^Qty/.test(name) ? 9 : /^Text[1-4]$/.test(name) ? 9 : 7);
     } catch { /* field is not a text field in this document */ }
   });
+  if (isDrugTestingConsent) {
+    ["Text1", "Date", "Date_2", "Company Representative"].forEach((name) => { try { form.getTextField(name).setText(""); } catch { /* field differs */ } });
+    ["Employee Name", "Employees Name Printed"].forEach((name) => { try { form.getTextField(name).setFontSize(8); } catch { /* field differs */ } });
+  }
+  if (isHandbookAcknowledgement) {
+    try { form.getTextField("Employer Representative").setText(""); } catch { /* field differs */ }
+  }
 
   const signatureImage = acknowledgement.signatureImage ? await document.embedPng(await trimSignature(acknowledgement.signatureImage)) : null;
+  const drawSignature = (page: any, x: number, y: number, width: number, height: number, signerName = employeeName, image = signatureImage) => {
+    if (image) {
+      const scale = Math.min((width - 6) / image.width, (height - 4) / image.height);
+      const imageWidth = image.width * scale;
+      const imageHeight = image.height * scale;
+      page.drawImage(image, { x: x + (width - imageWidth) / 2, y: y + (height - imageHeight) / 2, width: imageWidth, height: imageHeight });
+    } else if (signerName) {
+      let size = Math.min(12, height - 3);
+      while (size > 6 && signatureFont.widthOfTextAtSize(signerName, size) > width - 6) size -= 0.5;
+      page.drawText(signerName, { x: x + 3, y: y + Math.max(2, (height - size) / 2), size, font: signatureFont, color: rgb(0, 0, 0) });
+    }
+  };
+  const drawValue = (page: any, text: string, x: number, y: number, width = 180, size = 8, font = regularFont) => {
+    if (!text) return;
+    let fit = size;
+    while (fit > 5.5 && font.widthOfTextAtSize(text, fit) > width) fit -= 0.5;
+    page.drawText(text, { x, y, size: fit, font, color: rgb(0, 0, 0), maxWidth: width });
+  };
   for (const field of form.getFields()) {
     const name = field.getName();
     const lower = name.toLowerCase();
@@ -470,6 +510,79 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     });
   }
   try { form.updateFieldAppearances(regularFont); } catch { /* viewer regenerates */ }
+
+  if (isDrugTestingConsent) {
+    const page = document.getPages()[0];
+    drawSignature(page, 78, 170, 187, 25);
+    drawValue(page, formattedDate, 273, 176, 96, 8);
+    drawSignature(page, 75, 86, 189, 25, employerRepresentativeName, null);
+    drawValue(page, employerSignedDate, 272, 92, 96, 8);
+  }
+  if (isAvailabilityForm && employerRepresentativeName) {
+    try {
+      const managerField = form.getField("Manager Signature") as any;
+      for (const widget of managerField.acroField.getWidgets()) {
+        const rect = widget.getRectangle();
+        const page = document.getPages().find(candidate => candidate.ref === widget.P()) || document.getPages()[0];
+        drawSignature(page, rect.x, rect.y, rect.width, rect.height, employerRepresentativeName, null);
+      }
+    } catch { /* manager signature field differs */ }
+  }
+  if (isHandbookAcknowledgement && employerRepresentativeName) {
+    try {
+      const field = form.getTextField("Employer Representative") as any;
+      for (const widget of field.acroField.getWidgets()) {
+        const rect = widget.getRectangle();
+        const page = document.getPages().find(candidate => candidate.ref === widget.P()) || document.getPages()[0];
+        drawSignature(page, rect.x, rect.y, rect.width, rect.height, employerRepresentativeName, null);
+      }
+    } catch { /* employer representative field differs */ }
+  }
+
+  const staticPolicyLayout = isAppearancePolicy ? { page: 0, date: [154, 600], signature: [72, 130, 150, 20], name: [338, 136] }
+    : isAttendancePolicy ? { page: 0, date: [165, 631], signature: [101, 137, 132, 20], name: [325, 143] }
+    : isDisciplinePolicy ? { page: 0, date: [145, 626], signature: [72, 154, 142, 20], name: [330, 160] }
+    : isDrugPolicy ? { page: 0, date: [170, 628], signature: [90, 55, 150, 20], name: [332, 61] }
+    : null;
+  if (staticPolicyLayout) {
+    const page = document.getPages()[staticPolicyLayout.page];
+    drawValue(page, formattedDate, staticPolicyLayout.date[0], staticPolicyLayout.date[1], 90, 8);
+    drawSignature(page, staticPolicyLayout.signature[0], staticPolicyLayout.signature[1], staticPolicyLayout.signature[2], staticPolicyLayout.signature[3]);
+    drawValue(page, employeeName, staticPolicyLayout.name[0], staticPolicyLayout.name[1], 150, 8);
+  }
+  if (isSocialPolicy) {
+    const page = document.getPages()[2];
+    drawValue(page, employeeName, 86, 558, 260, 9);
+    drawSignature(page, 86, 501, 260, 22);
+    drawValue(page, formattedDate, 86, 468, 130, 9);
+  }
+  if (isUniformChecklist) {
+    const page = document.getPages()[0];
+    const rowTops = [207.8, 238.9, 270, 301, 332.1, 363.3, 381.8, 399.4, 417.1, 435.7, 454.2, 472.6, 491.2, 509.7, 528.2, 546.8, 565.3, 583.8, 602.4, 620.8, 639.3];
+    rowTops.forEach((top, index) => {
+      if (acknowledgement.documentFields?.[`uniformReceived:${index}`] === "true") drawValue(page, "X", 97, 792 - top - 9, 10, 8, boldFont);
+      if (acknowledgement.documentFields?.[`uniformReturned:${index}`] === "true") drawValue(page, "X", 331, 792 - top - 9, 10, 8, boldFont);
+    });
+  }
+  if (isWorkSchedule) {
+    const page = document.getPages()[0];
+    const fields = acknowledgement.documentFields || {};
+    drawValue(page, formattedDate, 119, 630, 120, 8);
+    drawValue(page, employeeName, 156, 602, 210, 8);
+    drawValue(page, fields.schedulePostAddress || values.scheduledPost || "", 180, 520, 270, 8);
+    drawValue(page, fields.schedulePostCity || "", 115, 494, 130, 8);
+    drawValue(page, fields.schedulePostState || "", 292, 494, 70, 8);
+    drawValue(page, fields.schedulePostZip || "", 420, 494, 70, 8);
+    drawValue(page, employeeName.split(/\s+/)[0] || employeeName, 112, 459, 140, 8);
+    const dayXs = [202, 253, 304, 355, 406, 457, 508];
+    const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    dayKeys.forEach((day, index) => {
+      drawValue(page, schedule[day]?.start || "", dayXs[index], 340, 45, 6.5);
+      drawValue(page, schedule[day]?.end || "", dayXs[index], 325, 45, 6.5);
+    });
+    drawValue(page, date(values.startDate || ""), 220, 239, 100, 8);
+    drawSignature(page, 72, 108, 132, 24);
+  }
 
   // The TrackTik template's interactive widgets sit one row below their printed
   // labels. Draw the values on the visible lines so each credential is clearly

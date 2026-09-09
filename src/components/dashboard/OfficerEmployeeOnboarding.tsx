@@ -172,6 +172,16 @@ const propertyAdditionalRows = [
 
 const issuedItemOptions = ["Building key/card", "Identification badge", "Mobile device", "Parking pass", "Laptop", "Uniform", "Radio", "Flashlight"];
 
+const uniformChecklistRows = [
+  "Long sleeve shirt (complete with patches)", "Short sleeve button-up shirt (complete with patches)",
+  "Short sleeve shirt (complete with patches)", "High-visibility traffic long sleeve shirt (complete with patches)",
+  "High-visibility traffic short sleeve shirt (complete with patches)", "Tie", "Silver badge", "Silver SOs", "Pants",
+  "Bomber jacket", "Jacket", "Beanie hat", "Baseball hat", "Flashlight", "Flag patch", "Radio", "ID badge",
+  "Additional jacket", "Additional beanie or baseball hat", "Additional flashlight", "Additional flag patch",
+] as const;
+
+const scheduleDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+
 const steps = [
   ["Welcome", "Confirm your hiring company"],
   ["Form I-9", "Complete the employee section in the app"],
@@ -592,7 +602,18 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return () => clearTimeout(timer);
   }, [activePolicyKey, currentStep, data]);
 
-  const policyDetailsComplete = (key: string) => key !== "trackTik" || Boolean(data.trackTikUsername && data.employeeIdNumber && data.trackTikPasswordSet);
+  const policyDetailsComplete = (key: string) => {
+    if (key === "trackTik") return Boolean(data.trackTikUsername && data.employeeIdNumber && data.trackTikPasswordSet);
+    if (key === "uniform") {
+      const fields = data.policyAcknowledgements[key]?.documentFields || {};
+      return fields.uniformNone === "true" || uniformChecklistRows.some((_, index) => fields[`uniformReceived:${index}`] === "true" || fields[`uniformReturned:${index}`] === "true");
+    }
+    if (key === "schedule") {
+      const fields = data.policyAcknowledgements[key]?.documentFields || {};
+      return Boolean(data.scheduledPost && fields.schedulePostAddress && fields.schedulePostCity && fields.schedulePostState && fields.schedulePostZip && data.startDate && scheduleDays.some((day) => data.availabilitySchedule[day]?.start || data.availabilitySchedule[day]?.end));
+    }
+    return true;
+  };
   const policiesComplete = Boolean(data.offerPreparedAt) && policyItems.every(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
     return Boolean(data.policies[key] && policyDetailsComplete(key) && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
@@ -791,23 +812,27 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return Boolean(data.policies[key] && policyDetailsComplete(key) && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   }).length;
   const openPolicy = (key: string) => {
-    setActivePolicyKey((current) => current === key ? null : key);
-    setData((current) => current.policyAcknowledgements[key] ? current : {
-      ...current,
-      policyAcknowledgements: {
-        ...current.policyAcknowledgements,
-        [key]: {
-          viewedAt: "",
-          printedName: [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
-          employeeTitle: current.offeredPosition || "Security Officer",
-          signatureDate: new Date().toISOString().slice(0, 10),
-          signatureImage: "",
-          accepted: false,
-          notes: "",
-          documentFields: {},
+    const closing = activePolicyKey === key;
+    setActivePolicyKey(closing ? null : key);
+    setData((current) => {
+      if (closing) return current;
+      const existing = current.policyAcknowledgements[key];
+      const reusable = [...Object.values(current.policyAcknowledgements)].reverse().find((item) => Boolean(item.signatureImage));
+      const identity = {
+        printedName: existing?.printedName || reusable?.printedName || [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
+        employeeTitle: existing?.employeeTitle || reusable?.employeeTitle || current.offeredPosition || "Security Officer",
+        signatureDate: existing?.signatureDate || reusable?.signatureDate || new Date().toISOString().slice(0, 10),
+        signatureImage: existing?.signatureImage || reusable?.signatureImage || current.signatureImage || "",
+      };
+      return {
+        ...current,
+        policyAcknowledgements: {
+          ...current.policyAcknowledgements,
+          [key]: existing ? { ...existing, ...identity } : { viewedAt: "", ...identity, accepted: false, notes: "", documentFields: {} },
         },
-      },
+      };
     });
+    if (!closing) requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(`policy-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" })));
   };
   const updatePolicyAcknowledgement = (key: string, changes: Partial<PolicyAcknowledgement>) => {
     setPolicyPreview((current) => {
@@ -832,6 +857,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     });
     setData((current) => ({ ...current, [field]: value, policies: { ...current.policies, trackTik: false } }));
   };
+  const updateScheduleDocument = (field: "startDate" | "scheduledPost" | "availabilitySchedule", value: string | OnboardingData["availabilitySchedule"]) => {
+    setPolicyPreview((current) => {
+      if (current?.key !== "schedule") return current;
+      if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
+      return null;
+    });
+    setData((current) => ({ ...current, [field]: value, policies: { ...current.policies, schedule: false } }));
+  };
   const savePolicyAcknowledgement = async (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
     if (!acknowledgement?.viewedAt) {
@@ -843,7 +876,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       return;
     }
     if (!policyDetailsComplete(key)) {
-      toast.error("Add the TrackTik username and employee number, then confirm the password was set");
+      toast.error(key === "trackTik" ? "Add the TrackTik username and employee number, then confirm the password was set" : key === "uniform" ? "Check the uniform items received or returned, or confirm that no items were issued" : "Add the complete post address, start date, and at least one scheduled shift");
       return;
     }
     if (policyPreview?.key !== key) {
@@ -1260,6 +1293,17 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                                   <PropertyDocumentFields acknowledgement={acknowledgement} data={data} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
                                 )}
                                 {key === "trackTik" && <TrackTikDocumentFields data={data} onChange={updateTrackTik} />}
+                                {key === "uniform" && (
+                                  <UniformDocumentFields acknowledgement={acknowledgement} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
+                                )}
+                                {key === "schedule" && (
+                                  <ScheduleDocumentFields
+                                    acknowledgement={acknowledgement}
+                                    data={data}
+                                    onFieldChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })}
+                                    onDataChange={updateScheduleDocument}
+                                  />
+                                )}
                                 <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
                                   <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
                                   <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
@@ -1431,6 +1475,73 @@ function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onCh
         <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(value) => onChange("trackTikPasswordSet", Boolean(value))} />
         <span className="text-sm"><strong className="block">My TrackTik password has been set *</strong>The PDF will show “Set privately” instead of exposing the password.</span>
       </label>
+    </section>
+  );
+}
+
+function UniformDocumentFields({ acknowledgement, onChange }: { acknowledgement: PolicyAcknowledgement; onChange: (field: string, value: string) => void }) {
+  const fields = acknowledgement.documentFields || {};
+  const toggle = (field: string, checked: boolean) => onChange(field, checked ? "true" : "");
+  return (
+    <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Uniform checklist</p>
+        <h4 className="mt-1 text-lg font-semibold">Check the same boxes that appear on the PDF</h4>
+        <p className="mt-1 text-sm text-muted-foreground">Mark every item received or returned. Your selections are written into the official checklist.</p>
+      </div>
+      <label className="flex items-center gap-3 rounded-xl border bg-background p-4">
+        <Checkbox checked={fields.uniformNone === "true"} onCheckedChange={(value) => toggle("uniformNone", Boolean(value))} />
+        <span className="text-sm font-medium">No uniform items were issued</span>
+      </label>
+      <div className="overflow-hidden rounded-xl border bg-background">
+        <div className="grid grid-cols-[1fr_92px_92px] gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold"><span>Item</span><span>Received</span><span>Returned</span></div>
+        {uniformChecklistRows.map((label, index) => (
+          <div key={label} className="grid grid-cols-[1fr_92px_92px] items-center gap-2 border-b px-3 py-3 last:border-b-0">
+            <span className="text-sm">{label}</span>
+            <Checkbox aria-label={`${label} received`} checked={fields[`uniformReceived:${index}`] === "true"} onCheckedChange={(value) => toggle(`uniformReceived:${index}`, Boolean(value))} />
+            <Checkbox aria-label={`${label} returned`} checked={fields[`uniformReturned:${index}`] === "true"} onCheckedChange={(value) => toggle(`uniformReturned:${index}`, Boolean(value))} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ScheduleDocumentFields({ acknowledgement, data, onFieldChange, onDataChange }: {
+  acknowledgement: PolicyAcknowledgement;
+  data: OnboardingData;
+  onFieldChange: (field: string, value: string) => void;
+  onDataChange: (field: "startDate" | "scheduledPost" | "availabilitySchedule", value: string | OnboardingData["availabilitySchedule"]) => void;
+}) {
+  const fields = acknowledgement.documentFields || {};
+  return (
+    <section className="space-y-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Initial work schedule</p>
+        <h4 className="mt-1 text-lg font-semibold">Complete the assignment details shown on the PDF</h4>
+        <p className="mt-1 text-sm text-muted-foreground">These details populate the post address, weekly schedule, and start date on the official schedule.</p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Post or worksite name" value={data.scheduledPost} onChange={(value) => onDataChange("scheduledPost", value)} required />
+        <Field label="Start date" type="date" value={data.startDate} onChange={(value) => onDataChange("startDate", value)} required />
+        <div className="sm:col-span-2"><Field label="Post street address" value={fields.schedulePostAddress || ""} onChange={(value) => onFieldChange("schedulePostAddress", value)} required /></div>
+        <Field label="Post city" value={fields.schedulePostCity || ""} onChange={(value) => onFieldChange("schedulePostCity", value)} />
+        <Field label="Post state" value={fields.schedulePostState || ""} onChange={(value) => onFieldChange("schedulePostState", value)} />
+        <Field label="Post ZIP code" value={fields.schedulePostZip || ""} onChange={(value) => onFieldChange("schedulePostZip", value)} />
+      </div>
+      <div className="space-y-3">
+        <p className="font-semibold">Scheduled shifts</p>
+        {scheduleDays.map((day) => {
+          const hours = data.availabilitySchedule[day] || {};
+          return (
+            <div key={day} className="grid items-end gap-3 rounded-xl border bg-background p-3 sm:grid-cols-[130px_1fr_1fr]">
+              <span className="pb-2 text-sm font-medium capitalize">{day}</span>
+              <Field label="From" type="time" value={hours.start || ""} onChange={(value) => onDataChange("availabilitySchedule", { ...data.availabilitySchedule, [day]: { ...hours, start: value } })} />
+              <Field label="To" type="time" value={hours.end || ""} onChange={(value) => onDataChange("availabilitySchedule", { ...data.availabilitySchedule, [day]: { ...hours, end: value } })} />
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }
