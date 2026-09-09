@@ -91,6 +91,42 @@ export const offerRequiredFields: Array<keyof EmploymentOfferTerms> = [
   "otherContingencies", "specialTerms", "representativeName", "representativeTitle",
 ];
 
+export const employmentOfferFieldLabels: Partial<Record<keyof EmploymentOfferTerms, string>> = {
+  positionTitle: "Position",
+  duties: "Duties and responsibilities",
+  employmentType: "Employment type",
+  classification: "Overtime classification",
+  hourlyRate: "Hourly rate",
+  overtimeTerms: "Overtime terms",
+  payFrequency: "Pay frequency",
+  regularPayday: "Regular payday",
+  shiftDifferential: "Shift differential",
+  bonusCompensation: "Bonus",
+  additionalCompensation: "Additional compensation",
+  worksiteName: "Worksite name",
+  worksiteAddress: "Street address",
+  worksiteCity: "City",
+  worksiteState: "State",
+  worksiteZip: "ZIP code",
+  supervisorName: "Supervisor",
+  expectedSchedule: "Expected schedule",
+  expectedWeeklyHours: "Expected weekly hours",
+  hoursType: "Guaranteed or variable hours",
+  benefitsEligibility: "Benefits eligibility",
+  benefitsEffectiveDate: "Benefits effective date",
+  benefitsSummary: "Benefits",
+  ptoSummary: "PTO",
+  holidaySummary: "Paid holidays",
+  policyReferences: "Applicable policies",
+  startDate: "Start date",
+  acceptanceDeadline: "Acceptance deadline",
+  otherContingencies: "Other contingencies",
+  atWillAcknowledged: "At-will employment notice",
+  specialTerms: "Special terms",
+  representativeName: "Hiring representative",
+  representativeTitle: "Representative title",
+};
+
 export const validateEmploymentOffer = (terms: EmploymentOfferTerms) => {
   const missing = offerRequiredFields.filter((key) => !String(terms[key] ?? "").trim());
   if (terms.benefitsEligibility === "eligible" && !terms.benefitsEffectiveDate) missing.push("benefitsEffectiveDate");
@@ -98,6 +134,10 @@ export const validateEmploymentOffer = (terms: EmploymentOfferTerms) => {
   const hours = Number(terms.expectedWeeklyHours);
   return {
     missing,
+    invalidRate: !Number.isFinite(rate) || rate <= 0,
+    invalidHours: !Number.isFinite(hours) || hours <= 0 || hours > 168,
+    missingAtWillAcknowledgment: !terms.atWillAcknowledged,
+    expiredDeadline: Boolean(terms.acceptanceDeadline) && terms.acceptanceDeadline < new Date().toISOString().slice(0, 10),
     valid: missing.length === 0 && Number.isFinite(rate) && rate > 0 && Number.isFinite(hours) && hours > 0 && hours <= 168 && terms.atWillAcknowledged && terms.acceptanceDeadline >= new Date().toISOString().slice(0, 10),
   };
 };

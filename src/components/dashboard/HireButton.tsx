@@ -8,10 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Briefcase, FileCheck2 } from "lucide-react";
+import { AlertCircle, Briefcase, FileCheck2 } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SignaturePad } from "./SignaturePad";
-import { emptyEmploymentOffer, validateEmploymentOffer, type EmploymentOfferTerms } from "@/lib/employmentOffer";
+import { emptyEmploymentOffer, employmentOfferFieldLabels, validateEmploymentOffer, type EmploymentOfferTerms } from "@/lib/employmentOffer";
 
 interface HireButtonProps { officerId: string; officerName: string; companyId: string; hiringApplicationId?: string | null; jobApplicationId?: string | null; jobTitle?: string; onChanged?: () => void; }
 
@@ -23,8 +23,31 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
   const [companySignature, setCompanySignature] = useState("");
   const [authorized, setAuthorized] = useState(false);
   const [previousOffer, setPreviousOffer] = useState<any>(null);
+  const [invalidFields, setInvalidFields] = useState<Array<keyof EmploymentOfferTerms>>([]);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
-  const update = <K extends keyof EmploymentOfferTerms>(key: K, value: EmploymentOfferTerms[K]) => setTerms((current) => ({ ...current, [key]: value }));
+  const update = <K extends keyof EmploymentOfferTerms>(key: K, value: EmploymentOfferTerms[K]) => {
+    setTerms((current) => ({ ...current, [key]: value }));
+    setInvalidFields((current) => current.filter((field) => field !== key));
+  };
+
+  const elementId = (key: keyof EmploymentOfferTerms) => ({
+    benefitsEffectiveDate: "benefits-effective",
+    startDate: "offer-start",
+    acceptanceDeadline: "offer-deadline",
+    atWillAcknowledged: "offer-at-will",
+  } as Partial<Record<keyof EmploymentOfferTerms, string>>)[key] || `offer-${key}`;
+
+  const showFieldError = (fields: Array<keyof EmploymentOfferTerms>, message?: string) => {
+    const uniqueFields = [...new Set(fields)];
+    setInvalidFields(uniqueFields);
+    const labels = uniqueFields.map((key) => employmentOfferFieldLabels[key] || key);
+    toast.error(message || `Complete: ${labels.join(", ")}`, { duration: 8000 });
+    requestAnimationFrame(() => {
+      const element = document.getElementById(elementId(uniqueFields[0]));
+      element?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => element?.focus(), 450);
+    });
+  };
 
   const prepareDialog = async (nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -38,13 +61,19 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
       const base = previous?.terms ? { ...emptyEmploymentOffer(jobTitle), ...previous.terms } : emptyEmploymentOffer(jobTitle);
       setPreviousOffer(previous || null);
       setTerms({ ...base, positionTitle: base.positionTitle || jobTitle || "Security Officer", worksiteName: base.worksiteName || company?.company_name || "", worksiteAddress: base.worksiteAddress || company?.company_address || "", worksiteCity: base.worksiteCity || company?.company_city || "", worksiteState: base.worksiteState || company?.company_state || "Texas", worksiteZip: base.worksiteZip || company?.company_zip || "", representativeName: base.representativeName || company?.contact_person_name || "", representativeTitle: base.representativeTitle || company?.contact_person_title || "Authorized Hiring Representative" });
-      setAuthorized(false); setCompanySignature(""); setIdempotencyKey(crypto.randomUUID());
+      setAuthorized(false); setCompanySignature(""); setInvalidFields([]); setIdempotencyKey(crypto.randomUUID());
     } finally { setInitializing(false); }
   };
 
   const sendOffer = async () => {
     const validation = validateEmploymentOffer(terms);
-    if (!validation.valid || !authorized || !companySignature) { toast.error(validation.missing.length ? "Complete every required offer field" : !companySignature ? "Add the hiring representative's signature" : "Authorize the offer before sending"); return; }
+    if (validation.missing.length) { showFieldError(validation.missing); return; }
+    if (validation.invalidRate) { showFieldError(["hourlyRate"], "Enter an hourly rate greater than $0"); return; }
+    if (validation.invalidHours) { showFieldError(["expectedWeeklyHours"], "Enter expected weekly hours between 1 and 168"); return; }
+    if (validation.expiredDeadline) { showFieldError(["acceptanceDeadline"], "Choose an acceptance deadline that has not passed"); return; }
+    if (validation.missingAtWillAcknowledgment) { showFieldError(["atWillAcknowledged"], "Check the at-will employment notice before sending"); return; }
+    if (!companySignature) { toast.error("Add the hiring representative's signature"); return; }
+    if (!authorized) { toast.error("Authorize the offer before sending"); return; }
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("manage-employment-offer", { body: { action: "send", company_id: companyId, officer_id: officerId, hiring_application_id: hiringApplicationId, job_application_id: jobApplicationId, terms, company_signature: companySignature, idempotency_key: idempotencyKey } });
@@ -60,8 +89,8 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     else { toast.success("Offer withdrawn"); setPreviousOffer({ ...previousOffer, status: "withdrawn" }); onChanged?.(); }
   };
 
-  const field = (label: string, key: keyof EmploymentOfferTerms, placeholder = "", type = "text") => <div className="space-y-2"><Label htmlFor={`offer-${key}`}>{label} *</Label><Input id={`offer-${key}`} type={type} value={String(terms[key] ?? "")} onChange={(e) => update(key as any, e.target.value as any)} placeholder={placeholder} /></div>;
-  const area = (label: string, key: keyof EmploymentOfferTerms, placeholder = "") => <div className="space-y-2"><Label htmlFor={`offer-${key}`}>{label} *</Label><Textarea id={`offer-${key}`} value={String(terms[key] ?? "")} onChange={(e) => update(key as any, e.target.value as any)} placeholder={placeholder} /></div>;
+  const field = (label: string, key: keyof EmploymentOfferTerms, placeholder = "", type = "text") => <div className="space-y-2"><Label className={invalidFields.includes(key) ? "text-destructive" : ""} htmlFor={`offer-${key}`}>{label} *</Label><Input aria-invalid={invalidFields.includes(key)} className={invalidFields.includes(key) ? "border-destructive ring-destructive/20" : ""} id={`offer-${key}`} type={type} value={String(terms[key] ?? "")} onChange={(e) => update(key as any, e.target.value as any)} placeholder={placeholder} /></div>;
+  const area = (label: string, key: keyof EmploymentOfferTerms, placeholder = "") => <div className="space-y-2"><Label className={invalidFields.includes(key) ? "text-destructive" : ""} htmlFor={`offer-${key}`}>{label} *</Label><Textarea aria-invalid={invalidFields.includes(key)} className={invalidFields.includes(key) ? "border-destructive ring-destructive/20" : ""} id={`offer-${key}`} value={String(terms[key] ?? "")} onChange={(e) => update(key as any, e.target.value as any)} placeholder={placeholder} /></div>;
 
   return <Dialog open={open} onOpenChange={prepareDialog}>
     <DialogTrigger asChild><Button className="w-full sm:w-auto"><Briefcase className="mr-2 h-4 w-4" />Send Offer</Button></DialogTrigger>
@@ -71,8 +100,9 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Role and classification</h3><div className="grid gap-4 sm:grid-cols-2">{field("Position", "positionTitle", "Security Officer")}<Choice label="Employment type" value={terms.employmentType} onChange={(v) => update("employmentType", v as any)} options={[["full_time","Full-time"],["part_time","Part-time"],["temporary","Temporary"],["seasonal","Seasonal"]]} /><Choice label="Overtime classification" value={terms.classification} onChange={(v) => update("classification", v as any)} options={[["nonexempt","Nonexempt — overtime eligible"],["exempt","Exempt"]]} /></div>{area("Duties and responsibilities", "duties", "Describe the role's primary duties")}</section>
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Pay and compensation</h3><div className="grid gap-4 sm:grid-cols-2">{field("Hourly rate ($)", "hourlyRate", "18.00", "number")}<Choice label="Pay frequency" value={terms.payFrequency} onChange={(v) => update("payFrequency", v as any)} options={[["biweekly","Every two weeks"],["semimonthly","Twice per month"]]} />{field("Regular payday", "regularPayday", "Every other Friday")}{field("Shift differential", "shiftDifferential", "None")}{field("Bonus", "bonusCompensation", "None")}{field("Additional compensation", "additionalCompensation", "None")}</div>{area("Overtime terms", "overtimeTerms")}</section>
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Worksite and schedule</h3><div className="grid gap-4 sm:grid-cols-2">{field("Worksite name", "worksiteName")}{field("Street address", "worksiteAddress")}{field("City", "worksiteCity")}{field("State", "worksiteState")}{field("ZIP code", "worksiteZip")}{field("Supervisor", "supervisorName")}{field("Expected weekly hours", "expectedWeeklyHours", "40", "number")}<Choice label="Hours" value={terms.hoursType} onChange={(v) => update("hoursType", v as any)} options={[["guaranteed","Guaranteed"],["variable","Variable / not guaranteed"]]} /></div>{area("Expected schedule", "expectedSchedule", "Days, start/end times, and shift expectations")}</section>
-        <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Benefits and policies</h3><div className="grid gap-4 sm:grid-cols-2"><Choice label="Benefits eligibility" value={terms.benefitsEligibility} onChange={(v) => update("benefitsEligibility", v as any)} options={[["eligible","Eligible"],["not_eligible","Not eligible"]]} />{terms.benefitsEligibility === "eligible" && <DatePicker id="benefits-effective" label="Benefits effective date *" value={terms.benefitsEffectiveDate} onChange={(v) => update("benefitsEffectiveDate", v)} />}{field("Benefits", "benefitsSummary", "Not eligible")}{field("PTO", "ptoSummary", "None")}{field("Paid holidays", "holidaySummary", "None")}{field("Applicable policies", "policyReferences")}</div></section>
-        <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Dates and contingencies</h3><div className="grid gap-4 sm:grid-cols-2"><DatePicker id="offer-start" label="Start date *" value={terms.startDate} onChange={(v) => update("startDate", v)} /><DatePicker id="offer-deadline" label="Acceptance deadline *" value={terms.acceptanceDeadline} onChange={(v) => update("acceptanceDeadline", v)} /></div><div className="grid gap-2 sm:grid-cols-2">{[["backgroundCheckRequired","Background check"],["drugTestRequired","Drug test"],["licenseVerificationRequired","License verification"],["workAuthorizationRequired","Work authorization verification"]].map(([key,label]) => <label key={key} className="flex items-center gap-2 rounded-xl border p-3 text-sm"><Checkbox checked={Boolean(terms[key as keyof EmploymentOfferTerms])} onCheckedChange={(v) => update(key as any, Boolean(v))} />{label}</label>)}</div>{area("Other contingencies", "otherContingencies", "None")}{area("Special terms", "specialTerms", "None")}<label className="flex items-start gap-3 rounded-xl border bg-muted/30 p-4"><Checkbox checked={terms.atWillAcknowledged} onCheckedChange={(v) => update("atWillAcknowledged", Boolean(v))} /><span className="text-sm"><strong className="block">At-will employment notice *</strong>Employment may be ended by either party at any time, with or without cause or advance notice, subject to applicable law.</span></label></section>
+        <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Benefits and policies</h3><div className="grid gap-4 sm:grid-cols-2"><Choice label="Benefits eligibility" value={terms.benefitsEligibility} onChange={(v) => update("benefitsEligibility", v as any)} options={[["eligible","Eligible"],["not_eligible","Not eligible"]]} />{terms.benefitsEligibility === "eligible" && <DatePicker className={invalidFields.includes("benefitsEffectiveDate") ? "text-destructive [&_button]:border-destructive" : ""} id="benefits-effective" label="Benefits effective date *" value={terms.benefitsEffectiveDate} onChange={(v) => update("benefitsEffectiveDate", v)} />}{field("Benefits", "benefitsSummary", "Not eligible")}{field("PTO", "ptoSummary", "None")}{field("Paid holidays", "holidaySummary", "None")}{field("Applicable policies", "policyReferences")}</div></section>
+        <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Dates and contingencies</h3><div className="grid gap-4 sm:grid-cols-2"><DatePicker className={invalidFields.includes("startDate") ? "text-destructive [&_button]:border-destructive" : ""} id="offer-start" label="Start date *" value={terms.startDate} onChange={(v) => update("startDate", v)} /><DatePicker className={invalidFields.includes("acceptanceDeadline") ? "text-destructive [&_button]:border-destructive" : ""} id="offer-deadline" label="Acceptance deadline *" value={terms.acceptanceDeadline} onChange={(v) => update("acceptanceDeadline", v)} /></div><div className="grid gap-2 sm:grid-cols-2">{[["backgroundCheckRequired","Background check"],["drugTestRequired","Drug test"],["licenseVerificationRequired","License verification"],["workAuthorizationRequired","Work authorization verification"]].map(([key,label]) => <label key={key} className="flex items-center gap-2 rounded-xl border p-3 text-sm"><Checkbox checked={Boolean(terms[key as keyof EmploymentOfferTerms])} onCheckedChange={(v) => update(key as any, Boolean(v))} />{label}</label>)}</div>{area("Other contingencies", "otherContingencies", "None")}{area("Special terms", "specialTerms", "None")}<label id="offer-at-will" className={`flex items-start gap-3 rounded-xl border bg-muted/30 p-4 ${invalidFields.includes("atWillAcknowledged") ? "border-destructive bg-destructive/5" : ""}`}><Checkbox checked={terms.atWillAcknowledged} onCheckedChange={(v) => update("atWillAcknowledged", Boolean(v))} /><span className="text-sm"><strong className="block">At-will employment notice *</strong>Employment may be ended by either party at any time, with or without cause or advance notice, subject to applicable law.</span></label></section>
+        {invalidFields.length > 0 && <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="block">Finish these fields before sending:</strong><div className="mt-2 flex flex-wrap gap-2">{invalidFields.map((key) => <button className="rounded-full border border-destructive/30 bg-background px-3 py-1 hover:bg-destructive/10" key={key} onClick={() => document.getElementById(elementId(key))?.scrollIntoView({ behavior: "smooth", block: "center" })} type="button">{employmentOfferFieldLabels[key] || key}</button>)}</div></div></div></div>}
         <section className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-4"><h3 className="flex items-center gap-2 font-semibold"><FileCheck2 className="h-5 w-5 text-primary" />Company authorization</h3><div className="grid gap-4 sm:grid-cols-2">{field("Hiring representative", "representativeName")}{field("Representative title", "representativeTitle")}</div><SignaturePad value={companySignature} suggestedName={terms.representativeName} onChange={setCompanySignature} /><label className="flex items-start gap-3 rounded-xl border bg-background p-4"><Checkbox checked={authorized} onCheckedChange={(v) => setAuthorized(Boolean(v))} /><span className="text-sm"><strong className="block">I am authorized to make this offer *</strong>I confirm the terms are complete and accurate and adopt the signature above on behalf of the company.</span></label></section>
       </div>}
       <DialogFooter><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={sendOffer} disabled={loading || initializing || ["accepted","legacy_accepted"].includes(previousOffer?.status)}>{loading ? "Generating and archiving…" : ["accepted","legacy_accepted"].includes(previousOffer?.status) ? "Offer already accepted" : previousOffer ? "Sign and send revised offer" : "Sign and send offer"}</Button></DialogFooter>
