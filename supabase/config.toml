@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.send-profile-reminder]
 verify_jwt = true
+
+[functions.archive-application-evidence]
+verify_jwt = true
