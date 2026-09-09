@@ -16,6 +16,8 @@ interface ChatDialogProps {
   officerId: string;
   officerName: string;
   currentUserType: "company" | "officer";
+  jobApplicationId?: string | null;
+  jobTitle?: string | null;
 }
 
 export function ChatDialog({
@@ -26,6 +28,8 @@ export function ChatDialog({
   officerId,
   officerName,
   currentUserType,
+  jobApplicationId = null,
+  jobTitle = null,
 }: ChatDialogProps) {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -44,19 +48,47 @@ export function ChatDialog({
   }, [messages]);
 
   const loadMessages = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("messages")
       .select("*")
       .eq("company_id", companyId)
       .eq("officer_id", officerId)
       .order("created_at", { ascending: true });
 
+    query = jobApplicationId
+      ? query.eq("job_application_id", jobApplicationId)
+      : query.is("job_application_id", null);
+
+    const { data, error } = await query;
+
     if (error) {
       console.error("Error loading messages:", error);
       return;
     }
 
-    setMessages(data || []);
+    const loadedMessages = data || [];
+    setMessages(loadedMessages);
+
+    const unreadIds = loadedMessages
+      .filter((message) => message.sender_type !== currentUserType && !message.is_read)
+      .map((message) => message.id);
+
+    if (unreadIds.length > 0) {
+      const { error: readError } = await supabase
+        .from("messages")
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .in("id", unreadIds);
+
+      if (readError) {
+        console.error("Error marking messages as read:", readError);
+      } else {
+        setMessages((current) => current.map((message) =>
+          unreadIds.includes(message.id)
+            ? { ...message, is_read: true, read_at: new Date().toISOString() }
+            : message
+        ));
+      }
+    }
   };
 
   const subscribeToMessages = () => {
@@ -68,10 +100,16 @@ export function ChatDialog({
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `company_id=eq.${companyId},officer_id=eq.${officerId}`,
+          filter: `company_id=eq.${companyId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          const next = payload.new as any;
+          if (
+            next.officer_id === officerId &&
+            (next.job_application_id || null) === jobApplicationId
+          ) {
+            setMessages((prev) => prev.some((message) => message.id === next.id) ? prev : [...prev, next]);
+          }
         }
       )
       .subscribe();
@@ -133,6 +171,7 @@ export function ChatDialog({
       const { error } = await supabase.from("messages").insert({
         company_id: companyId,
         officer_id: officerId,
+        job_application_id: jobApplicationId,
         sender_type: currentUserType,
         message: newMessage.trim(),
       });
@@ -155,6 +194,9 @@ export function ChatDialog({
           <DialogTitle>
             Chat with {currentUserType === "company" ? officerName : companyName}
           </DialogTitle>
+          {jobTitle && (
+            <p className="text-sm text-muted-foreground">Regarding: {jobTitle}</p>
+          )}
         </DialogHeader>
 
         <ScrollArea className="flex-1 pr-4">

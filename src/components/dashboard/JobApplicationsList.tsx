@@ -186,7 +186,9 @@ export default function JobApplicationsList({ companyId }: JobApplicationsListPr
                         onClick={() => {
                           setSelectedOfficer({
                             id: application.officer_profiles?.id,
-                            name: application.officer_profiles?.profiles?.full_name
+                            name: application.officer_profiles?.profiles?.full_name,
+                            jobApplicationId: application.id,
+                            jobTitle: group.jobPosting?.title,
                           });
                           setChatOpen(true);
                         }}
@@ -212,6 +214,8 @@ export default function JobApplicationsList({ companyId }: JobApplicationsListPr
           officerId={selectedOfficer.id}
           officerName={selectedOfficer.name}
           currentUserType="company"
+          jobApplicationId={selectedOfficer.jobApplicationId}
+          jobTitle={selectedOfficer.jobTitle}
         />
       )}
     </div>

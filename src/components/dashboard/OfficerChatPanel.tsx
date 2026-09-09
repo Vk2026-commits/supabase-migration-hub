@@ -27,26 +27,31 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
 
   const loadConversations = async () => {
     try {
-      const { data: messages, error } = await supabase
+      const { data: messages, error } = await (supabase as any)
         .from("messages")
         .select(`
           *,
-          company_profiles!inner(id, company_name, logo_url)
+          company_profiles!inner(id, company_name, logo_url),
+          job_applications(job_postings(title))
         `)
         .eq("officer_id", officerId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      // Group by company and get latest message for each
+      // Keep each application conversation distinct from general chat.
       const companyMap = new Map();
-      messages?.forEach((msg) => {
+      messages?.forEach((msg: any) => {
         const companyId = msg.company_profiles.id;
-        if (!companyMap.has(companyId)) {
-          companyMap.set(companyId, {
+        const conversationKey = `${companyId}:${msg.job_application_id || "general"}`;
+        if (!companyMap.has(conversationKey)) {
+          companyMap.set(conversationKey, {
+            conversationKey,
             companyId,
             companyName: msg.company_profiles.company_name,
             logoUrl: msg.company_profiles.logo_url,
+            jobApplicationId: msg.job_application_id,
+            jobTitle: msg.job_applications?.job_postings?.title || null,
             latestMessage: msg.message,
             latestMessageTime: msg.created_at,
             isRead: msg.is_read,
@@ -69,7 +74,7 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "messages",
           filter: `officer_id=eq.${officerId}`,
@@ -136,7 +141,7 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
               <div className="space-y-2 max-h-[150px] overflow-y-auto">
                 {conversations.map((conv) => (
                   <Card 
-                    key={conv.companyId} 
+                    key={conv.conversationKey}
                     className="cursor-pointer hover:bg-accent/50 transition-colors"
                     onClick={() => handleOpenChat(conv)}
                   >
@@ -149,6 +154,11 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
                               <Badge variant="default" className="text-xs">New</Badge>
                             )}
                           </div>
+                          {conv.jobTitle && (
+                            <p className="text-xs font-medium text-primary truncate">
+                              Regarding: {conv.jobTitle}
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground truncate">
                             {conv.latestMessage}
                           </p>
@@ -178,6 +188,8 @@ export function OfficerChatPanel({ officerId, officerName }: OfficerChatPanelPro
           officerId={officerId}
           officerName={officerName}
           currentUserType="officer"
+          jobApplicationId={selectedChat.jobApplicationId}
+          jobTitle={selectedChat.jobTitle}
         />
       )}
     </>

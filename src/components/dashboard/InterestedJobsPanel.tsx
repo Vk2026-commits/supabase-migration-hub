@@ -88,8 +88,11 @@ export function InterestedJobsPanel({ officerId, officerName }: InterestedJobsPa
     }
   };
 
-  const handleContactEmployer = (job: any) => {
-    setSelectedJob(job);
+  const handleContactEmployer = (application: any) => {
+    setSelectedJob({
+      ...application.job_postings,
+      jobApplicationId: application.id,
+    });
     setChatOpen(true);
   };
 
@@ -172,7 +175,7 @@ export function InterestedJobsPanel({ officerId, officerName }: InterestedJobsPa
                       <Button 
                         size="sm" 
                         className="w-full mt-2"
-                        onClick={() => handleContactEmployer(application.job_postings)}
+                        onClick={() => handleContactEmployer(application)}
                       >
                         <MessageCircle className="h-3 w-3 mr-1" />
                         Contact Employer
@@ -195,6 +198,8 @@ export function InterestedJobsPanel({ officerId, officerName }: InterestedJobsPa
           officerId={officerId}
           officerName={officerName}
           currentUserType="officer"
+          jobApplicationId={selectedJob.jobApplicationId}
+          jobTitle={selectedJob.title}
         />
       )}
     </>

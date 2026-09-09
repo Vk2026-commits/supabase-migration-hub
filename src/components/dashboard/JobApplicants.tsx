@@ -151,7 +151,9 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       onClick={() => {
                         setSelectedOfficer({
                           id: app.officer.id,
-                          name: app.officerName
+                          name: app.officerName,
+                          jobApplicationId: app.id,
+                          jobTitle: app.job_posting?.title,
                         });
                         setChatOpen(true);
                       }}
@@ -198,6 +200,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           officerId={selectedOfficer.id}
           officerName={selectedOfficer.name}
           currentUserType="company"
+          jobApplicationId={selectedOfficer.jobApplicationId}
+          jobTitle={selectedOfficer.jobTitle}
         />
       )}
       <ApplicantReviewDialog open={Boolean(reviewApplication)} onOpenChange={(open) => !open && setReviewApplication(null)} application={reviewApplication} />
