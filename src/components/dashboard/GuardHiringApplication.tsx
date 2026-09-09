@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Cloud, Copy, Download, ExternalLink, FileCheck2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Copy, Download, ExternalLink, FileCheck2, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -99,6 +99,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [editingSubmitted, setEditingSubmitted] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
   const pendingSaveCount = useRef(0);
@@ -331,7 +332,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       await syncShared();
       const selectedJob = jobs.find(j => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
-      const snapshot = { ...form, jobPostingId: selectedJob.id, availability: shared, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id) } as any;
+      const snapshot = { ...form, jobPostingId: selectedJob.id, availability: shared, photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
       const base: any = { officer_id: activeOfficerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, status: "submitted", current_step: 9, submitted_at: new Date().toISOString(), signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
       const result = masterId ? await (supabase as any).from("guard_hiring_applications").update({ ...base, application_type: "master", job_application_id: null }).eq("id", masterId).select("id").single() : await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "master", job_application_id: null }).select("id").single();
       if (result.error) throw result.error; setMasterId(result.data.id); setMasterStatus("submitted");
@@ -349,12 +350,56 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
       const { error: copyError } = await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "employer_copy", source_application_id: result.data.id, job_application_id: jobApplication.id, company_name: selectedJob.companyName, position: selectedJob.position, application_data: employerSnapshot });
       if (copyError && copyError.code !== "23505") throw copyError;
-      toast.success("Onboarding application submitted"); onChanged?.(); await generateGuardApplicationPDF(form);
+      setEditingSubmitted(false);
+      toast.success("Hiring application submitted");
+      onChanged?.();
+      await generateGuardApplicationPDF({ ...form, availability: shared, photosComplete, certificationComplete });
     } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
     finally { setSubmitting(false); }
   };
 
   const progress = Math.round(((currentStep + 1) / 10) * 100);
+  const pdfApplication: GuardApplicationData = { ...form, availability: shared, photosComplete, certificationComplete };
+  const editForAnotherCompany = () => {
+    setEditingSubmitted(true);
+    setAcknowledged(false);
+    setCurrentStep(0);
+    window.localStorage.setItem(`guard-application-step:${userId}`, "1");
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("applicationStep", "1");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  if (loaded && masterStatus === "submitted" && !editingSubmitted) {
+    return (
+      <section className="mx-auto w-full max-w-4xl rounded-2xl border border-green-200 bg-green-50/70 p-5 shadow-sm sm:p-8">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
+              <CheckCircle2 className="h-7 w-7" />
+            </span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[.16em] text-green-700">Application complete</p>
+              <h2 className="mt-1 text-xl font-bold text-foreground sm:text-2xl">Your hiring application is submitted</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your application for {form.position || "Security Officer"} with {form.companyName || "the selected company"} is saved. The submitted company copy remains unchanged.
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800">
+            <Check className="h-4 w-4" /> Submitted
+          </span>
+        </div>
+        <div className="mt-6 flex flex-col gap-3 border-t border-green-200 pt-5 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(pdfApplication)}>
+            <Download className="mr-2 h-4 w-4" />Download completed PDF
+          </Button>
+          <Button type="button" onClick={editForAnotherCompany}>Edit or apply to another company</Button>
+        </div>
+      </section>
+    );
+  }
+
   return <form id="guard-application-top" onSubmit={submit} className="mx-auto w-full max-w-6xl scroll-mt-4 pb-24 lg:pb-8">
     <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background"><div className="flex items-center gap-3 px-5 py-5 sm:px-8"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-7 w-7" /></div><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">We Find Guards</p><h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1><p className="mt-1 text-sm text-muted-foreground">Your application saves automatically. You can leave and continue later.</p>{saveError && <p className="mt-2 text-sm font-semibold text-destructive">Draft not saved. Please check your connection and try again.</p>}</div><span className={`hidden items-center gap-1 text-xs sm:flex ${saveError ? "text-destructive" : "text-muted-foreground"}`}><Cloud className="h-4 w-4" />{saveError ? "Save failed" : saving ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Autosave on"}</span></div><div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div></div>
     <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]"><aside className="hidden lg:block"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => <button key={s[0]} type="button" onClick={() => go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : stepComplete(i) ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{stepComplete(i) ? <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} /> : i + 1}</span><span className="min-w-0"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block truncate text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{s[1]}</span></span></button>)}</nav></aside>
@@ -369,7 +414,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         {currentStep === 7 && <OfficerPhotos userId={userId} embedded onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
         {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={updateCertifications} />}
         {currentStep === 9 && <div className="space-y-8"><section><h3 className="mb-2 text-lg font-semibold">Official government forms</h3><p className="mb-4 text-sm text-muted-foreground">Open the official fillable PDF, complete it, then download or print it.</p><div className="grid gap-4 md:grid-cols-3"><GovernmentForm title="Form I-9" href="https://www.uscis.gov/sites/default/files/document/forms/i-9.pdf" /><GovernmentForm title="Form W-4" href="https://www.irs.gov/pub/irs-pdf/fw4.pdf" /><GovernmentForm title="Form W-9" href="https://www.irs.gov/pub/irs-pdf/fw9.pdf" /></div></section><section className="space-y-5 border-t pt-7"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Printed full legal name" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5"><SignaturePad value={form.signatureImage} suggestedName={form.signature || form.applicantName} onChange={value => update("signatureImage", value)} /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Required onboarding check</p><p>{photosComplete ? "✓" : "○"} Headshot and full-body photo &nbsp; {availabilityComplete ? "✓" : "○"} Availability &nbsp; {certificationComplete ? "✓" : "○"} Certification front</p></div></section></div>}
-      </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={form} /></main></div>
+      </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={pdfApplication} /></main></div>
     <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"><Button type="button" variant="outline" size="lg" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="h-5 w-5" /></Button>{currentStep < 9 ? <Button type="button" size="lg" className="flex-1" onClick={next}>Continue<ArrowRight className="ml-2 h-5 w-5" /></Button> : <Button type="submit" size="lg" className="flex-1" disabled={submitting || !complete}><FileCheck2 className="mr-2 h-5 w-5" />{submitting ? "Submitting…" : "Submit application"}</Button>}</div>
   </form>;
 }
