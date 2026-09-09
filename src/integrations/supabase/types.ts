@@ -263,6 +263,52 @@ export type Database = {
           },
         ]
       }
+      employment_offers: {
+        Row: {
+          id: string
+          company_id: string
+          officer_id: string
+          hiring_application_id: string | null
+          job_application_id: string | null
+          job_posting_id: string | null
+          hire_id: string | null
+          supersedes_offer_id: string | null
+          version: number
+          status: string
+          terms: Json
+          employer_signature_name: string
+          employer_signature_title: string
+          employer_signed_at: string
+          offer_document_path: string | null
+          offer_document_sha256: string | null
+          accepted_document_path: string | null
+          accepted_document_sha256: string | null
+          prepared_at: string
+          sent_at: string | null
+          viewed_at: string | null
+          accepted_at: string | null
+          declined_at: string | null
+          expired_at: string | null
+          withdrawn_at: string | null
+          officer_printed_name: string | null
+          decline_reason: string | null
+          legacy_acceptance_unverified: boolean
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string; company_id: string; officer_id: string; hiring_application_id?: string | null; job_application_id?: string | null; job_posting_id?: string | null; hire_id?: string | null; supersedes_offer_id?: string | null; version: number; status?: string; terms?: Json; employer_signature_name: string; employer_signature_title: string; employer_signed_at?: string; offer_document_path?: string | null; offer_document_sha256?: string | null; accepted_document_path?: string | null; accepted_document_sha256?: string | null; prepared_at?: string; sent_at?: string | null; viewed_at?: string | null; accepted_at?: string | null; declined_at?: string | null; expired_at?: string | null; withdrawn_at?: string | null; officer_printed_name?: string | null; decline_reason?: string | null; legacy_acceptance_unverified?: boolean; created_by?: string; created_at?: string; updated_at?: string
+        }
+        Update: {
+          id?: string; company_id?: string; officer_id?: string; hiring_application_id?: string | null; job_application_id?: string | null; job_posting_id?: string | null; hire_id?: string | null; supersedes_offer_id?: string | null; version?: number; status?: string; terms?: Json; employer_signature_name?: string; employer_signature_title?: string; employer_signed_at?: string; offer_document_path?: string | null; offer_document_sha256?: string | null; accepted_document_path?: string | null; accepted_document_sha256?: string | null; prepared_at?: string; sent_at?: string | null; viewed_at?: string | null; accepted_at?: string | null; declined_at?: string | null; expired_at?: string | null; withdrawn_at?: string | null; officer_printed_name?: string | null; decline_reason?: string | null; legacy_acceptance_unverified?: boolean; created_by?: string; created_at?: string; updated_at?: string
+        }
+        Relationships: [
+          { foreignKeyName: "employment_offers_company_id_fkey"; columns: ["company_id"]; isOneToOne: false; referencedRelation: "company_profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "employment_offers_officer_id_fkey"; columns: ["officer_id"]; isOneToOne: false; referencedRelation: "officer_profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "employment_offers_hiring_application_id_fkey"; columns: ["hiring_application_id"]; isOneToOne: false; referencedRelation: "guard_hiring_applications"; referencedColumns: ["id"] },
+        ]
+      }
       employment_updates: {
         Row: {
           created_at: string | null
@@ -384,6 +430,7 @@ export type Database = {
           metadata: Json
           mime_type: string
           officer_id: string
+          offer_id: string | null
           original_filename: string
           sha256: string
           source_bucket: string
@@ -405,6 +452,7 @@ export type Database = {
           metadata?: Json
           mime_type: string
           officer_id: string
+          offer_id?: string | null
           original_filename: string
           sha256: string
           source_bucket: string
@@ -426,6 +474,7 @@ export type Database = {
           metadata?: Json
           mime_type?: string
           officer_id?: string
+          offer_id?: string | null
           original_filename?: string
           sha256?: string
           source_bucket?: string
@@ -546,6 +595,7 @@ export type Database = {
           id: string
           hiring_application_id: string | null
           officer_id: string
+          offer_id: string | null
           offer_prepared_at: string | null
           offer_terms: Json
           position_title: string | null
@@ -560,6 +610,7 @@ export type Database = {
           id?: string
           hiring_application_id?: string | null
           officer_id: string
+          offer_id?: string | null
           offer_prepared_at?: string | null
           offer_terms?: Json
           position_title?: string | null
@@ -574,6 +625,7 @@ export type Database = {
           id?: string
           hiring_application_id?: string | null
           officer_id?: string
+          offer_id?: string | null
           offer_prepared_at?: string | null
           offer_terms?: Json
           position_title?: string | null
@@ -593,6 +645,13 @@ export type Database = {
             columns: ["hiring_application_id"]
             isOneToOne: false
             referencedRelation: "guard_hiring_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hires_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: true
+            referencedRelation: "employment_offers"
             referencedColumns: ["id"]
           },
           {
@@ -1541,6 +1600,14 @@ export type Database = {
         Args: { _application_id: string }
         Returns: boolean
       }
+      decline_employment_offer: {
+        Args: { _offer_id: string; _reason?: string | null }
+        Returns: undefined
+      }
+      finalize_employment_offer_acceptance: {
+        Args: { _offer_id: string; _accepted_document_path: string; _accepted_document_sha256: string; _officer_printed_name: string; _acting_user_id: string }
+        Returns: string
+      }
       check_overdue_payments: { Args: never; Returns: undefined }
       company_can_view_officer_contact: {
         Args: { _company_user_id: string; _officer_id: string }
@@ -1582,6 +1649,10 @@ export type Database = {
           _table_name: string
         }
         Returns: undefined
+      }
+      mark_employment_offer_viewed: {
+        Args: { _offer_id: string }
+        Returns: Database["public"]["Tables"]["employment_offers"]["Row"]
       }
     }
     Enums: {

@@ -38,3 +38,6 @@ verify_jwt = true
 
 [functions.archive-application-evidence]
 verify_jwt = true
+
+[functions.manage-employment-offer]
+verify_jwt = true

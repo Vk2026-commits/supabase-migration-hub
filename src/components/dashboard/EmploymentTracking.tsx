@@ -5,10 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2 } from "lucide-react";
@@ -26,10 +23,6 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [updateType, setUpdateType] = useState("performance_review");
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState(5);
-  const [offerHire, setOfferHire] = useState<any>(null);
-  const [offerSaving, setOfferSaving] = useState(false);
-  const [offerAuthorized, setOfferAuthorized] = useState(false);
-  const [offer, setOffer] = useState({ startDate: "", offeredPosition: "", hourlyRate: "", supervisorName: "", scheduledPost: "", scheduledShift: "", acceptanceDeadline: "", representativeName: "", representativeTitle: "Authorized Hiring Representative" });
   const [complianceHire, setComplianceHire] = useState<any>(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number; submittedAt: string; sha256: string; url: string }>>([]);
@@ -62,59 +55,11 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
     }
   };
 
-  const openOffer = (hire: any) => {
-    const saved = hire.offer_terms || {};
-    setOfferHire(hire);
-    setOffer({
-      startDate: saved.startDate || hire.hire_date || "",
-      offeredPosition: saved.offeredPosition || hire.position_title || "Security Officer",
-      hourlyRate: saved.hourlyRate || "",
-      supervisorName: saved.supervisorName || "",
-      scheduledPost: saved.scheduledPost || "",
-      scheduledShift: saved.scheduledShift || "",
-      acceptanceDeadline: saved.acceptanceDeadline || "",
-      representativeName: saved.representativeName || (/kairos security/i.test(hire.company_profiles?.company_name || "") ? "Erika Garces" : hire.company_profiles?.contact_person_name) || "",
-      representativeTitle: saved.representativeTitle || hire.company_profiles?.contact_person_title || "Authorized Hiring Representative",
-    });
-    setOfferAuthorized(false);
-  };
-
-  const saveOffer = async () => {
-    if (!offer.startDate || !offer.offeredPosition.trim() || !offer.hourlyRate || !offer.supervisorName.trim() || !offer.scheduledPost.trim() || !offer.scheduledShift.trim() || !offer.acceptanceDeadline || !offer.representativeName.trim() || !offerAuthorized) {
-      toast.error("Complete and authorize all offer details");
-      return;
-    }
-    setOfferSaving(true);
-    let linkedApplicationId = offerHire.hiring_application_id || null;
-    if (!linkedApplicationId) {
-      const { data: applications, error: applicationError } = await (supabase as any)
-        .from("guard_hiring_applications")
-        .select("id,submitted_at,job_application:job_applications!inner(job_posting:job_postings!inner(company_id))")
-        .eq("officer_id", offerHire.officer_id)
-        .eq("application_type", "employer_copy")
-        .eq("status", "submitted")
-        .eq("job_application.job_posting.company_id", companyId)
-        .order("submitted_at", { ascending: false })
-        .limit(1);
-      if (applicationError || !applications?.[0]?.id) {
-        setOfferSaving(false);
-        toast.error("This officer must submit an application to your company before you can send the offer");
-        return;
-      }
-      linkedApplicationId = applications[0].id;
-    }
-    const { error } = await supabase.from("hires").update({
-      hire_date: offer.startDate,
-      hiring_application_id: linkedApplicationId,
-      position_title: offer.offeredPosition.trim(),
-      offer_prepared_at: new Date().toISOString(),
-      offer_terms: { ...offer, employerSignatureName: offer.representativeName.trim() },
-    }).eq("id", offerHire.id);
-    setOfferSaving(false);
-    if (error) { toast.error("Offer could not be saved"); return; }
-    toast.success("Offer prepared and sent to employee onboarding");
-    setOfferHire(null);
-    loadHires();
+  const openAcceptedOffer = async (hire: any) => {
+    if (!hire.offer_id) { toast.info("This is a legacy hire without captured offer evidence"); return; }
+    const { data, error } = await supabase.functions.invoke("manage-employment-offer", { body: { action: "preview", offer_id: hire.offer_id } });
+    if (error || data?.error || !data?.url) { toast.error(data?.error || "The accepted offer could not be opened"); return; }
+    window.open(data.url, "_blank", "noopener,noreferrer");
   };
 
   const openComplianceFile = async (hire: any) => {
@@ -313,9 +258,9 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                     {hire.status}
                   </Badge>
                 </div>
-                <div className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 ${hire.offer_prepared_at ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
-                  <div><strong className="block text-sm">{hire.offer_prepared_at ? "Offer prepared" : "Offer needs preparation"}</strong><span className="text-xs text-muted-foreground">{hire.offer_prepared_at ? "The officer can review and accept it in onboarding." : "Complete the hiring terms before the officer accepts."}</span></div>
-                  <Button size="sm" variant={hire.offer_prepared_at ? "outline" : "default"} onClick={() => openOffer(hire)}>{hire.offer_prepared_at ? "Review offer" : "Prepare offer"}</Button>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-3">
+                  <div><strong className="block text-sm">Offer accepted</strong><span className="text-xs text-muted-foreground">Accepted terms are immutable and retained with this hire.</span></div>
+                  <Button size="sm" variant="outline" onClick={() => openAcceptedOffer(hire)}>{hire.offer_id ? "View signed offer" : "Legacy record"}</Button>
                 </div>
                 <Button type="button" variant="outline" className="w-full" onClick={() => openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Open audit-ready officer file</Button>
 
@@ -405,24 +350,6 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
           </div>
         </CardContent>
       </Card>
-      <Dialog open={Boolean(offerHire)} onOpenChange={(open) => !open && setOfferHire(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader><DialogTitle>Prepare employee offer</DialogTitle><DialogDescription>These company-approved terms will be locked in the officer's onboarding packet. The officer will review, accept, and sign.</DialogDescription></DialogHeader>
-          <div className="grid gap-4 py-4 sm:grid-cols-2">
-            <DatePicker id="offer-start-date" label="Start Date" value={offer.startDate} onChange={(value) => setOffer({ ...offer, startDate: value })} />
-            <div className="space-y-2"><Label>Position</Label><Input value={offer.offeredPosition} onChange={(e) => setOffer({ ...offer, offeredPosition: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Hourly Rate</Label><Input type="number" min="0" step="0.01" value={offer.hourlyRate} onChange={(e) => setOffer({ ...offer, hourlyRate: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Supervisor</Label><Input value={offer.supervisorName} onChange={(e) => setOffer({ ...offer, supervisorName: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Post or Assignment</Label><Input value={offer.scheduledPost} onChange={(e) => setOffer({ ...offer, scheduledPost: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Expected Shift</Label><Input value={offer.scheduledShift} onChange={(e) => setOffer({ ...offer, scheduledShift: e.target.value })} /></div>
-            <DatePicker id="offer-acceptance-date" label="Accept By" value={offer.acceptanceDeadline} onChange={(value) => setOffer({ ...offer, acceptanceDeadline: value })} />
-            <div className="space-y-2"><Label>Hiring Representative</Label><Input value={offer.representativeName} onChange={(e) => setOffer({ ...offer, representativeName: e.target.value })} /></div>
-            <div className="space-y-2 sm:col-span-2"><Label>Representative Title</Label><Input value={offer.representativeTitle} onChange={(e) => setOffer({ ...offer, representativeTitle: e.target.value })} /></div>
-            <label className="sm:col-span-2 flex cursor-pointer items-start gap-3 rounded-xl border bg-muted/30 p-4"><Checkbox checked={offerAuthorized} onCheckedChange={(value) => setOfferAuthorized(Boolean(value))} /><span className="text-sm"><strong className="block">Approve and sign for the company</strong>I confirm these terms and authorize my typed name as the company representative signature.</span></label>
-          </div>
-          <DialogFooter><Button variant="outline" onClick={() => setOfferHire(null)}>Cancel</Button><Button onClick={saveOffer} disabled={offerSaving}>{offerSaving ? "Saving..." : "Save & Send Prepared Offer"}</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
       <Dialog open={Boolean(complianceHire)} onOpenChange={(open) => !open && setComplianceHire(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} compliance file</DialogTitle><DialogDescription>Immutable signed documents are retained by version. Opening this file is recorded in the security audit log.</DialogDescription></DialogHeader>

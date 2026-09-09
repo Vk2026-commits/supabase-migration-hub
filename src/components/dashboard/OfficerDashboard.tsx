@@ -24,6 +24,7 @@ import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { GuardHiringApplication } from "./GuardHiringApplication";
 import { OfficerEmployeeOnboarding } from "./OfficerEmployeeOnboarding";
+import { OfficerOfferReview } from "./OfficerOfferReview";
 import { useSearchParams } from "@/lib/router-compat";
 
 interface OfficerDashboardProps {
@@ -82,6 +83,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [employeeOnboardingSubmitted, setEmployeeOnboardingSubmitted] = useState(false);
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
+  const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
   const choseInitialExperience = useRef(false);
@@ -209,7 +211,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
@@ -218,6 +220,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,acceptance_deadline,company:company_profiles(company_name)").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
         
         setCertCount(certsResult.count || 0);
@@ -227,7 +230,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
         setApplicationSubmitted(applicationResult.data?.status === "submitted");
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
-        setOnboardingOfferAvailable(Boolean(preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id));
+        setPendingEmploymentOffer(pendingOfferResult.data || null);
+        setOnboardingOfferAvailable(Boolean(pendingOfferResult.data?.id || (preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id)));
         setOnboardingOfferLoaded(true);
         const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
         setPhotoCount(photoNames.length);
@@ -417,6 +421,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           completionStatus={completionStatus}
           onboardingAvailable={onboardingOfferAvailable}
           onboardingOfferLoaded={onboardingOfferLoaded}
+          offerNeedsResponse={Boolean(pendingEmploymentOffer)}
         />
         <div className="flex min-w-0 flex-1">
           <div className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
@@ -981,7 +986,11 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               </Card>
             )}
 
-            {activeTab === "employee-onboarding" && (!onboardingOfferLoaded || onboardingOfferAvailable) && (
+            {activeTab === "employee-onboarding" && pendingEmploymentOffer && (
+              <OfficerOfferReview offer={pendingEmploymentOffer} officerName={profile?.full_name || ""} onChanged={loadProfile} />
+            )}
+
+            {activeTab === "employee-onboarding" && !pendingEmploymentOffer && (!onboardingOfferLoaded || onboardingOfferAvailable) && (
               <OfficerEmployeeOnboarding
                 userId={userId}
                 officerId={officerProfile?.id || null}

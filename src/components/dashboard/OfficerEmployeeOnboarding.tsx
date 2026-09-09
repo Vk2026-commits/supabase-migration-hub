@@ -134,7 +134,6 @@ const newBankAccount = (allocationType: "amount" | "entire" = "entire", id = `ba
 const policyItems = [
   ["property", "Company property and equipment", "/forms/07-receipt-company-property.pdf"],
   ["confidentiality", "Confidentiality agreement", "/forms/09-confidentialityagreement.pdf"],
-  ["offer", "Offer letter", "/forms/10-offer-letter-per-hour.pdf"],
   ["trackTik", "TrackTik login and usage", "/forms/11-track-tik-login-info-sheet.pdf"],
   ["temporary", "Temporary employment acknowledgement", "/forms/12-temporary-employeement-acknowldgement.pdf"],
   ["appearance", "Personal appearance standards", "/forms/13-personal-appearance.pdf"],
@@ -431,11 +430,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         ...saved,
         employerName: hire.company_profiles?.company_name || hiring.company_name || snapshot.companyName || "Your hiring company",
         startDate: offer.startDate || hire.hire_date || snapshot.startDate || "",
-        offeredPosition: offer.offeredPosition || hire.position_title || hiring.position || snapshot.position || officerResult.data?.title || "Security Officer",
+        offeredPosition: offer.positionTitle || offer.offeredPosition || hire.position_title || hiring.position || snapshot.position || officerResult.data?.title || "Security Officer",
         hourlyRate: offer.hourlyRate || "",
         supervisorName: offer.supervisorName || "",
-        scheduledPost: offer.scheduledPost || "",
-        scheduledShift: offer.scheduledShift || "",
+        scheduledPost: offer.worksiteName ? `${offer.worksiteName}, ${offer.worksiteAddress || ""}, ${offer.worksiteCity || ""}, ${offer.worksiteState || ""} ${offer.worksiteZip || ""}`.replace(/,\s*,/g, ",").trim() : offer.scheduledPost || "",
+        scheduledShift: offer.expectedSchedule || offer.scheduledShift || "",
         acceptanceDeadline: offer.acceptanceDeadline || "",
         employerRepresentativeName: offer.representativeName || "",
         employerRepresentativeTitle: offer.representativeTitle || "",
@@ -1184,7 +1183,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     {data.offerPreparedAt ? (
                       <div className="md:col-span-2 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
                         <strong className="block">Company-prepared offer</strong>
-                        {data.employerName} approved the position, pay, start date, assignment, and supervisor below. These terms are locked; your step is to review and accept the offer letter.
+                        {data.employerName} approved these terms. You already reviewed and accepted the archived employment offer before onboarding was unlocked.
                       </div>
                     ) : (
                       <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong className="block">Waiting for prepared offer</strong>Your hiring company has not prepared the offer terms yet.</div>
@@ -1228,12 +1227,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                             }} />
                             {viewed && (
                               <div className="space-y-6">
-                                {key === "offer" && data.offerPreparedAt && (
-                                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
-                                    <strong className="block">Prepared and signed by {data.employerRepresentativeName || data.employerName}</strong>
-                                    {data.employerRepresentativeTitle || "Authorized hiring representative"}. Review the company-completed offer above, then accept and sign below.
-                                  </div>
-                                )}
                                 <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Step 2: Complete and sign.</strong> Existing profile information is added automatically, and the preview refreshes inside this same card.</div>
                                 <div className="grid gap-5 md:grid-cols-2">
                                   <Field label="Employee legal name" value={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { printedName: value })} required />

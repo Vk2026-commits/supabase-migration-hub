@@ -171,14 +171,18 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         Application PDF
                       </Button>
                     )}
-                    {app.hiring_application?.[0]?.id && (
+                    {app.hiring_application?.[0]?.id && app.status !== "accepted" && (
                       <HireButton
                         officerId={app.officer.id}
                         officerName={app.officerName}
                         companyId={companyId}
                         hiringApplicationId={app.hiring_application[0].id}
+                        jobApplicationId={app.id}
+                        jobTitle={app.job_posting?.title}
+                        onChanged={loadApplications}
                       />
                     )}
+                    {app.status === "accepted" && <Badge className="bg-green-600">Offer accepted</Badge>}
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" disabled className="mt-3">
