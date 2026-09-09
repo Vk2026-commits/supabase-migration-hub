@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Briefcase, Calendar, Download, Eye, FileText, Image as ImageIcon, Mail, MapPin, Phone, Printer, ShieldCheck, User } from "lucide-react";
+import { Archive, Briefcase, Calendar, Download, Eye, FileText, Image as ImageIcon, Mail, MapPin, Phone, Printer, ShieldCheck, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
+import { createZip } from "@/lib/createZip";
 import { toast } from "sonner";
 
 type ApplicantReviewDialogProps = {
@@ -15,24 +16,36 @@ type ApplicantReviewDialogProps = {
 };
 
 type ReviewData = {
+  applicationId: string | null;
   snapshot: GuardApplicationData | null;
   officer: any;
-  certifications: any[];
-  workHistory: any[];
-  photos: Array<{ name: string; label: string; url: string }>;
-  documentUrls: Record<string, string>;
+  snapshotStatus: string;
+  snapshotKind: "submission" | "legacy" | null;
+  snapshotCompletedAt: string | null;
+  attachments: EvidenceAttachment[];
   onboardingDocuments: Array<{ label: string; url: string; submittedAt: string }>;
 };
 
-const photoLabels: Record<string, string> = {
-  headshot: "Professional headshot",
-  "full-body": "Full-body photo",
-  "action-1": "Action photo 1",
-  "action-2": "Action photo 2",
+type EvidenceAttachment = {
+  id: string;
+  evidence_kind: "photo" | "certification";
+  evidence_role: string;
+  label: string;
+  original_filename: string;
+  mime_type: string;
+  byte_size: number;
+  sha256: string;
+  storage_path: string;
+  archive_kind: "submission" | "legacy";
+  archived_at: string;
+  metadata: Record<string, any>;
+  url: string;
 };
 
 const value = (item: unknown) => typeof item === "string" && item.trim() ? item : "Not provided";
 const pretty = (item: string) => item.replace(/_/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+const safeFilename = (item: string) => item.replace(/[^a-zA-Z0-9._-]/g, "-");
+const formatBytes = (bytes: number) => bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 const formatTime = (item: string) => {
   const [hourText, minute = "00"] = item.split(":");
   const hour = Number(hourText);
@@ -42,8 +55,9 @@ const formatTime = (item: string) => {
 
 export function ApplicantReviewDialog({ open, onOpenChange, application }: ApplicantReviewDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [downloadingAll, setDownloadingAll] = useState(false);
   const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string } | null>(null);
-  const [review, setReview] = useState<ReviewData>({ snapshot: null, officer: null, certifications: [], workHistory: [], photos: [], documentUrls: {}, onboardingDocuments: [] });
+  const [review, setReview] = useState<ReviewData>({ applicationId: null, snapshot: null, officer: null, snapshotStatus: "pending", snapshotKind: null, snapshotCompletedAt: null, attachments: [], onboardingDocuments: [] });
 
   useEffect(() => {
     if (!open || !application?.id || !application?.officer?.id) return;
@@ -52,36 +66,28 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
       setLoading(true);
       try {
         const officerId = application.officer.id;
-        const officerUserId = application.officer.user_id;
-        const [snapshotResult, officerResult, certificationsResult, workResult, photoFilesResult] = await Promise.all([
-          (supabase as any).from("guard_hiring_applications").select("id,application_data,status,submitted_at").eq("job_application_id", application.id).eq("application_type", "employer_copy").maybeSingle(),
+        let [snapshotResult, officerResult] = await Promise.all([
+          (supabase as any).from("guard_hiring_applications").select("id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at").eq("job_application_id", application.id).eq("application_type", "employer_copy").maybeSingle(),
           supabase.from("officer_profiles").select("*").eq("id", officerId).maybeSingle(),
-          supabase.from("certifications").select("*").eq("officer_id", officerId).order("created_at", { ascending: false }),
-          supabase.from("work_history").select("*").eq("officer_id", officerId).order("start_date", { ascending: false }),
-          supabase.storage.from("officer-photos").list(officerUserId, { limit: 100 }),
         ]);
-        const error = snapshotResult.error || officerResult.error || certificationsResult.error || workResult.error || photoFilesResult.error;
+        const error = snapshotResult.error || officerResult.error;
         if (error) throw error;
 
-        const photos = (await Promise.all((photoFilesResult.data || []).map(async (file: any) => {
-          const path = `${officerUserId}/${file.name}`;
-          const signed = await supabase.storage.from("officer-photos").createSignedUrl(path, 3600);
-          if (signed.error || !signed.data?.signedUrl) return null;
-          const key = file.name.split(".")[0];
-          return { name: key, label: photoLabels[key] || pretty(key), url: signed.data.signedUrl };
-        }))).filter(Boolean) as ReviewData["photos"];
-
-        const documentUrls: Record<string, string> = {};
-        for (const certification of certificationsResult.data || []) {
-          for (const side of ["front", "back"] as const) {
-            const path = certification[`document_${side}_url`];
-            if (!path) continue;
-            const cleanPath = path.startsWith("http") ? path.split("certification-documents/").pop() : path;
-            if (!cleanPath) continue;
-            const signed = await supabase.storage.from("certification-documents").createSignedUrl(cleanPath, 3600);
-            if (!signed.error && signed.data?.signedUrl) documentUrls[`${certification.id}-${side}`] = signed.data.signedUrl;
-          }
+        if (snapshotResult.data?.id && snapshotResult.data.evidence_snapshot_status !== "complete" && snapshotResult.data.evidence_snapshot_kind === "legacy") {
+          const legacyResult = await supabase.functions.invoke("archive-application-evidence", { body: { hiring_application_id: snapshotResult.data.id, archive_kind: "legacy" } });
+          if (legacyResult.error) console.warn("Legacy evidence could not be archived", legacyResult.error);
+          const refreshed = await (supabase as any).from("guard_hiring_applications").select("id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at").eq("id", snapshotResult.data.id).single();
+          if (!refreshed.error) snapshotResult = refreshed;
         }
+
+        const evidenceResult = snapshotResult.data?.id
+          ? await (supabase as any).from("application_evidence_files").select("*").eq("hiring_application_id", snapshotResult.data.id).order("evidence_kind").order("evidence_role")
+          : { data: [], error: null };
+        if (evidenceResult.error) throw evidenceResult.error;
+        const attachments = (await Promise.all((evidenceResult.data || []).map(async (item: any) => {
+          const signed = await supabase.storage.from("application-evidence").createSignedUrl(item.storage_path, 3600);
+          return signed.error || !signed.data?.signedUrl ? null : { ...item, metadata: item.metadata || {}, url: signed.data.signedUrl };
+        }))).filter(Boolean) as EvidenceAttachment[];
 
         const onboardingDocuments: ReviewData["onboardingDocuments"] = [];
         if (snapshotResult.data?.id) {
@@ -105,12 +111,13 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
         }
 
         if (active) setReview({
+          applicationId: snapshotResult.data?.id || null,
           snapshot: snapshotResult.data?.application_data || application.hiring_application?.[0]?.application_data || null,
           officer: officerResult.data,
-          certifications: certificationsResult.data || [],
-          workHistory: workResult.data || [],
-          photos,
-          documentUrls,
+          snapshotStatus: snapshotResult.data?.evidence_snapshot_status || "pending",
+          snapshotKind: snapshotResult.data?.evidence_snapshot_kind || null,
+          snapshotCompletedAt: snapshotResult.data?.evidence_snapshot_completed_at || null,
+          attachments,
           onboardingDocuments,
         });
       } catch (error: any) {
@@ -125,7 +132,9 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
 
   const data = review.snapshot;
   const schedule = (data as any)?.availability?.schedule || review.officer?.availability_schedule || {};
-  const workHistory = review.workHistory.length ? review.workHistory : (data?.workHistory || []);
+  const workHistory = data?.workHistory || [];
+  const photos = review.attachments.filter(item => item.evidence_kind === "photo");
+  const certifications = review.attachments.filter(item => item.evidence_kind === "certification");
   const title = application?.officerName || data?.applicantName || "Applicant";
   const applicationReady = Boolean(data);
   const download = (mode: "download" | "print") => {
@@ -134,6 +143,43 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
       return;
     }
     void generateGuardApplicationPDF(data, mode);
+  };
+
+  const logEvidenceAction = (action: string, recordId: string, details: Record<string, unknown>) => {
+    void (supabase as any).rpc("log_sensitive_access", { _action: action, _table_name: "application_evidence_files", _record_id: recordId, _details: details });
+  };
+  const previewEvidence = (attachment: EvidenceAttachment) => {
+    logEvidenceAction("preview", attachment.id, { hiring_application_id: review.applicationId, evidence_kind: attachment.evidence_kind });
+    setPreviewDocument({ label: attachment.label, url: attachment.url });
+  };
+  const downloadAll = async () => {
+    if (!review.attachments.length) return;
+    setDownloadingAll(true);
+    try {
+      const files = await Promise.all(review.attachments.map(async (attachment) => {
+        const response = await fetch(attachment.url);
+        if (!response.ok) throw new Error(`Could not download ${attachment.label}`);
+        const folder = attachment.evidence_kind === "photo" ? "Photos" : "Certifications";
+        return { name: `${folder}/${safeFilename(`${attachment.label}-${attachment.original_filename}`)}`, data: await response.blob() };
+      }));
+      files.push({ name: "attachment-manifest.json", data: new Blob([JSON.stringify(review.attachments.map(({ url, ...attachment }) => attachment), null, 2)], { type: "application/json" }) });
+      const archive = await createZip(files);
+      const url = URL.createObjectURL(archive);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${safeFilename(title)}-application-attachments.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      const snapshotId = review.applicationId || review.attachments[0].id;
+      logEvidenceAction("download_bundle", snapshotId, { attachment_count: review.attachments.length });
+      toast.success("Application attachments downloaded");
+    } catch (error: any) {
+      toast.error(error.message || "Could not download all attachments");
+    } finally {
+      setDownloadingAll(false);
+    }
   };
 
   const contactRows = useMemo(() => [
@@ -154,16 +200,20 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" disabled={!applicationReady} onClick={() => download("print")}><Printer className="mr-2 h-4 w-4" />Print PDF</Button>
             <Button disabled={!applicationReady} onClick={() => download("download")}><Download className="mr-2 h-4 w-4" />Download PDF</Button>
+            <Button variant="outline" disabled={!review.attachments.length || downloadingAll} onClick={downloadAll}><Archive className="mr-2 h-4 w-4" />{downloadingAll ? "Preparing ZIP…" : "Download all attachments"}</Button>
           </div>
         </div>
       </DialogHeader>
 
       <div className="space-y-6 p-5 sm:p-8">
         {loading ? <div className="py-20 text-center text-muted-foreground">Loading the complete application…</div> : <>
+          {review.snapshotKind === "legacy" && review.snapshotStatus === "complete" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Legacy attachment archive</p><p className="mt-1">These are the officer files available when this archive was created{review.snapshotCompletedAt ? ` on ${new Date(review.snapshotCompletedAt).toLocaleString()}` : ""}. They are not represented as the original files from the earlier application date.</p></div>}
+          {review.snapshotStatus === "legacy_unavailable" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">No legacy attachments were available</p><p className="mt-1">This older application has no preserved photo or certification files. Current profile files are intentionally not substituted.</p></div>}
+          {review.snapshotStatus !== "complete" && review.snapshotKind !== "legacy" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Attachment archive is not complete</p><p className="mt-1">The officer must finish preserving the required photos and certification before this submission can be treated as complete.</p></div>}
           <Card className="overflow-hidden border-primary/20 bg-primary/5">
             <CardContent className="grid gap-5 p-5 sm:grid-cols-[140px_1fr] sm:p-6">
               <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border bg-background sm:w-36">
-                {review.photos.find(photo => photo.name === "headshot") ? <img className="h-full w-full object-cover" src={review.photos.find(photo => photo.name === "headshot")!.url} alt={`${title} headshot`} /> : <User className="h-14 w-14 text-muted-foreground" />}
+                {photos.find(photo => photo.evidence_role === "headshot") ? <img className="h-full w-full object-cover" src={photos.find(photo => photo.evidence_role === "headshot")!.url} alt={`${title} headshot`} /> : <User className="h-14 w-14 text-muted-foreground" />}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {contactRows.map(item => <div key={item.label} className="rounded-xl bg-background p-4"><div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><item.icon className="h-4 w-4" />{item.label}</div><p className="break-words font-medium">{value(item.value)}</p></div>)}
@@ -190,7 +240,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </div>
 
           <Section title="Applicant photos" icon={ImageIcon}>
-            {review.photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{review.photos.map(photo => <a key={photo.url} href={photo.url} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-xl border bg-card"><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /><p className="p-3 text-sm font-semibold">{photo.label}</p></a>)}</div> : <Empty text="No applicant photos are available" />}
+            {photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{photos.map(photo => <div key={photo.id} className="overflow-hidden rounded-xl border bg-card"><button type="button" className="group block w-full" onClick={() => previewEvidence(photo)}><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /></button><div className="space-y-2 p-3"><p className="text-sm font-semibold">{photo.label}</p><p className="text-xs text-muted-foreground">{formatBytes(photo.byte_size)}</p><div className="flex gap-2"><Button type="button" size="sm" className="flex-1" onClick={() => previewEvidence(photo)}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={photo.url} download={photo.original_filename} target="_blank" rel="noreferrer" onClick={() => logEvidenceAction("download", photo.id, { hiring_application_id: review.applicationId })}><Download className="mr-2 h-4 w-4" />Download</a></Button></div></div></div>)}</div> : <Empty text="No preserved applicant photos are available" />}
           </Section>
 
           {review.onboardingDocuments.length > 0 && <Section title="Submitted employee documents" icon={FileText}>
@@ -198,12 +248,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </Section>}
 
           <Section title="Licenses and certifications" icon={FileText}>
-            {review.certifications.length ? <div className="grid gap-4 md:grid-cols-2">{review.certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.name || pretty(cert.license_level || "Certification")}</p><p className="text-sm text-muted-foreground">{cert.certification_number || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.certification_type || "certificate")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.issue_date} /><Info label="Expires" content={cert.expiry_date} /></div><div className="space-y-2">{(["front", "back"] as const).map(side => {
-              const documentUrl = review.documentUrls[`${cert.id}-${side}`];
-              if (!documentUrl) return null;
-              const label = `${pretty(side)} document`;
-              return <div key={side} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-2"><span className="pl-1 text-sm font-medium">{label}</span><div className="flex gap-2"><Button type="button" size="sm" onClick={() => setPreviewDocument({ label: `${cert.name || pretty(cert.license_level || "Certification")} — ${label}`, url: documentUrl })}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={documentUrl} download target="_blank" rel="noreferrer" aria-label={`Download ${label}`}><Download className="h-4 w-4" /></a></Button></div></div>;
-            })}</div></div>)}</div> : <Empty text="No licenses or certification documents are available" />}
+            {certifications.length ? <div className="grid gap-4 md:grid-cols-2">{certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.metadata?.name || cert.label}</p><p className="text-sm text-muted-foreground">{cert.metadata?.certificationNumber || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.metadata?.side || "document")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.metadata?.issueDate} /><Info label="Expires" content={cert.metadata?.expiryDate} /></div><p className="mb-3 break-all text-xs text-muted-foreground">SHA-256: {cert.sha256}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => previewEvidence(cert)}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={cert.url} download={cert.original_filename} target="_blank" rel="noreferrer" onClick={() => logEvidenceAction("download", cert.id, { hiring_application_id: review.applicationId })}><Download className="mr-2 h-4 w-4" />Download</a></Button></div></div>)}</div> : <Empty text="No preserved license or certification documents are available" />}
           </Section>
 
           <Section title="Work history" icon={Briefcase}>

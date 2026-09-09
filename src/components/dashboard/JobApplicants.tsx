@@ -43,7 +43,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         job_posting:job_postings(title),
         officer:officer_profiles(id, user_id),
         profile:officer_profiles(user_id),
-        hiring_application:guard_hiring_applications(application_data,status,submitted_at)
+        hiring_application:guard_hiring_applications(id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
       `)
       .eq("job_posting.company_id", companyId)
       .order("created_at", { ascending: false });

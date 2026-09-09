@@ -369,6 +369,174 @@ export type Database = {
           },
         ]
       }
+      application_evidence_files: {
+        Row: {
+          archive_kind: string
+          archived_at: string
+          byte_size: number
+          created_by: string | null
+          evidence_kind: string
+          evidence_role: string
+          hiring_application_id: string
+          id: string
+          is_required: boolean
+          label: string
+          metadata: Json
+          mime_type: string
+          officer_id: string
+          original_filename: string
+          sha256: string
+          source_bucket: string
+          source_path: string
+          source_record_id: string | null
+          storage_path: string
+        }
+        Insert: {
+          archive_kind: string
+          archived_at?: string
+          byte_size: number
+          created_by?: string | null
+          evidence_kind: string
+          evidence_role: string
+          hiring_application_id: string
+          id?: string
+          is_required?: boolean
+          label: string
+          metadata?: Json
+          mime_type: string
+          officer_id: string
+          original_filename: string
+          sha256: string
+          source_bucket: string
+          source_path: string
+          source_record_id?: string | null
+          storage_path: string
+        }
+        Update: {
+          archive_kind?: string
+          archived_at?: string
+          byte_size?: number
+          created_by?: string | null
+          evidence_kind?: string
+          evidence_role?: string
+          hiring_application_id?: string
+          id?: string
+          is_required?: boolean
+          label?: string
+          metadata?: Json
+          mime_type?: string
+          officer_id?: string
+          original_filename?: string
+          sha256?: string
+          source_bucket?: string
+          source_path?: string
+          source_record_id?: string | null
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_evidence_files_hiring_application_id_fkey"
+            columns: ["hiring_application_id"]
+            isOneToOne: false
+            referencedRelation: "guard_hiring_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_evidence_files_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "officer_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guard_hiring_applications: {
+        Row: {
+          applicant_email: string
+          applicant_name: string
+          application_data: Json
+          application_type: string
+          company_name: string
+          created_at: string
+          current_step: number
+          evidence_snapshot_completed_at: string | null
+          evidence_snapshot_kind: string | null
+          evidence_snapshot_status: string
+          id: string
+          job_application_id: string | null
+          officer_id: string
+          position: string
+          signature_date: string | null
+          signature_name: string | null
+          source_application_id: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applicant_email: string
+          applicant_name: string
+          application_data?: Json
+          application_type?: string
+          company_name: string
+          created_at?: string
+          current_step?: number
+          evidence_snapshot_completed_at?: string | null
+          evidence_snapshot_kind?: string | null
+          evidence_snapshot_status?: string
+          id?: string
+          job_application_id?: string | null
+          officer_id: string
+          position?: string
+          signature_date?: string | null
+          signature_name?: string | null
+          source_application_id?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applicant_email?: string
+          applicant_name?: string
+          application_data?: Json
+          application_type?: string
+          company_name?: string
+          created_at?: string
+          current_step?: number
+          evidence_snapshot_completed_at?: string | null
+          evidence_snapshot_kind?: string | null
+          evidence_snapshot_status?: string
+          id?: string
+          job_application_id?: string | null
+          officer_id?: string
+          position?: string
+          signature_date?: string | null
+          signature_name?: string | null
+          source_application_id?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guard_hiring_applications_job_application_id_fkey"
+            columns: ["job_application_id"]
+            isOneToOne: false
+            referencedRelation: "job_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guard_hiring_applications_officer_id_fkey"
+            columns: ["officer_id"]
+            isOneToOne: false
+            referencedRelation: "officer_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hires: {
         Row: {
           company_id: string
@@ -1296,6 +1464,10 @@ export type Database = {
       }
     }
     Functions: {
+      can_view_application_evidence: {
+        Args: { _application_id: string }
+        Returns: boolean
+      }
       check_overdue_payments: { Args: never; Returns: undefined }
       company_can_view_officer_contact: {
         Args: { _company_user_id: string; _officer_id: string }

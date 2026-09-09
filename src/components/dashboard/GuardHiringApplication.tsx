@@ -333,9 +333,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const selectedJob = jobs.find(j => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
       const snapshot = { ...form, jobPostingId: selectedJob.id, availability: shared, photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
-      const base: any = { officer_id: activeOfficerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, status: "submitted", current_step: 9, submitted_at: new Date().toISOString(), signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
-      const result = masterId ? await (supabase as any).from("guard_hiring_applications").update({ ...base, application_type: "master", job_application_id: null }).eq("id", masterId).select("id").single() : await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "master", job_application_id: null }).select("id").single();
-      if (result.error) throw result.error; setMasterId(result.data.id); setMasterStatus("submitted");
+      const submittedAt = new Date().toISOString();
+      const base: any = { officer_id: activeOfficerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, current_step: 9, signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
+      const result = masterId ? await (supabase as any).from("guard_hiring_applications").update({ ...base, application_type: "master", job_application_id: null }).eq("id", masterId).select("id").single() : await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "master", job_application_id: null, status: "draft" }).select("id").single();
+      if (result.error) throw result.error; setMasterId(result.data.id);
       let jobApplication: { id: string } | null = null;
       const existingJobApplication = await supabase.from("job_applications").select("id").eq("job_posting_id", selectedJob.id).eq("officer_id", activeOfficerId).maybeSingle();
       if (existingJobApplication.error) throw existingJobApplication.error;
@@ -348,12 +349,43 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       }
       if (!jobApplication) throw new Error("Could not link this application to the selected company");
       const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
-      const { error: copyError } = await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "employer_copy", source_application_id: result.data.id, job_application_id: jobApplication.id, company_name: selectedJob.companyName, position: selectedJob.position, application_data: employerSnapshot });
-      if (copyError && copyError.code !== "23505") throw copyError;
+      const employerInsert = await (supabase as any).from("guard_hiring_applications").insert({
+        ...base,
+        application_type: "employer_copy",
+        source_application_id: result.data.id,
+        job_application_id: jobApplication.id,
+        company_name: selectedJob.companyName,
+        position: selectedJob.position,
+        application_data: employerSnapshot,
+        status: "draft",
+        submitted_at: null,
+        evidence_snapshot_status: "pending",
+        evidence_snapshot_kind: "submission",
+      }).select("id,evidence_snapshot_status").single();
+      if (employerInsert.error && employerInsert.error.code !== "23505") throw employerInsert.error;
+      const employerApplicationResult = employerInsert.data
+        ? { data: employerInsert.data, error: null }
+        : await (supabase as any).from("guard_hiring_applications").select("id,evidence_snapshot_status").eq("job_application_id", jobApplication.id).eq("application_type", "employer_copy").single();
+      if (employerApplicationResult.error || !employerApplicationResult.data) throw employerApplicationResult.error || new Error("Could not create the employer application copy");
+      if (employerInsert.error?.code === "23505" && employerApplicationResult.data.evidence_snapshot_status === "complete") {
+        throw new Error("You already submitted an application for this position. Its locked company copy remains unchanged.");
+      }
+
+      const archiveResult = await supabase.functions.invoke("archive-application-evidence", {
+        body: { hiring_application_id: employerApplicationResult.data.id, archive_kind: "submission" },
+      });
+      if (archiveResult.error) throw new Error(archiveResult.data?.error || archiveResult.error.message || "Could not preserve the submitted photos and certificates");
+      if (archiveResult.data?.snapshot_status !== "complete") throw new Error(archiveResult.data?.error || "The required application attachments could not be preserved");
+      const attachmentManifest = archiveResult.data.manifest || [];
+      const completedSnapshot = { ...employerSnapshot, attachmentManifest };
+      setForm(current => ({ ...current, attachmentManifest }));
+      const masterCompletion = await (supabase as any).from("guard_hiring_applications").update({ status: "submitted", submitted_at: submittedAt, application_data: { ...snapshot, attachmentManifest } }).eq("id", result.data.id);
+      if (masterCompletion.error) throw masterCompletion.error;
+      setMasterStatus("submitted");
       setEditingSubmitted(false);
       toast.success("Hiring application submitted");
       onChanged?.();
-      await generateGuardApplicationPDF({ ...form, availability: shared, photosComplete, certificationComplete });
+      await generateGuardApplicationPDF(completedSnapshot);
     } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
     finally { setSubmitting(false); }
   };

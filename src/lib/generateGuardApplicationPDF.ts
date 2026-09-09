@@ -33,9 +33,23 @@ export type GuardApplicationData = {
   certificationRequirementsComplete?: boolean;
   canonicalPhotoTypes?: string[];
   canonicalCertificationIds?: string[];
+  attachmentManifest?: ApplicationAttachmentManifestItem[];
   signature: string;
   signatureImage: string;
   signatureDate: string;
+};
+
+export type ApplicationAttachmentManifestItem = {
+  id?: string;
+  kind: "photo" | "certification";
+  role: string;
+  label: string;
+  filename: string;
+  mimeType?: string;
+  byteSize?: number;
+  sha256: string;
+  archivedAt: string;
+  archiveKind: "submission" | "legacy";
 };
 
 const display = (value?: string) => value?.trim() || "Not provided";
@@ -210,6 +224,22 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   ensureSpace(34);
   section("Required Supporting Records");
   row("Were the required headshot and full-body photos provided?", photosProvided ? "Yes" : "No", "Was a license or certification front document provided?", certificationProvided ? "Yes" : "No");
+
+  if (data.attachmentManifest?.length) {
+    section("Submitted Attachment Index");
+    field(
+      "How are the supporting files preserved?",
+      data.attachmentManifest[0].archiveKind === "legacy"
+        ? `Legacy attachment archive created ${new Date(data.attachmentManifest[0].archivedAt).toLocaleString()}. These were the officer's available files on the archive date and are not represented as the original submission files.`
+        : `The files below were preserved with this employer application on ${new Date(data.attachmentManifest[0].archivedAt).toLocaleString()}.`,
+    );
+    data.attachmentManifest.forEach((attachment, index) => {
+      field(
+        `${index + 1}. ${attachment.label}`,
+        `${attachment.filename}\nCategory: ${attachment.kind === "photo" ? "Photo" : "License or certification"}\nSHA-256: ${attachment.sha256}`,
+      );
+    });
+  }
 
   ensureSpace(86);
   section("Applicant Certification");
