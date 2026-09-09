@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, Briefcase, Calendar, Download, Eye, FileText, Image as ImageIcon, Mail, MapPin, Phone, Printer, ShieldCheck, User } from "lucide-react";
+import { Archive, Briefcase, Calendar, Download, Eye, FileText, Image as ImageIcon, Loader2, Mail, MapPin, Phone, Printer, ShieldCheck, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,8 +53,17 @@ const formatTime = (item: string) => {
   return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
 };
 
+const embeddedApplication = (application: any) => {
+  const record = Array.isArray(application?.hiring_application)
+    ? application.hiring_application[0]
+    : application?.hiring_application;
+  return record || null;
+};
+
 export function ApplicantReviewDialog({ open, onOpenChange, application }: ApplicantReviewDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string; attachment?: EvidenceAttachment } | null>(null);
@@ -63,16 +72,46 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
   useEffect(() => {
     if (!open || !application?.id || !application?.officer?.id) return;
     let active = true;
+    const embedded = embeddedApplication(application);
+
+    setReview({
+      applicationId: embedded?.id || null,
+      snapshot: embedded?.application_data || null,
+      officer: application.officer || null,
+      snapshotStatus: embedded?.evidence_snapshot_status || "pending",
+      snapshotKind: embedded?.evidence_snapshot_kind || null,
+      snapshotCompletedAt: embedded?.evidence_snapshot_completed_at || null,
+      attachments: [],
+      onboardingDocuments: [],
+    });
+    setLoading(!embedded?.application_data);
+    setAttachmentsLoading(true);
+    setDocumentsLoading(true);
+
     (async () => {
-      setLoading(true);
       try {
         const officerId = application.officer.id;
         let [snapshotResult, officerResult] = await Promise.all([
-          (supabase as any).from("guard_hiring_applications").select("id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at").eq("job_application_id", application.id).eq("application_type", "employer_copy").maybeSingle(),
-          supabase.from("officer_profiles").select("*").eq("id", officerId).maybeSingle(),
+          embedded?.id && embedded?.application_data
+            ? Promise.resolve({ data: embedded, error: null })
+            : (supabase as any).from("guard_hiring_applications").select("id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at").eq("job_application_id", application.id).eq("application_type", "employer_copy").maybeSingle(),
+          supabase.from("officer_profiles").select("phone,availability_schedule,location").eq("id", officerId).maybeSingle(),
         ]);
         const error = snapshotResult.error || officerResult.error;
         if (error) throw error;
+
+        if (active) {
+          setReview(current => ({
+            ...current,
+            applicationId: snapshotResult.data?.id || current.applicationId,
+            snapshot: snapshotResult.data?.application_data || current.snapshot,
+            officer: officerResult.data || current.officer,
+            snapshotStatus: snapshotResult.data?.evidence_snapshot_status || current.snapshotStatus,
+            snapshotKind: snapshotResult.data?.evidence_snapshot_kind || current.snapshotKind,
+            snapshotCompletedAt: snapshotResult.data?.evidence_snapshot_completed_at || current.snapshotCompletedAt,
+          }));
+          setLoading(false);
+        }
 
         if (snapshotResult.data?.id && snapshotResult.data.evidence_snapshot_status !== "complete" && snapshotResult.data.evidence_snapshot_kind === "legacy") {
           const legacyResult = await supabase.functions.invoke("archive-application-evidence", { body: { hiring_application_id: snapshotResult.data.id, archive_kind: "legacy" } });
@@ -81,51 +120,72 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           if (!refreshed.error) snapshotResult = refreshed;
         }
 
-        const evidenceResult = snapshotResult.data?.id
-          ? await (supabase as any).from("application_evidence_files").select("*").eq("hiring_application_id", snapshotResult.data.id).order("evidence_kind").order("evidence_role")
-          : { data: [], error: null };
+        const onboardingPacketPromise = snapshotResult.data?.id
+          ? (supabase as any).from("officer_onboarding_packets").select("id,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle()
+          : Promise.resolve({ data: null, error: null });
+        const [evidenceResult, onboardingResult] = await Promise.all([
+          snapshotResult.data?.id
+            ? (supabase as any).from("application_evidence_files").select("*").eq("hiring_application_id", snapshotResult.data.id).order("evidence_kind").order("evidence_role")
+            : Promise.resolve({ data: [], error: null }),
+          onboardingPacketPromise,
+        ]);
         if (evidenceResult.error) throw evidenceResult.error;
-        const attachments = (await Promise.all((evidenceResult.data || []).map(async (item: any) => {
-          const signed = await supabase.storage.from("application-evidence").createSignedUrl(item.storage_path, 3600);
-          return signed.error || !signed.data?.signedUrl ? null : { ...item, metadata: item.metadata || {}, url: signed.data.signedUrl };
-        }))).filter(Boolean) as EvidenceAttachment[];
+        if (onboardingResult.error) throw onboardingResult.error;
 
-        const onboardingDocuments: ReviewData["onboardingDocuments"] = [];
-        if (snapshotResult.data?.id) {
-          const onboardingResult = await (supabase as any).from("officer_onboarding_packets").select("id,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("hiring_application_id", snapshotResult.data.id).maybeSingle();
-          if (onboardingResult.error) throw onboardingResult.error;
-          const records = onboardingResult.data?.id ? await (supabase as any).from("officer_compliance_documents").select("id,document_label,document_type,version,storage_path,sha256,signed_at,submitted_at").eq("packet_id", onboardingResult.data.id).order("submitted_at", { ascending: false }) : { data: [], error: null };
-          if (records.error) throw records.error;
-          for (const document of records.data || []) {
-            await (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: officerId } });
-            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(document.storage_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: `${document.document_label} (v${document.version})`, url: signed.data.signedUrl, submittedAt: document.submitted_at });
-          }
-          if (!(records.data || []).some((document: any) => document.document_type === "form-i9") && onboardingResult.data?.i9_document_path && onboardingResult.data?.i9_submitted_at) {
-            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.i9_document_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form I-9 (legacy)", url: signed.data.signedUrl, submittedAt: onboardingResult.data.i9_submitted_at });
-          }
-          if (!(records.data || []).some((document: any) => document.document_type === "form-w4") && onboardingResult.data?.w4_document_path && onboardingResult.data?.w4_submitted_at) {
-            const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(onboardingResult.data.w4_document_path, 3600);
-            if (!signed.error && signed.data?.signedUrl) onboardingDocuments.push({ label: "Signed Form W-4 (legacy)", url: signed.data.signedUrl, submittedAt: onboardingResult.data.w4_submitted_at });
-          }
+        const evidenceFiles = evidenceResult.data || [];
+        const evidenceSigned = evidenceFiles.length
+          ? await supabase.storage.from("application-evidence").createSignedUrls(evidenceFiles.map((item: any) => item.storage_path), 3600)
+          : { data: [], error: null };
+        const evidenceUrls = new Map((evidenceSigned.data || []).map((item: any) => [item.path, item.signedUrl]));
+        const attachments = evidenceFiles.map((item: any) => ({
+          ...item,
+          metadata: item.metadata || {},
+          url: evidenceUrls.get(item.storage_path) || "",
+        })).filter((item: EvidenceAttachment) => item.url) as EvidenceAttachment[];
+
+        if (active) {
+          setReview(current => ({
+            ...current,
+            snapshotStatus: snapshotResult.data?.evidence_snapshot_status || current.snapshotStatus,
+            snapshotKind: snapshotResult.data?.evidence_snapshot_kind || current.snapshotKind,
+            snapshotCompletedAt: snapshotResult.data?.evidence_snapshot_completed_at || current.snapshotCompletedAt,
+            attachments,
+          }));
+          setAttachmentsLoading(false);
         }
 
-        if (active) setReview({
-          applicationId: snapshotResult.data?.id || null,
-          snapshot: snapshotResult.data?.application_data || application.hiring_application?.[0]?.application_data || null,
-          officer: officerResult.data,
-          snapshotStatus: snapshotResult.data?.evidence_snapshot_status || "pending",
-          snapshotKind: snapshotResult.data?.evidence_snapshot_kind || null,
-          snapshotCompletedAt: snapshotResult.data?.evidence_snapshot_completed_at || null,
-          attachments,
-          onboardingDocuments,
-        });
+        const onboardingDocuments: ReviewData["onboardingDocuments"] = [];
+        if (snapshotResult.data?.id && onboardingResult.data?.id) {
+          const records = onboardingResult.data?.id ? await (supabase as any).from("officer_compliance_documents").select("id,document_label,document_type,version,storage_path,sha256,signed_at,submitted_at").eq("packet_id", onboardingResult.data.id).order("submitted_at", { ascending: false }) : { data: [], error: null };
+          if (records.error) throw records.error;
+          const documentEntries = (records.data || []).map((document: any) => ({ path: document.storage_path, label: `${document.document_label} (v${document.version})`, submittedAt: document.submitted_at }));
+          for (const document of records.data || []) void (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: officerId } });
+          if (!(records.data || []).some((document: any) => document.document_type === "form-i9") && onboardingResult.data?.i9_document_path && onboardingResult.data?.i9_submitted_at) {
+            documentEntries.push({ path: onboardingResult.data.i9_document_path, label: "Signed Form I-9 (legacy)", submittedAt: onboardingResult.data.i9_submitted_at });
+          }
+          if (!(records.data || []).some((document: any) => document.document_type === "form-w4") && onboardingResult.data?.w4_document_path && onboardingResult.data?.w4_submitted_at) {
+            documentEntries.push({ path: onboardingResult.data.w4_document_path, label: "Signed Form W-4 (legacy)", submittedAt: onboardingResult.data.w4_submitted_at });
+          }
+          const signedDocuments = documentEntries.length
+            ? await supabase.storage.from("onboarding-documents").createSignedUrls(documentEntries.map((document: any) => document.path), 3600)
+            : { data: [], error: null };
+          const documentUrls = new Map((signedDocuments.data || []).map((item: any) => [item.path, item.signedUrl]));
+          documentEntries.forEach((document: any) => {
+            const url = documentUrls.get(document.path);
+            if (url) onboardingDocuments.push({ label: document.label, url, submittedAt: document.submittedAt });
+          });
+        }
+
+        if (active) setReview(current => ({ ...current, onboardingDocuments }));
       } catch (error: any) {
         console.error("Applicant review failed", error);
         toast.error("Could not load the complete applicant record");
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setAttachmentsLoading(false);
+          setDocumentsLoading(false);
+        }
       }
     })();
     return () => { active = false; };
@@ -262,15 +322,15 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
           </div>
 
           <Section title="Applicant photos" icon={ImageIcon}>
-            {photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{photos.map(photo => <div key={photo.id} className="overflow-hidden rounded-xl border bg-card"><button type="button" className="group block w-full" onClick={() => previewEvidence(photo)}><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /></button><div className="space-y-2 p-3"><p className="text-sm font-semibold">{photo.label}</p><p className="text-xs text-muted-foreground">{formatBytes(photo.byte_size)}</p><div className="flex gap-2"><Button type="button" size="sm" className="flex-1" onClick={() => previewEvidence(photo)}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === photo.id} onClick={() => void downloadEvidence(photo)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === photo.id ? "Saving…" : "Download"}</Button></div></div></div>)}</div> : <Empty text="No preserved applicant photos are available" />}
+            {attachmentsLoading ? <LoadingState text="Loading preserved photos…" /> : photos.length ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{photos.map(photo => <div key={photo.id} className="overflow-hidden rounded-xl border bg-card"><button type="button" className="group block w-full" onClick={() => previewEvidence(photo)}><img src={photo.url} alt={photo.label} className="h-52 w-full object-cover transition-transform group-hover:scale-[1.02]" /></button><div className="space-y-2 p-3"><p className="text-sm font-semibold">{photo.label}</p><p className="text-xs text-muted-foreground">{formatBytes(photo.byte_size)}</p><div className="flex gap-2"><Button type="button" size="sm" className="flex-1" onClick={() => previewEvidence(photo)}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === photo.id} onClick={() => void downloadEvidence(photo)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === photo.id ? "Saving…" : "Download"}</Button></div></div></div>)}</div> : <Empty text="No preserved applicant photos are available" />}
           </Section>
 
-          {review.onboardingDocuments.length > 0 && <Section title="Submitted employee documents" icon={FileText}>
-            <div className="grid gap-3 md:grid-cols-2">{review.onboardingDocuments.map(document => <div key={document.label} className="flex flex-col gap-3 rounded-xl border bg-green-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{document.label}</p><p className="text-sm text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</p></div><div className="flex gap-2"><Button type="button" size="sm" onClick={() => setPreviewDocument({ label: document.label, url: document.url })}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={document.url} download target="_blank" rel="noreferrer" aria-label={`Download ${document.label}`}><Download className="h-4 w-4" /></a></Button></div></div>)}</div>
+          {(documentsLoading || review.onboardingDocuments.length > 0) && <Section title="Submitted employee documents" icon={FileText}>
+            {documentsLoading ? <LoadingState text="Loading submitted documents…" /> : <div className="grid gap-3 md:grid-cols-2">{review.onboardingDocuments.map(document => <div key={document.label} className="flex flex-col gap-3 rounded-xl border bg-green-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{document.label}</p><p className="text-sm text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</p></div><div className="flex gap-2"><Button type="button" size="sm" onClick={() => setPreviewDocument({ label: document.label, url: document.url })}><Eye className="mr-2 h-4 w-4" />View</Button><Button asChild type="button" size="sm" variant="outline"><a href={document.url} download target="_blank" rel="noreferrer" aria-label={`Download ${document.label}`}><Download className="h-4 w-4" /></a></Button></div></div>)}</div>}
           </Section>}
 
           <Section title="Licenses and certifications" icon={FileText}>
-            {certifications.length ? <div className="grid gap-4 md:grid-cols-2">{certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.metadata?.name || cert.label}</p><p className="text-sm text-muted-foreground">{cert.metadata?.certificationNumber || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.metadata?.side || "document")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.metadata?.issueDate} /><Info label="Expires" content={cert.metadata?.expiryDate} /></div><p className="mb-3 break-all text-xs text-muted-foreground">SHA-256: {cert.sha256}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => previewEvidence(cert)}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === cert.id} onClick={() => void downloadEvidence(cert)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === cert.id ? "Saving…" : "Download"}</Button></div></div>)}</div> : <Empty text="No preserved license or certification documents are available" />}
+            {attachmentsLoading ? <LoadingState text="Loading preserved certifications…" /> : certifications.length ? <div className="grid gap-4 md:grid-cols-2">{certifications.map(cert => <div key={cert.id} className="rounded-xl border p-4"><div className="mb-3 flex items-start justify-between gap-3"><div><p className="font-semibold">{cert.metadata?.name || cert.label}</p><p className="text-sm text-muted-foreground">{cert.metadata?.certificationNumber || "No license number"}</p></div><Badge variant="secondary">{pretty(cert.metadata?.side || "document")}</Badge></div><div className="mb-3 grid grid-cols-2 gap-3 text-sm"><Info label="Issued" content={cert.metadata?.issueDate} /><Info label="Expires" content={cert.metadata?.expiryDate} /></div><p className="mb-3 break-all text-xs text-muted-foreground">SHA-256: {cert.sha256}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => previewEvidence(cert)}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" disabled={downloadingAttachmentId === cert.id} onClick={() => void downloadEvidence(cert)}><Download className="mr-2 h-4 w-4" />{downloadingAttachmentId === cert.id ? "Saving…" : "Download"}</Button></div></div>)}</div> : <Empty text="No preserved license or certification documents are available" />}
           </Section>
 
           <Section title="Work history" icon={Briefcase}>
@@ -311,4 +371,8 @@ function Info({ label, content, wide = false }: { label: string; content: unknow
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">{text}</div>;
+}
+
+function LoadingState({ text }: { text: string }) {
+  return <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed p-6 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />{text}</div>;
 }
