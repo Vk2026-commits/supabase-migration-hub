@@ -112,20 +112,20 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
         </div>
 
         <CardContent className="space-y-7 p-6 sm:p-8">
-          <OfferSection icon={BriefcaseBusiness} title="The role" description={`This is a ${employmentTypeLabel(terms.employmentType).toLowerCase()} ${terms.positionTitle} position reporting to ${terms.supervisorName}.`}>
+          <OfferSection icon={BriefcaseBusiness} title="The role" description={`A ${employmentTypeLabel(terms.employmentType).toLowerCase()} ${terms.positionTitle} position reporting to ${terms.supervisorName}.`} tone="blue">
             <Detail label="What you will do" value={terms.duties} />
             <Detail label="Schedule" value={`${terms.expectedSchedule}. The company expects approximately ${terms.expectedWeeklyHours} hours each week; hours are ${terms.hoursType === "guaranteed" ? "guaranteed" : "variable and not guaranteed"}.`} />
             <Detail label="Where you will work" value={location} />
           </OfferSection>
 
-          <OfferSection icon={DollarSign} title="Pay and benefits" description={`You will be paid $${Number(terms.hourlyRate).toFixed(2)} per hour, ${payFrequencyLabel(terms.payFrequency).toLowerCase()}, with the regular payday described as ${terms.regularPayday}.`}>
+          <OfferSection icon={DollarSign} title="Pay and benefits" description={`$${Number(terms.hourlyRate).toFixed(2)} per hour, paid ${payFrequencyLabel(terms.payFrequency).toLowerCase()}. Regular payday: ${terms.regularPayday}.`} tone="green">
             <Detail label="Overtime" value={terms.overtimeTerms} />
             {additionalPay.length > 0 && <Detail label="Additional compensation" value={additionalPay.join(" • ")} />}
             <Detail label="Benefits" value={terms.benefitsEligibility === "eligible" ? `${terms.benefitsSummary}${terms.benefitsEffectiveDate ? ` Effective ${readableDate(terms.benefitsEffectiveDate)}.` : ""}` : "This position is not eligible for company benefits."} />
             <Detail label="Time off and holidays" value={`PTO: ${terms.ptoSummary}. Holidays: ${terms.holidaySummary}.`} />
           </OfferSection>
 
-          <OfferSection icon={ShieldCheck} title="Before you start" description={contingencies.length ? "This offer depends on successful completion of the items below." : "The company listed no pre-employment contingencies."}>
+          <OfferSection icon={ShieldCheck} title="Before you start" description={contingencies.length ? "This offer depends on successful completion of the items below." : "The company listed no pre-employment contingencies."} tone="amber">
             {contingencies.length > 0 && <ul className="grid gap-2 sm:grid-cols-2">{contingencies.map((item) => <li key={item} className="flex items-start gap-2 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /><span>{item}</span></li>)}</ul>}
             {meaningful(terms.specialTerms) && <Detail label="Special terms" value={terms.specialTerms} />}
           </OfferSection>
@@ -156,8 +156,13 @@ function Summary({ icon: Icon, label, value }: { icon: LucideIcon; label: string
   return <div className="rounded-xl border bg-background/85 p-4 shadow-sm"><Icon className="mb-3 h-5 w-5 text-primary" /><span className="block text-xs font-medium text-muted-foreground">{label}</span><strong className="mt-1 block text-sm leading-5 text-foreground">{value}</strong></div>;
 }
 
-function OfferSection({ icon: Icon, title, description, children }: { icon: LucideIcon; title: string; description: string; children: ReactNode }) {
-  return <section className="grid gap-4 border-b pb-7 last:border-b-0 last:pb-0 sm:grid-cols-[180px_1fr]"><div><div className="flex items-center gap-2 font-semibold"><Icon className="h-5 w-5 text-primary" />{title}</div><p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p></div><div className="space-y-4">{children}</div></section>;
+function OfferSection({ icon: Icon, title, description, tone, children }: { icon: LucideIcon; title: string; description: string; tone: "blue" | "green" | "amber"; children: ReactNode }) {
+  const colors = {
+    blue: "border-blue-200 bg-blue-50/55 [&_.offer-icon]:bg-blue-600",
+    green: "border-emerald-200 bg-emerald-50/55 [&_.offer-icon]:bg-emerald-600",
+    amber: "border-amber-200 bg-amber-50/55 [&_.offer-icon]:bg-amber-600",
+  }[tone];
+  return <section className={`rounded-2xl border p-5 sm:p-6 ${colors}`}><div className="mb-5 flex items-start gap-4"><div className="offer-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"><Icon className="h-5 w-5" /></div><div><h2 className="text-lg font-bold text-foreground">{title}</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p></div></div><div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">{children}</div></section>;
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
