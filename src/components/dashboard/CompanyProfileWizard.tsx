@@ -101,19 +101,11 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
   };
 
   if (isComplete && !editing) {
-    const address = [
-      formData.company_address,
-      formData.company_address_unit,
-      formData.company_city,
-      formData.company_state,
-      formData.company_zip,
-    ].filter(Boolean).join(", ");
-
     return (
-      <div id="company-profile-top" className="mx-auto w-full max-w-4xl scroll-mt-20">
+      <div id="company-profile-top" className="mx-auto w-full max-w-3xl scroll-mt-20">
         <Card className="overflow-hidden rounded-2xl border-emerald-200 bg-emerald-50/40 shadow-sm">
           <CardContent className="p-0">
-            <div className="flex flex-col gap-6 p-6 sm:p-8">
+            <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
                   <CheckCircle2 className="h-7 w-7" />
@@ -123,27 +115,11 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
                     <h2 className="text-xl font-bold sm:text-2xl">Company profile complete</h2>
                     <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Complete</span>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">Your saved company profile is ready for officers and applicants to view.</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Your information is saved. Open the profile only when you want to review or update it.</p>
                 </div>
               </div>
 
-              <div className="grid gap-3 rounded-xl border border-emerald-200/80 bg-background/80 p-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company</p>
-                  <p className="mt-1 font-semibold">{formData.company_name}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hiring contact</p>
-                  <p className="mt-1 font-semibold">{formData.contact_person_name}</p>
-                  <p className="break-words text-sm text-muted-foreground">{formData.contact_email}</p>
-                </div>
-                <div className="sm:col-span-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company address</p>
-                  <p className="mt-1 text-sm font-medium">{address}</p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
                 <Button type="button" variant="outline" className="h-11" onClick={() => { setCurrentStep(0); setEditing(true); }}>
                   <Pencil className="mr-2 h-4 w-4" />Edit company profile
                 </Button>
