@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, Building2, Check, Cloud, FileCheck2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Building2, Check, CheckCircle2, Cloud, FileCheck2, Pencil, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -67,6 +67,7 @@ const Field = ({ label, value, onChange, type = "text", placeholder = "", requir
 
 export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoFile, loading, uploadingLogo, isComplete, onSave, onBrowse }: Props) {
   const [currentStep, setCurrentStep] = useState(isComplete ? steps.length - 1 : 0);
+  const [editing, setEditing] = useState(!isComplete);
   const update = <K extends keyof CompanyProfileForm>(key: K, value: CompanyProfileForm[K]) => setFormData((current) => ({ ...current, [key]: value }));
   const stepComplete = (step: number) => step === 0
     ? Boolean(formData.company_name.trim() && formData.company_address.trim() && formData.company_city.trim() && formData.company_state.trim() && formData.company_zip.trim())
@@ -94,9 +95,68 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
   const finish = async () => {
     if (await onSave()) {
       toast.success("Company profile is ready");
-      onBrowse();
+      setEditing(false);
+      requestAnimationFrame(() => document.getElementById("company-profile-top")?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
   };
+
+  if (isComplete && !editing) {
+    const address = [
+      formData.company_address,
+      formData.company_address_unit,
+      formData.company_city,
+      formData.company_state,
+      formData.company_zip,
+    ].filter(Boolean).join(", ");
+
+    return (
+      <div id="company-profile-top" className="mx-auto w-full max-w-4xl scroll-mt-20">
+        <Card className="overflow-hidden rounded-2xl border-emerald-200 bg-emerald-50/40 shadow-sm">
+          <CardContent className="p-0">
+            <div className="flex flex-col gap-6 p-6 sm:p-8">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+                  <CheckCircle2 className="h-7 w-7" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-bold sm:text-2xl">Company profile complete</h2>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">Complete</span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">Your saved company profile is ready for officers and applicants to view.</p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 rounded-xl border border-emerald-200/80 bg-background/80 p-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company</p>
+                  <p className="mt-1 font-semibold">{formData.company_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hiring contact</p>
+                  <p className="mt-1 font-semibold">{formData.contact_person_name}</p>
+                  <p className="break-words text-sm text-muted-foreground">{formData.contact_email}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Company address</p>
+                  <p className="mt-1 text-sm font-medium">{address}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" className="h-11" onClick={() => { setCurrentStep(0); setEditing(true); }}>
+                  <Pencil className="mr-2 h-4 w-4" />Edit company profile
+                </Button>
+                <Button type="button" className="h-11" onClick={onBrowse}>
+                  Browse guards<ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div id="company-profile-top" className="mx-auto w-full max-w-6xl scroll-mt-20 pb-24 lg:pb-8">

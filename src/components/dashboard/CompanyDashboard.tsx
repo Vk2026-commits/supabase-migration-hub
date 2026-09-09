@@ -69,13 +69,13 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
   const companyProfileComplete = Boolean(
     companyProfile &&
-    formData.company_name.trim() &&
-    formData.company_address.trim() &&
-    formData.company_city.trim() &&
-    formData.company_state.trim() &&
-    formData.company_zip.trim() &&
-    formData.contact_person_name.trim() &&
-    formData.contact_email.trim(),
+    companyProfile.company_name?.trim() &&
+    companyProfile.company_address?.trim() &&
+    companyProfile.company_city?.trim() &&
+    companyProfile.company_state?.trim() &&
+    companyProfile.company_zip?.trim() &&
+    companyProfile.contact_person_name?.trim() &&
+    companyProfile.contact_email?.trim(),
   );
 
   const selectTab = (tab: string) => {
