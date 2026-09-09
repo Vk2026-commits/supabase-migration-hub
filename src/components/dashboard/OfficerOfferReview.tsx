@@ -98,8 +98,9 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="max-w-2xl">
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">Employment offer</p>
-              <h1 className="text-3xl font-bold tracking-tight text-foreground">Your offer for {terms.positionTitle}</h1>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">Your employment offer</h1>
               <p className="mt-3 text-base leading-7 text-muted-foreground">Review the key terms below, then open the company-signed offer document. Nothing is final until you choose to accept and add your signature.</p>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-800"><ShieldCheck className="h-4 w-4" />Company signed - awaiting your decision</div>
             </div>
             <Badge variant="outline" className="bg-background/80 px-3 py-1">Offer version {offer.version}</Badge>
           </div>
@@ -166,5 +167,5 @@ function OfferSection({ icon: Icon, title, description, tone, children }: { icon
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
-  return <div><h3 className="text-sm font-semibold text-foreground">{label}</h3><p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{value || "Not provided"}</p></div>;
+  return <div className="rounded-xl border bg-white/90 p-4 shadow-sm"><h3 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</h3><p className="mt-1.5 whitespace-pre-wrap text-sm font-semibold leading-6 text-foreground">{value || "Not provided"}</p></div>;
 }

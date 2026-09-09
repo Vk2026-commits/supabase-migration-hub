@@ -110,7 +110,7 @@ async function buildOfferPdf(input: {
   };
   const field = (name: string, value: unknown) => {
     text(name.toUpperCase(), { font: bold, size: 7.5, color: gray, gap: 0 });
-    text(clean(value) || "None", { size: 10.5, gap: 8 });
+    text(clean(value) || "None", { font: bold, size: 10.5, gap: 8 });
   };
 
   const summaryCard = (x: number, top: number, cardWidth: number, name: string, value: string) => {
@@ -123,9 +123,9 @@ async function buildOfferPdf(input: {
   const companyAddress = [input.company.company_address, input.company.company_address_unit, input.company.company_city, input.company.company_state, input.company.company_zip].filter(Boolean).join(", ");
   page.drawRectangle({ x: 0, y: 652, width: 612, height: 140, color: blue });
   page.drawText(clean(input.company.company_name).toUpperCase(), { x: margin, y: 752, size: 10, font: bold, color: rgb(0.75, 0.85, 1) });
-  page.drawText("Employment Offer", { x: margin, y: 714, size: 26, font: bold, color: rgb(1, 1, 1) });
+  page.drawText("Employment Offer Letter", { x: margin, y: 714, size: 26, font: bold, color: rgb(1, 1, 1) });
   page.drawText(`Prepared for ${input.officerName}`, { x: margin, y: 687, size: 12, font: regular, color: rgb(0.9, 0.94, 1) });
-  page.drawText(`Offer date: ${new Date().toLocaleDateString("en-US")}  |  Version ${input.version}`, { x: margin, y: 668, size: 8.5, font: regular, color: rgb(0.75, 0.85, 1) });
+  page.drawText(`Company signed | Offer date: ${new Date().toLocaleDateString("en-US")} | Version ${input.version}`, { x: margin, y: 668, size: 8.5, font: bold, color: rgb(0.75, 0.85, 1) });
   y = 622;
   text(`Dear ${input.officerName},`, { font: bold, size: 11, gap: 7 });
   text(`${clean(input.company.company_name)} is pleased to offer you the position described below. This summary highlights the terms that matter most. The complete conditions and company authorization follow.`, { size: 10.5, gap: 14 });
@@ -175,14 +175,20 @@ async function buildOfferPdf(input: {
   section("Company authorization");
   text(`This offer was prepared and approved on behalf of ${clean(input.company.company_name)} by ${clean(input.terms.representativeName)}, ${clean(input.terms.representativeTitle)}.`, { size: 10.5, gap: 10 });
   field("Company address", companyAddress);
+  ensure(98);
+  const signatureTop = y;
   const employerSignature = dataUrlBytes(input.employerSignature);
   if (employerSignature) {
     const image = await pdf.embedPng(employerSignature);
     const scale = Math.min(230 / image.width, 55 / image.height);
-    ensure(72);
-    page.drawImage(image, { x: margin, y: y - image.height * scale + 8, width: image.width * scale, height: image.height * scale });
-    y -= 64;
-  } else text(clean(input.terms.representativeName), { font: italic, size: 18 });
+    page.drawImage(image, { x: margin, y: signatureTop - image.height * scale, width: image.width * scale, height: image.height * scale });
+  } else {
+    page.drawText(clean(input.terms.representativeName), { x: margin + 8, y: signatureTop - 36, size: 18, font: italic, color: dark });
+  }
+  page.drawLine({ start: { x: margin, y: signatureTop - 60 }, end: { x: margin + 260, y: signatureTop - 60 }, thickness: 0.8, color: gray });
+  page.drawText(`${clean(input.terms.representativeName)}, ${clean(input.terms.representativeTitle)}`, { x: margin, y: signatureTop - 75, size: 8.5, font: bold, color: dark });
+  page.drawText(`Signed ${new Date().toLocaleDateString("en-US")}`, { x: margin, y: signatureTop - 89, size: 8, font: regular, color: gray });
+  y = signatureTop - 104;
 
   if (input.officerPrintedName) {
     section("Employee acceptance");
