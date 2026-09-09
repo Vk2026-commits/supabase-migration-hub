@@ -76,10 +76,10 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     if (!authorized) { toast.error("Authorize the offer before sending"); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("manage-employment-offer", { body: { action: "send", company_id: companyId, officer_id: officerId, hiring_application_id: hiringApplicationId, job_application_id: jobApplicationId, terms, company_signature: companySignature, idempotency_key: idempotencyKey } });
+      const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 30000, body: { action: "send", company_id: companyId, officer_id: officerId, hiring_application_id: hiringApplicationId, job_application_id: jobApplicationId, terms, company_signature: companySignature, idempotency_key: idempotencyKey } });
       if (error) throw error; if (data?.error) throw new Error(data.error);
       toast.success(`Offer sent to ${officerName}. Onboarding unlocks only after acceptance.`); setOpen(false); onChanged?.();
-    } catch (error: any) { toast.error(error?.message || "The offer could not be securely generated and sent"); } finally { setLoading(false); }
+    } catch (error: any) { toast.error(error?.name === "AbortError" || error?.context?.name === "AbortError" || /timeout|aborted/i.test(error?.message || "") ? "The secure offer service took too long. Nothing was duplicated—please try again." : error?.message || "The offer could not be securely generated and sent"); } finally { setLoading(false); }
   };
   const offerAction = async (action: "preview" | "withdraw") => {
     if (!previousOffer?.id) return;
