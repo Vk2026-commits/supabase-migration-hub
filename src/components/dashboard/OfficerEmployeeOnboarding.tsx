@@ -592,9 +592,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return () => clearTimeout(timer);
   }, [activePolicyKey, currentStep, data]);
 
+  const policyDetailsComplete = (key: string) => key !== "trackTik" || Boolean(data.trackTikUsername && data.employeeIdNumber && data.trackTikPasswordSet);
   const policiesComplete = Boolean(data.offerPreparedAt) && policyItems.every(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
-    return Boolean(data.policies[key] && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+    return Boolean(data.policies[key] && policyDetailsComplete(key) && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   });
   const i9AuthorizationComplete = data.citizenshipStatus !== "Authorized to work until a specified date" || Boolean(data.workAuthorizationExpiration && (data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)));
   const bankAccountsComplete = savedBankAccounts.length > 0 || (bankAccounts.length > 0 && bankAccounts.every((account, index) => Boolean(
@@ -787,7 +788,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const progress = Math.round(((currentStep + 1) / steps.length) * 100);
   const completedPolicyCount = policyItems.filter(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
-    return Boolean(data.policies[key] && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+    return Boolean(data.policies[key] && policyDetailsComplete(key) && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
   }).length;
   const openPolicy = (key: string) => {
     setActivePolicyKey((current) => current === key ? null : key);
@@ -823,6 +824,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       },
     }));
   };
+  const updateTrackTik = (field: "trackTikUsername" | "employeeIdNumber" | "trackTikPasswordSet", value: string | boolean) => {
+    setPolicyPreview((current) => {
+      if (current?.key !== "trackTik") return current;
+      if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
+      return null;
+    });
+    setData((current) => ({ ...current, [field]: value, policies: { ...current.policies, trackTik: false } }));
+  };
   const savePolicyAcknowledgement = async (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
     if (!acknowledgement?.viewedAt) {
@@ -831,6 +840,10 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
     if (!acknowledgement?.accepted || !acknowledgement.printedName || !acknowledgement.signatureDate || !acknowledgement.signatureImage) {
       toast.error("Accept the document, add your name and date, and sign before saving");
+      return;
+    }
+    if (!policyDetailsComplete(key)) {
+      toast.error("Add the TrackTik username and employee number, then confirm the password was set");
       return;
     }
     if (policyPreview?.key !== key) {
@@ -1208,17 +1221,12 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Supervisor</span><strong className="block">{data.supervisorName || "Not provided"}</strong></div>
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Assignment</span><strong className="block">{data.scheduledPost || "Not provided"}</strong></div>
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift || "Not provided"}</strong></div>
-                    <Field label="TrackTik username" value={data.trackTikUsername} onChange={(v) => update("trackTikUsername", v)} />
-                    <label className="flex items-center gap-3 self-end rounded-xl border p-4">
-                      <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(v) => update("trackTikPasswordSet", Boolean(v))} />
-                      <span className="text-sm font-medium">TrackTik password set</span>
-                    </label>
                   </div>
                   {policyItems.map(([key, label, document], index) => {
                     const acknowledgement = data.policyAcknowledgements[key];
                     const expanded = activePolicyKey === key;
                     const viewed = Boolean(acknowledgement?.viewedAt);
-                    const completed = Boolean(data.policies[key] && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
+                    const completed = Boolean(data.policies[key] && policyDetailsComplete(key) && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
                       <div key={key} id={`policy-${key}`} className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 transition-colors ${completed ? "border-green-500 bg-green-50 shadow-sm" : expanded ? "border-primary/40 bg-background" : "border-border bg-background"}`}>
                         <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
@@ -1251,6 +1259,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                                 {key === "property" && (
                                   <PropertyDocumentFields acknowledgement={acknowledgement} data={data} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
                                 )}
+                                {key === "trackTik" && <TrackTikDocumentFields data={data} onChange={updateTrackTik} />}
                                 <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
                                   <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
                                   <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
@@ -1402,6 +1411,26 @@ function PropertyDocumentFields({ acknowledgement, data, onChange }: { acknowled
         ))}
       </div>
       <p className="text-xs text-muted-foreground">The company representative signature remains for the employer to complete.</p>
+    </section>
+  );
+}
+
+function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onChange: (field: "trackTikUsername" | "employeeIdNumber" | "trackTikPasswordSet", value: string | boolean) => void }) {
+  return (
+    <section className="space-y-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">TrackTik account information</p>
+        <h4 className="mt-1 text-lg font-semibold">Fill in the login details shown on the document</h4>
+        <p className="mt-1 text-sm text-muted-foreground">Your username and employee number will appear on their matching lines in the PDF preview. For security, We Find Guards records that your password was set but does not store or display the password itself.</p>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="TrackTik username" value={data.trackTikUsername} onChange={(value) => onChange("trackTikUsername", value)} required placeholder="Example: lrose" />
+        <Field label="Employee number" value={data.employeeIdNumber} onChange={(value) => onChange("employeeIdNumber", value)} required placeholder="Enter the assigned employee number" />
+      </div>
+      <label className="flex items-start gap-3 rounded-xl border bg-background p-4">
+        <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(value) => onChange("trackTikPasswordSet", Boolean(value))} />
+        <span className="text-sm"><strong className="block">My TrackTik password has been set *</strong>The PDF will show “Set privately” instead of exposing the password.</span>
+      </label>
     </section>
   );
 }

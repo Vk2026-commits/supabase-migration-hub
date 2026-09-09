@@ -79,6 +79,7 @@ export type PolicyAutofillValues = OfficialOnboardingValues & {
   employerSignatureName?: string;
   offerPreparedAt?: string;
   trackTikUsername?: string;
+  trackTikPasswordSet?: boolean;
   issuedItems?: Record<string, boolean>;
   availabilitySchedule?: Record<string, { start?: string; end?: string }>;
   scheduledPost?: string;
@@ -350,6 +351,11 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const employeeName = acknowledgement.printedName || [values.legalFirstName, values.middleInitial, values.legalLastName].filter(Boolean).join(" ");
   const formattedDate = date(acknowledgement.signatureDate);
   const isKairosConfidentialityAgreement = /kairos security/i.test(values.employerName || "") && path.includes("09-confidentialityagreement");
+  const isConfidentialityAgreement = path.includes("09-confidentialityagreement");
+  const isTrackTikDocument = path.includes("11-track-tik-login-info-sheet");
+  const isTemporaryAcknowledgement = path.includes("12-temporary-employeement-acknowldgement");
+  const confidentialityDate = isConfidentialityAgreement && formattedDate ? formattedDate.slice(0, 5) : formattedDate;
+  const confidentialityYear = isConfidentialityAgreement && formattedDate ? formattedDate.slice(-2) : "";
   const isOfferLetter = path.includes("10-offer-letter-per-hour");
   const employerRepresentativeName = isKairosConfidentialityAgreement ? "Erika Garces" : "";
   const employerRepresentativeTitle = isKairosConfidentialityAgreement ? "Authorized Hiring Representative" : "";
@@ -357,14 +363,13 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const fieldValues: Record<string, string> = {
     "Employee Name": employeeName,
     "Employees Name Printed": employeeName,
-    Employee: employeeName,
+    Employee: isTrackTikDocument ? values.employeeIdNumber || "" : employeeName,
     "Printed Name": employeeName,
     "Print Name": employeeName,
     "Print Name_2": employerRepresentativeName,
-    "Temporary Employees Signature Date": [employeeName, formattedDate].filter(Boolean).join(" - "),
     Date: formattedDate,
     "Todays Date": formattedDate,
-    "This Confidentiality Agreement the Agreement dated as of": formattedDate,
+    "This Confidentiality Agreement the Agreement dated as of": confidentialityDate,
     Title: acknowledgement.employeeTitle || values.offeredPosition || "Security Officer",
     Title_2: employerRepresentativeTitle,
     "Employee File Number": values.employeeIdNumber || "",
@@ -372,8 +377,9 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     "City State ZIP": [values.city, values.state, values.zip].filter(Boolean).join(", "),
     undefined: employeeName,
     "User Name  for Track Tik": values.trackTikUsername || "",
+    "Password  for  Track Tik": values.trackTikPasswordSet ? "Set privately" : "",
     Position: values.offeredPosition || "Security Officer",
-    Text1: employeeName,
+    Text1: isConfidentialityAgreement ? confidentialityYear : employeeName,
     Text2: date(values.startDate) || formattedDate,
     Text3: values.employeeIdNumber || "",
     Text4: "Security",
@@ -422,6 +428,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     const companySignature = isKairosConfidentialityAgreement && name === "Signature_2";
     const employeeSignature = lower.includes("signature") && !companySignature && !/(company|employer|manager|supervisor|representative)/.test(lower);
     if (!employeeSignature) continue;
+    if (isTemporaryAcknowledgement && name === "Temporary Employees Signature Date") continue;
     if (field.constructor.name === "PDFTextField") {
       try { (field as any).setText(employeeName); } catch { /* field type differs */ }
       continue;
@@ -457,7 +464,64 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
       }
     } catch { /* employer signature field differs between documents */ }
   }
+  if (isTrackTikDocument) {
+    ["User Name  for Track Tik", "Password  for  Track Tik", "Employee"].forEach((name) => {
+      try { form.getTextField(name).setText(""); } catch { /* field differs between editions */ }
+    });
+  }
   try { form.updateFieldAppearances(regularFont); } catch { /* viewer regenerates */ }
+
+  // The TrackTik template's interactive widgets sit one row below their printed
+  // labels. Draw the values on the visible lines so each credential is clearly
+  // associated with the correct label.
+  if (isTrackTikDocument) {
+    const entries = [
+      ["User Name  for Track Tik", values.trackTikUsername || "", 8],
+      ["Password  for  Track Tik", values.trackTikPasswordSet ? "Set privately" : "", 7],
+      ["Employee", values.employeeIdNumber || "", 8],
+    ] as const;
+    entries.forEach(([name, value, size]) => {
+      if (!value) return;
+      try {
+        const field = form.getTextField(name) as any;
+        for (const widget of field.acroField.getWidgets()) {
+          const rect = widget.getRectangle();
+          const pageRef = widget.P();
+          const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
+          page.drawText(value, { x: rect.x + 2, y: rect.y + 23, size, font: regularFont, color: rgb(0, 0, 0), maxWidth: rect.width - 4 });
+        }
+      } catch { /* field differs between editions */ }
+    });
+  }
+
+  // This template combines the employee signature and date in one text field.
+  // Draw each value in its own part of the employee cell so the employee mark
+  // stays legible and never touches the supervisor signature area.
+  if (isTemporaryAcknowledgement) {
+    try {
+      const temporaryField = form.getTextField("Temporary Employees Signature Date") as any;
+      temporaryField.setText("");
+      for (const widget of temporaryField.acroField.getWidgets()) {
+        const rect = widget.getRectangle();
+        const pageRef = widget.P();
+        const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
+        const entryHeight = Math.min(15, rect.height * 0.52);
+        page.drawRectangle({ x: rect.x + 1, y: rect.y + 1, width: rect.width - 2, height: entryHeight, color: rgb(1, 1, 1) });
+        const signatureWidth = rect.width * 0.74;
+        if (signatureImage) {
+          const scale = Math.min((signatureWidth - 10) / signatureImage.width, (entryHeight - 4) / signatureImage.height);
+          const width = signatureImage.width * scale;
+          const height = signatureImage.height * scale;
+          page.drawImage(signatureImage, { x: rect.x + 5, y: rect.y + 2 + (entryHeight - 4 - height) / 2, width, height });
+        } else if (employeeName) {
+          let size = 9;
+          while (size > 6 && signatureFont.widthOfTextAtSize(employeeName, size) > signatureWidth - 10) size -= 0.5;
+          page.drawText(employeeName, { x: rect.x + 5, y: rect.y + 4, size, font: signatureFont, color: rgb(0, 0, 0) });
+        }
+        if (formattedDate) page.drawText(formattedDate, { x: rect.x + rect.width * 0.81, y: rect.y + 4, size: 7, font: regularFont, color: rgb(0, 0, 0) });
+      }
+    } catch { /* combined employee signature field differs between editions */ }
+  }
 
   const receipt = document.addPage([612, 792]);
   receipt.drawRectangle({ x: 0, y: 716, width: 612, height: 76, color: rgb(0.06, 0.29, 0.72) });
