@@ -23,6 +23,7 @@ export type GuardApplicationData = {
   workHistory: Array<Record<string, string>>;
   references: Array<Record<string, string>>;
   signature: string;
+  signatureImage: string;
   signatureDate: string;
 };
 
@@ -138,7 +139,35 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   section("Applicant Certification");
   const certification = "I certify that the information in this application is true and complete. I authorize verification of the information provided and understand that false or omitted information may disqualify me or result in termination. I understand that submitting this application does not guarantee employment.";
   field("Certification", certification);
-  row("Electronic signature", data.signature, "Date signed", data.signatureDate);
+  ensureSpace(34);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(80, 87, 102);
+  doc.text("Applicant signature", margin, y);
+  if (data.signatureImage) {
+    try {
+      const properties = doc.getImageProperties(data.signatureImage);
+      const maxWidth = 72;
+      const maxHeight = 22;
+      const scale = Math.min(maxWidth / properties.width, maxHeight / properties.height);
+      const imageWidth = properties.width * scale;
+      const imageHeight = properties.height * scale;
+      doc.addImage(data.signatureImage, "PNG", margin, y + 2, imageWidth, imageHeight, undefined, "FAST");
+    } catch (error) {
+      console.warn("The drawn signature could not be added to the application PDF", error);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(11);
+      doc.setTextColor(20, 24, 35);
+      doc.text(display(data.signature), margin, y + 10);
+    }
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(11);
+    doc.setTextColor(20, 24, 35);
+    doc.text(display(data.signature), margin, y + 10);
+  }
+  y += 28;
+  row("Printed legal name", data.signature, "Date signed", data.signatureDate);
 
   doc.setFontSize(7);
   doc.setTextColor(100, 106, 118);
