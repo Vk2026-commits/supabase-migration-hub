@@ -11,6 +11,7 @@ interface OfficerPhotosProps {
   userId: string;
   embedded?: boolean;
   onChanged?: (photos: Record<string, string>) => void;
+  onSaved?: (complete: boolean) => void;
 }
 
 const PHOTO_TYPES = [
@@ -20,7 +21,7 @@ const PHOTO_TYPES = [
   { id: "action-2", label: "Action Shot 2", description: "On duty or training" },
 ];
 
-export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPhotosProps) {
+export function OfficerPhotos({ userId, embedded = false, onChanged, onSaved }: OfficerPhotosProps) {
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [savingPhotos, setSavingPhotos] = useState(false);
@@ -58,7 +59,11 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
       }
 
       setPhotos(photoUrls);
-      if (confirmExisting) setPhotosConfirmed(Boolean(photoUrls.headshot && photoUrls["full-body"]));
+      if (confirmExisting) {
+        const complete = Boolean(photoUrls.headshot && photoUrls["full-body"]);
+        setPhotosConfirmed(complete);
+        onSaved?.(complete);
+      }
       onChanged?.(photoUrls);
       return photoUrls;
     } catch (error: any) {
@@ -77,6 +82,7 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
 
       const file = event.target.files[0];
       setPhotosConfirmed(false);
+      onSaved?.(false);
       
       // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
@@ -112,6 +118,7 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
   const deletePhoto = async (photoType: string) => {
     try {
       setPhotosConfirmed(false);
+      onSaved?.(false);
       const { data: files } = await supabase.storage
         .from("officer-photos")
         .list(userId);
@@ -143,6 +150,7 @@ export function OfficerPhotos({ userId, embedded = false, onChanged }: OfficerPh
         return;
       }
       setPhotosConfirmed(true);
+      onSaved?.(true);
       toast.success("Photos saved. Step 8 is complete.");
     } finally {
       setSavingPhotos(false);
