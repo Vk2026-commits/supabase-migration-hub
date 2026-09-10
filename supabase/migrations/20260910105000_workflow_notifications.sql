@@ -444,30 +444,9 @@ CREATE TRIGGER queue_onboarding_submission_notifications_on_packet
 AFTER INSERT OR UPDATE OF status ON public.officer_onboarding_packets
 FOR EACH ROW EXECUTE FUNCTION public.queue_onboarding_submission_notifications();
 
--- Start daily reminders for existing officers whose master hiring application is still incomplete.
-INSERT INTO public.notification_workflows (
-  kind, recipient_user_id, recipient_email, target_key, officer_id, context, next_send_at
-)
-SELECT
-  'application_reminder',
-  profile.id,
-  profile.email,
-  'officer-application:' || profile.id::text,
-  officer.id,
-  jsonb_build_object('officer_name', coalesce(profile.full_name, 'there')),
-  now() + interval '24 hours'
-FROM public.profiles profile
-LEFT JOIN public.officer_profiles officer ON officer.user_id = profile.id
-WHERE profile.role = 'officer'
-  AND coalesce(trim(profile.email), '') <> ''
-  AND NOT EXISTS (
-    SELECT 1
-    FROM public.guard_hiring_applications application
-    WHERE application.user_id = profile.id
-      AND application.application_type = 'master'
-      AND application.status = 'submitted'
-  )
-ON CONFLICT (kind, recipient_user_id, target_key) DO NOTHING;
+-- Reminders begin with a newly created officer account. Existing incomplete
+-- accounts are intentionally not bulk-enrolled, so enabling this feature does
+-- not send unexpected retroactive email to historical users.
 
 REVOKE ALL ON FUNCTION public.enqueue_notification_workflow(text, uuid, text, text, uuid, uuid, uuid, uuid, uuid, uuid, jsonb, timestamptz) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.company_notification_recipients(uuid) FROM PUBLIC, anon, authenticated;
