@@ -60,7 +60,7 @@ const Index = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid grid-cols-1 gap-4 py-4">
-                  <Link to="/auth?role=officer" className="w-full">
+                  <Link to="/get-started" className="w-full">
                     <Button variant="outline" className="w-full h-24 flex flex-col gap-2">
                       <User className="w-8 h-8" />
                       <span className="font-semibold">{t('roleSelection.officer')}</span>
@@ -80,7 +80,7 @@ const Index = () => {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button size="lg" asChild className="text-lg h-12 px-8">
-                <Link to="/auth?role=officer">Security Professionals Create Your Profile</Link>
+                <Link to="/get-started">Security Professionals Create Your Profile</Link>
               </Button>
               <Button size="lg" variant="outline" asChild className="text-lg h-12 px-8">
                 <Link to="/auth?role=company">Create Your Company Profile For Companies</Link>

@@ -312,7 +312,7 @@ const JobListings = () => {
           </DialogHeader>
           <div className="space-y-3 pt-4">
             <Button 
-              onClick={() => navigate("/auth?role=officer")} 
+              onClick={() => navigate("/get-started")}
               className="w-full"
             >
               Sign In / Create Account
