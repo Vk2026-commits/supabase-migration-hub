@@ -120,6 +120,53 @@ export type Database = {
           },
         ]
       }
+      company_members: {
+        Row: {
+          company_id: string
+          email: string
+          id: string
+          invited_at: string
+          invited_by: string | null
+          joined_at: string | null
+          role: Database["public"]["Enums"]["company_member_role"]
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          email: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: Database["public"]["Enums"]["company_member_role"]
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          email?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          joined_at?: string | null
+          role?: Database["public"]["Enums"]["company_member_role"]
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "company_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_profiles: {
         Row: {
           account_status: string | null
@@ -1653,6 +1700,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      company_team_has_access: {
+        Args: {
+          _allowed_roles?: Database["public"]["Enums"]["company_member_role"][]
+          _company_id: string
+        }
+        Returns: boolean
+      }
       is_officer_owner: {
         Args: { _officer_id: string; _user_id: string }
         Returns: boolean
@@ -1673,6 +1727,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "company" | "officer" | "view_only" | "full_access"
+      company_member_role: "owner" | "admin" | "hiring_manager" | "reviewer"
       subscription_tier: "free" | "professional" | "premium"
       user_role: "officer" | "company"
     }
@@ -1803,6 +1858,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "company", "officer", "view_only", "full_access"],
+      company_member_role: ["owner", "admin", "hiring_manager", "reviewer"],
       subscription_tier: ["free", "professional", "premium"],
       user_role: ["officer", "company"],
     },

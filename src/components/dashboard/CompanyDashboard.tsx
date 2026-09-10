@@ -20,18 +20,20 @@ import SubscriptionManager from "./SubscriptionManager";
 import { useSearchParams } from "@/lib/router-compat";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileWizard";
+import CompanyTeam from "./CompanyTeam";
 
 interface CompanyDashboardProps {
   userId: string;
   userName: string;
 }
 
-const companyTabs = new Set(["profile", "jobs", "applicants", "interested", "employment", "subscriptions"]);
+const companyTabs = new Set(["profile", "jobs", "applicants", "interested", "employment", "team", "subscriptions"]);
 
 const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(requestedTab && companyTabs.has(requestedTab) ? requestedTab : "profile");
@@ -94,11 +96,28 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   }, [activeTab]);
 
   const loadProfile = async () => {
-    const { data } = await supabase
+    const { data: ownedCompany } = await supabase
       .from("company_profiles")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
+
+    let data = ownedCompany;
+    let teamRole: string | null = ownedCompany ? "owner" : null;
+    if (!data) {
+      const { data: membership } = await (supabase as any)
+        .from("company_members")
+        .select("company_id,role,status")
+        .eq("user_id", userId)
+        .in("status", ["active", "invited"])
+        .maybeSingle();
+      if (membership?.company_id) {
+        const { data: memberCompany } = await supabase.from("company_profiles").select("*").eq("id", membership.company_id).maybeSingle();
+        data = memberCompany;
+        teamRole = membership.role;
+      }
+    }
+    setCompanyTeamRole(teamRole);
 
     if (data) {
       setCompanyProfile(data);
@@ -255,6 +274,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                 isComplete={companyProfileComplete}
                 onSave={() => handleSubmit(undefined, false)}
                 onBrowse={() => { window.location.href = "/browse"; }}
+                canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
               /> : <div className="py-20 text-center text-muted-foreground">Loading your company profile…</div>
             )}
             {false && activeTab === "profile" && (
@@ -756,6 +776,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
             {activeTab === "employment" && companyProfile && (
               <EmploymentTracking companyId={companyProfile.id} />
+            )}
+
+            {activeTab === "team" && companyProfile && (
+              <CompanyTeam companyId={companyProfile.id} />
             )}
 
             {activeTab === "subscriptions" && companyProfile && (

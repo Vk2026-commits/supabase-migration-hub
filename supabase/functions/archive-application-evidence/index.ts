@@ -61,7 +61,14 @@ serve(async (request) => {
       const { data: company } = jobPosting?.company_id
         ? await admin.from("company_profiles").select("user_id,subscription_tier").eq("id", jobPosting.company_id).maybeSingle()
         : { data: null };
-      isCompany = Boolean(company && company.user_id === authData.user.id && ["professional", "premium"].includes(company.subscription_tier));
+      const { data: member } = jobPosting?.company_id
+        ? await admin.from("company_members").select("status").eq("company_id", jobPosting.company_id).eq("user_id", authData.user.id).maybeSingle()
+        : { data: null };
+      isCompany = Boolean(
+        company
+        && (company.user_id === authData.user.id || ["active", "invited"].includes(member?.status || ""))
+        && ["professional", "premium"].includes(company.subscription_tier),
+      );
     }
     const isOwner = application.user_id === authData.user.id;
     const archiveKind = requestedKind === "legacy" || application.evidence_snapshot_kind === "legacy" ? "legacy" : "submission";

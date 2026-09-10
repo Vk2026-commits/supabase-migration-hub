@@ -41,3 +41,6 @@ verify_jwt = true
 
 [functions.manage-employment-offer]
 verify_jwt = true
+
+[functions.manage-company-team]
+verify_jwt = true

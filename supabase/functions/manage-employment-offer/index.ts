@@ -295,6 +295,10 @@ Deno.serve(async (request) => {
     if (authError || !authData.user) return json({ error: "Invalid or expired session" }, 401);
     const body = await request.json();
     const action = clean(body.action);
+    const companyMemberRole = async (companyId: string) => {
+      const { data } = await admin.from("company_members").select("role,status").eq("company_id", companyId).eq("user_id", authData.user.id).maybeSingle();
+      return data && ["active", "invited"].includes(data.status) ? data.role : null;
+    };
 
     if (action === "send") {
       const companyId = clean(body.company_id);
@@ -305,8 +309,10 @@ Deno.serve(async (request) => {
       const missing = validateTerms(terms || {});
       if (!companyId || !officerId || !applicationId || !/^[0-9a-f-]{36}$/i.test(offerId) || missing.length) return json({ error: "Complete every required offer field", missing }, 400);
       if (!dataUrlBytes(body.company_signature)) return json({ error: "Company representative signature is required" }, 400);
-      const { data: company } = await admin.from("company_profiles").select("*").eq("id", companyId).eq("user_id", authData.user.id).maybeSingle();
-      if (!company) return json({ error: "Company access denied" }, 403);
+      const { data: company } = await admin.from("company_profiles").select("*").eq("id", companyId).maybeSingle();
+      const memberRole = await companyMemberRole(companyId);
+      const canSendOffer = company?.user_id === authData.user.id || ["owner", "admin", "hiring_manager"].includes(memberRole || "");
+      if (!company || !canSendOffer) return json({ error: "Company hiring access denied" }, 403);
       const { data: application } = await admin.from("guard_hiring_applications").select("id,officer_id,job_application_id,status,application_type,application_data").eq("id", applicationId).maybeSingle();
       if (!application || application.officer_id !== officerId || application.application_type !== "employer_copy" || application.status !== "submitted") return json({ error: "A submitted company application is required" }, 400);
       const { data: jobApplication } = application.job_application_id ? await admin.from("job_applications").select("id,job_posting_id").eq("id", application.job_application_id).maybeSingle() : { data: null };
@@ -347,7 +353,9 @@ Deno.serve(async (request) => {
     if (!offerId) return json({ error: "Offer is required" }, 400);
     const { data: offer } = await admin.from("employment_offers").select("*,company_profiles(*),officer_profiles(user_id,address_street,address_unit,address_city,address_state,address_zip)").eq("id", offerId).maybeSingle();
     if (!offer) return json({ error: "Offer not found" }, 404);
-    const isCompany = offer.company_profiles?.user_id === authData.user.id;
+    const memberRole = await companyMemberRole(offer.company_id);
+    const isCompany = offer.company_profiles?.user_id === authData.user.id || Boolean(memberRole);
+    const canManageCompanyOffer = offer.company_profiles?.user_id === authData.user.id || ["owner", "admin", "hiring_manager"].includes(memberRole || "");
     const isOfficer = offer.officer_profiles?.user_id === authData.user.id;
     const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", authData.user.id);
     const isAdmin = (roles || []).some((item: { role: string }) => ["admin", "full_access", "view_only"].includes(item.role));
@@ -370,7 +378,7 @@ Deno.serve(async (request) => {
     }
 
     if (action === "withdraw") {
-      if (!isCompany || !["sent", "viewed"].includes(offer.status)) return json({ error: "Offer cannot be withdrawn" }, 409);
+      if (!canManageCompanyOffer || !["sent", "viewed"].includes(offer.status)) return json({ error: "Offer cannot be withdrawn" }, 409);
       await admin.from("employment_offers").update({ status: "withdrawn", withdrawn_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", offerId);
       if (offer.job_application_id) await admin.from("job_applications").update({ status: "reviewed" }).eq("id", offer.job_application_id);
       await userClient.rpc("log_sensitive_access", { _action: "offer_withdrawn", _table_name: "employment_offers", _record_id: offerId, _details: { company_id: offer.company_id, officer_id: offer.officer_id } });

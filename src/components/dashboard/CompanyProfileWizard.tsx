@@ -48,6 +48,7 @@ type Props = {
   isComplete: boolean;
   onSave: () => Promise<boolean>;
   onBrowse: () => void;
+  canEdit?: boolean;
 };
 
 const steps = [
@@ -65,7 +66,7 @@ const Field = ({ label, value, onChange, type = "text", placeholder = "", requir
   </div>
 );
 
-export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoFile, loading, uploadingLogo, isComplete, onSave, onBrowse }: Props) {
+export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoFile, loading, uploadingLogo, isComplete, onSave, onBrowse, canEdit = true }: Props) {
   const [currentStep, setCurrentStep] = useState(isComplete ? steps.length - 1 : 0);
   const [editing, setEditing] = useState(!isComplete);
   const update = <K extends keyof CompanyProfileForm>(key: K, value: CompanyProfileForm[K]) => setFormData((current) => ({ ...current, [key]: value }));
@@ -120,9 +121,9 @@ export function CompanyProfileWizard({ formData, setFormData, logoFile, setLogoF
               </div>
 
               <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
-                <Button type="button" variant="outline" className="h-11" onClick={() => { setCurrentStep(0); setEditing(true); }}>
+                {canEdit && <Button type="button" variant="outline" className="h-11" onClick={() => { setCurrentStep(0); setEditing(true); }}>
                   <Pencil className="mr-2 h-4 w-4" />Edit company profile
-                </Button>
+                </Button>}
                 <Button type="button" className="h-11" onClick={onBrowse}>
                   Browse guards<ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
