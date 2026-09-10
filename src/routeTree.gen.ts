@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as CompleteTeamProfileRouteImport } from './routes/complete-team-profile'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as NotificationActionRouteImport } from './routes/notification-action'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 
@@ -54,6 +55,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NotificationActionRoute = NotificationActionRouteImport.update({
+  id: '/notification-action',
+  path: '/notification-action',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/browse': typeof BrowseRoute
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
+  '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/browse': typeof BrowseRoute
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
+  '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/browse': typeof BrowseRoute
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
+  '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/complete-team-profile'
     | '/dashboard'
+    | '/notification-action'
     | '/privacy'
     | '/reset-password'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/complete-team-profile'
     | '/dashboard'
+    | '/notification-action'
     | '/privacy'
     | '/reset-password'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/complete-team-profile'
     | '/dashboard'
+    | '/notification-action'
     | '/privacy'
     | '/reset-password'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   BrowseRoute: typeof BrowseRoute
   CompleteTeamProfileRoute: typeof CompleteTeamProfileRoute
   DashboardRoute: typeof DashboardRoute
+  NotificationActionRoute: typeof NotificationActionRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
 }
@@ -198,6 +211,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/notification-action': {
+      id: '/notification-action'
+      path: '/notification-action'
+      fullPath: '/notification-action'
+      preLoaderRoute: typeof NotificationActionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   BrowseRoute: BrowseRoute,
   CompleteTeamProfileRoute: CompleteTeamProfileRoute,
   DashboardRoute: DashboardRoute,
+  NotificationActionRoute: NotificationActionRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
 }

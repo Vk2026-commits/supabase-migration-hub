@@ -9,16 +9,26 @@ import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 import CompanyDashboard from "@/components/dashboard/CompanyDashboard";
 import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
 
+type AccountProfile = {
+  role?: string | null;
+};
+
+type CompanyProfile = {
+  trial_end_date?: string | null;
+  subscription_tier?: string | null;
+  [key: string]: unknown;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const viewAs = searchParams.get("viewAs");
   const onboarding = searchParams.get("onboarding");
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showExpiredTrialDialog, setShowExpiredTrialDialog] = useState(false);
-  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
 
   useEffect(() => {
     const getProfile = async () => {
@@ -28,7 +38,8 @@ const Dashboard = () => {
         } = await supabase.auth.getSession();
 
         if (!session) {
-          navigate("/auth");
+          const next = `${window.location.pathname}${window.location.search}`;
+          navigate(`/auth?next=${encodeURIComponent(next)}`);
           return;
         }
 

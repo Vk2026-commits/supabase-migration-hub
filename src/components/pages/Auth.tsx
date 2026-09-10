@@ -12,13 +12,15 @@ import { Link } from "@/lib/router-compat";
 import { z } from "zod";
 
 // Password validation schema
-const passwordSchema = z.string()
+const passwordSchema = z
+  .string()
   .min(8, "Password must be at least 8 characters")
   .regex(/[A-Z]/, "Password must contain at least one capital letter")
   .regex(/[0-9]/, "Password must contain at least one number")
   .regex(/[^A-Za-z0-9]/, "Password must contain at least one special symbol");
 
-const usernameSchema = z.string()
+const usernameSchema = z
+  .string()
   .min(3, "Username must be at least 3 characters")
   .max(20, "Username must be less than 20 characters")
   .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores");
@@ -28,14 +30,17 @@ const Auth = () => {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
   const urlRole = searchParams.get("role");
-  
+  const requestedNext = searchParams.get("next");
+  const nextPath =
+    requestedNext?.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : null;
+
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [emailOrUsername, setEmailOrUsername] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [role, setRole] = useState<"officer" | "company">(
-    (urlRole === "officer" || urlRole === "company") ? urlRole : "officer"
+    urlRole === "officer" || urlRole === "company" ? urlRole : "officer",
   );
   const [loading, setLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
@@ -46,10 +51,10 @@ const Auth = () => {
     const force = searchParams.get("force");
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session && !force) {
-        navigate("/dashboard");
+        navigate(nextPath || "/dashboard");
       }
     });
-  }, [navigate, searchParams]);
+  }, [navigate, nextPath, searchParams]);
 
   const validatePassword = (pwd: string) => {
     const errors: string[] = [];
@@ -58,7 +63,7 @@ const Auth = () => {
       setPasswordErrors([]);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        const errorMessages = error.errors.map(e => e.message);
+        const errorMessages = error.errors.map((e) => e.message);
         setPasswordErrors(errorMessages);
         return false;
       }
@@ -98,9 +103,8 @@ const Auth = () => {
           return;
         }
 
-        const postConfirmationPath = role === "officer"
-          ? "/dashboard?onboarding=application"
-          : "/dashboard";
+        const postConfirmationPath =
+          nextPath || (role === "officer" ? "/dashboard?onboarding=application" : "/dashboard");
 
         const { data: signUpData, error } = await supabase.auth.signUp({
           email: emailOrUsername,
@@ -118,15 +122,19 @@ const Auth = () => {
         if (error) throw error;
 
         if (signUpData.session) {
-          toast.success(role === "officer" ? "Account created! Complete your hiring application next." : "Account created successfully!");
+          toast.success(
+            role === "officer"
+              ? "Account created! Complete your hiring application next."
+              : "Account created successfully!",
+          );
           navigate(postConfirmationPath);
         } else {
           setConfirmationEmail(emailOrUsername);
         }
       } else {
         // Sign in - check if input is email or username
-        const isEmail = emailOrUsername.includes('@');
-        
+        const isEmail = emailOrUsername.includes("@");
+
         if (isEmail) {
           // Sign in with email
           const { error } = await supabase.auth.signInWithPassword({
@@ -138,9 +146,9 @@ const Auth = () => {
         } else {
           // Sign in with username - first get email from profiles
           const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('email')
-            .eq('username', emailOrUsername)
+            .from("profiles")
+            .select("email")
+            .eq("username", emailOrUsername)
             .single();
 
           if (profileError || !profile) {
@@ -154,12 +162,12 @@ const Auth = () => {
 
           if (error) throw error;
         }
-        
+
         toast.success("Signed in successfully!");
-        navigate("/dashboard");
+        navigate(nextPath || "/dashboard");
       }
-    } catch (error: any) {
-      toast.error(error.message || "An error occurred");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "An error occurred");
     } finally {
       setLoading(false);
     }
@@ -170,25 +178,25 @@ const Auth = () => {
       toast.error("Please enter your email address first");
       return;
     }
-    
+
     // Check if input looks like an email
-    const isEmail = emailOrUsername.includes('@');
+    const isEmail = emailOrUsername.includes("@");
     if (!isEmail) {
       toast.error("Please enter your email address (not username)");
       return;
     }
-    
+
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(emailOrUsername, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
-      
+
       if (error) throw error;
-      
+
       toast.success("Password reset link sent to your email!");
-    } catch (error: any) {
-      toast.error(error.message || "Failed to send reset email");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to send reset email");
     } finally {
       setLoading(false);
     }
@@ -217,7 +225,9 @@ const Auth = () => {
           </CardHeader>
           <CardContent className="space-y-4 text-center">
             <p className="text-sm text-muted-foreground">
-              We sent a confirmation link to <span className="font-medium text-foreground">{confirmationEmail}</span>. Open that email and select the confirmation link.
+              We sent a confirmation link to{" "}
+              <span className="font-medium text-foreground">{confirmationEmail}</span>. Open that
+              email and select the confirmation link.
             </p>
             <div className="rounded-lg border bg-muted/40 p-4 text-sm">
               {role === "officer"
@@ -246,8 +256,8 @@ const Auth = () => {
             {mode === "signin" ? "Welcome back" : "Create your account"}
           </CardTitle>
           <CardDescription className="text-center">
-            {mode === "signin" 
-              ? "Sign in to access your account" 
+            {mode === "signin"
+              ? "Sign in to access your account"
               : "Join the premier security professional marketplace"}
           </CardDescription>
         </CardHeader>
@@ -284,7 +294,10 @@ const Auth = () => {
 
                 <div className="space-y-2">
                   <Label>I am a...</Label>
-                  <RadioGroup value={role} onValueChange={(value) => setRole(value as "officer" | "company")}>
+                  <RadioGroup
+                    value={role}
+                    onValueChange={(value) => setRole(value as "officer" | "company")}
+                  >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="officer" id="officer" />
                       <Label htmlFor="officer" className="font-normal cursor-pointer">
@@ -342,9 +355,7 @@ const Auth = () => {
                     <li className={/[A-Z]/.test(password) ? "text-green-600" : ""}>
                       One capital letter
                     </li>
-                    <li className={/[0-9]/.test(password) ? "text-green-600" : ""}>
-                      One number
-                    </li>
+                    <li className={/[0-9]/.test(password) ? "text-green-600" : ""}>One number</li>
                     <li className={/[^A-Za-z0-9]/.test(password) ? "text-green-600" : ""}>
                       One special symbol (!@#$%^&*)
                     </li>
@@ -352,7 +363,9 @@ const Auth = () => {
                   {passwordErrors.length > 0 && (
                     <div className="mt-2 space-y-1">
                       {passwordErrors.map((error, index) => (
-                        <p key={index} className="text-destructive text-xs">{error}</p>
+                        <p key={index} className="text-destructive text-xs">
+                          {error}
+                        </p>
                       ))}
                     </div>
                   )}
@@ -383,24 +396,28 @@ const Auth = () => {
                 onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
                 className="text-primary hover:underline"
               >
-                {mode === "signin" 
-                  ? "Don't have an account? Sign up" 
+                {mode === "signin"
+                  ? "Don't have an account? Sign up"
                   : "Already have an account? Sign in"}
               </button>
             </div>
           </form>
-          
+
           {/* Show pricing for companies */}
           {mode === "signup" && role === "company" && (
             <div className="mt-6 space-y-4">
               <div className="text-center space-y-3">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
-                  <span className="text-sm font-semibold text-primary">🎉 Free for the First 30 Days</span>
+                  <span className="text-sm font-semibold text-primary">
+                    🎉 Free for the First 30 Days
+                  </span>
                 </div>
                 <h3 className="text-lg font-semibold">Choose Your Plan</h3>
-                <p className="text-sm text-muted-foreground">Select the plan that best fits your hiring needs</p>
+                <p className="text-sm text-muted-foreground">
+                  Select the plan that best fits your hiring needs
+                </p>
               </div>
-              
+
               <div className="space-y-3">
                 <Card className="p-4">
                   <div className="flex justify-between items-start mb-2">
@@ -416,13 +433,15 @@ const Auth = () => {
                     <li>• Search functionality</li>
                   </ul>
                 </Card>
-                
+
                 <Card className="p-4 border-2 border-primary">
                   <div className="flex justify-between items-start mb-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="font-semibold">Professional</h4>
-                        <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">Popular</span>
+                        <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
+                          Popular
+                        </span>
                       </div>
                       <p className="text-sm text-muted-foreground">30-day free trial</p>
                     </div>
@@ -438,7 +457,7 @@ const Auth = () => {
                     <li>• Job posting management</li>
                   </ul>
                 </Card>
-                
+
                 <Card className="p-4">
                   <div className="flex justify-between items-start mb-2">
                     <div>
@@ -458,13 +477,12 @@ const Auth = () => {
                   </ul>
                 </Card>
               </div>
-              
+
               <p className="text-xs text-center text-muted-foreground">
                 You can upgrade or change plans after signing up
               </p>
             </div>
           )}
-
         </CardContent>
       </Card>
     </div>

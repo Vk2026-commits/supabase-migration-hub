@@ -4,6 +4,10 @@ project_id = "yatawyeamsaxemjctggp"
 subject = "You’ve been added to a We Find Guards team"
 content_path = "./supabase/templates/invite.html"
 
+[auth.email.template.confirmation]
+subject = "Welcome to We Find Guards — confirm your account"
+content_path = "./supabase/templates/confirm-account.html"
+
 [functions.express-interest]
 verify_jwt = true
 
@@ -48,3 +52,6 @@ verify_jwt = true
 
 [functions.manage-company-team]
 verify_jwt = true
+
+[functions.send-workflow-notifications]
+verify_jwt = false
