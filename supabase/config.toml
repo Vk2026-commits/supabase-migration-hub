@@ -1,5 +1,9 @@
 project_id = "yatawyeamsaxemjctggp"
 
+[auth.email.template.invite]
+subject = "You’ve been added to a We Find Guards team"
+content_path = "./supabase/templates/invite.html"
+
 [functions.express-interest]
 verify_jwt = true
 
