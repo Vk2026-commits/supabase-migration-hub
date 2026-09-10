@@ -61,15 +61,9 @@ Deno.serve(async (request) => {
       if (!hasValidEmailShape) return json({ error: "Enter a valid email address" }, 400);
       if (!roles.has(role)) return json({ error: "Choose a valid team role" }, 400);
 
-      let invitedUser = null as { id: string; email?: string } | null;
-      let page = 1;
-      while (!invitedUser && page <= 10) {
-        const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-        if (error) throw error;
-        invitedUser = data.users.find((user) => user.email?.toLowerCase() === email) || null;
-        if (data.users.length < 1000) break;
-        page += 1;
-      }
+      const { data: existingUserId, error: lookupError } = await admin.rpc("find_company_team_user_by_email", { p_email: email });
+      if (lookupError) throw new Error("Team member lookup failed. Please try again.");
+      let invitedUser = existingUserId ? { id: existingUserId as string, email } : null;
 
       let invited = false;
       if (!invitedUser) {
