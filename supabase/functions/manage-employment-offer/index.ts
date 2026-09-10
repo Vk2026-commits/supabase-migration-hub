@@ -8,6 +8,20 @@ const corsHeaders = {
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const sha256 = async (bytes: Uint8Array) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((b) => b.toString(16).padStart(2, "0")).join("");
 const clean = (value: unknown) => String(value ?? "").trim();
+const companyProfileReady = (company: Record<string, unknown> | null | undefined) =>
+  Boolean(
+    company &&
+      [
+        company.company_name,
+        company.company_address,
+        company.company_city,
+        company.company_state,
+        company.company_zip,
+        company.contact_person_name,
+        company.contact_email,
+        company.contact_cell_phone,
+      ].every((value) => clean(value)),
+  );
 const formatDate = (value: unknown) => {
   const input = clean(value);
   if (!input) return "Not provided";
@@ -297,7 +311,7 @@ Deno.serve(async (request) => {
     const action = clean(body.action);
     const companyMemberRole = async (companyId: string) => {
       const { data } = await admin.from("company_members").select("role,status").eq("company_id", companyId).eq("user_id", authData.user.id).maybeSingle();
-      return data && ["active", "invited"].includes(data.status) ? data.role : null;
+      return data?.status === "active" ? data.role : null;
     };
 
     if (action === "send") {
@@ -313,6 +327,7 @@ Deno.serve(async (request) => {
       const memberRole = await companyMemberRole(companyId);
       const canSendOffer = company?.user_id === authData.user.id || ["owner", "admin", "hiring_manager"].includes(memberRole || "");
       if (!company || !canSendOffer) return json({ error: "Company hiring access denied" }, 403);
+      if (!companyProfileReady(company)) return json({ error: "Complete the company profile before sending an offer" }, 403);
       const { data: application } = await admin.from("guard_hiring_applications").select("id,officer_id,job_application_id,status,application_type,application_data").eq("id", applicationId).maybeSingle();
       if (!application || application.officer_id !== officerId || application.application_type !== "employer_copy" || application.status !== "submitted") return json({ error: "A submitted company application is required" }, 400);
       const { data: jobApplication } = application.job_application_id ? await admin.from("job_applications").select("id,job_posting_id").eq("id", application.job_application_id).maybeSingle() : { data: null };
@@ -360,6 +375,9 @@ Deno.serve(async (request) => {
     const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", authData.user.id);
     const isAdmin = (roles || []).some((item: { role: string }) => ["admin", "full_access", "view_only"].includes(item.role));
     if (!isCompany && !isOfficer && !isAdmin) return json({ error: "Offer access denied" }, 403);
+    if (isCompany && !isAdmin && !companyProfileReady(offer.company_profiles)) {
+      return json({ error: "Complete the company profile before using employment offers" }, 403);
+    }
     const deadline = clean(offer.terms?.acceptanceDeadline);
     if (["sent", "viewed"].includes(offer.status) && deadline && deadline < new Date().toISOString().slice(0, 10)) {
       await admin.from("employment_offers").update({ status: "expired", expired_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", offerId);

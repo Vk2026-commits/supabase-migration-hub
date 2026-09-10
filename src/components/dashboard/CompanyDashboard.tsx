@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, Building2, Crown, Users, Upload } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, Building2, Crown, Users, Upload, type LucideIcon } from "lucide-react";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
 import EmploymentTracking from "./EmploymentTracking";
@@ -27,6 +27,7 @@ import { useSearchParams } from "@/lib/router-compat";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileWizard";
 import CompanyTeam from "./CompanyTeam";
+import type { Database } from "@/integrations/supabase/types";
 
 interface CompanyDashboardProps {
   userId: string;
@@ -43,10 +44,15 @@ const companyTabs = new Set([
   "subscriptions",
 ]);
 
+type CompanyProfile = Database["public"]["Tables"]["company_profiles"]["Row"];
+
+const errorMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const [companyProfile, setCompanyProfile] = useState<any>(null);
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -85,6 +91,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const expiringItems = useExpiringCredentials(userId, "company");
   const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
+  const showLegacyProfile = import.meta.env.VITE_SHOW_LEGACY_PROFILE === "true";
   const companyProfileComplete = Boolean(
     companyProfile &&
     companyProfile.company_name?.trim() &&
@@ -115,10 +122,6 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   };
 
   useEffect(() => {
-    loadProfile();
-  }, [userId]);
-
-  useEffect(() => {
     requestAnimationFrame(() =>
       document
         .getElementById("company-dashboard-content")
@@ -126,7 +129,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     );
   }, [activeTab]);
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     const { data: ownedCompany } = await supabase
       .from("company_profiles")
       .select("*")
@@ -136,11 +139,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     let data = ownedCompany;
     let teamRole: string | null = ownedCompany ? "owner" : null;
     if (!data) {
-      const { data: membership } = await (supabase as any)
+      const { data: membership } = await supabase
         .from("company_members")
         .select("company_id,role,status")
         .eq("user_id", userId)
-        .in("status", ["active", "invited"])
+        .eq("status", "active")
         .maybeSingle();
       if (membership?.company_id) {
         const { data: memberCompany } = await supabase
@@ -186,7 +189,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       });
     }
     setProfileLoaded(true);
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    void loadProfile();
+  }, [loadProfile]);
 
   const handleLogoUpload = async (file: File) => {
     setUploadingLogo(true);
@@ -207,8 +214,6 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       setFormData((current) => ({ ...current, logo_url: publicUrl }));
       toast.success("Logo uploaded successfully!");
       return publicUrl;
-    } catch (error: any) {
-      throw error;
     } finally {
       setUploadingLogo(false);
     }
@@ -249,31 +254,32 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       if (showToast) toast.success("Company profile updated successfully!");
       await loadProfile();
       return true;
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Company profile could not be saved"));
       return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const getTierBadge = (tier: string) => {
-    const variants: Record<string, { variant: any; icon: any }> = {
+  const getTierBadge = (tier?: string | null) => {
+    const variants: Record<string, { variant: BadgeProps["variant"]; icon: LucideIcon | null }> = {
       free: { variant: "secondary", icon: null },
       professional: { variant: "default", icon: Users },
       premium: { variant: "default", icon: Crown },
     };
 
-    const config = variants[tier] || variants.free;
+    const normalizedTier = tier || "free";
+    const config = variants[normalizedTier] || variants.free;
     const Icon = config.icon;
 
     return (
       <Badge
         variant={config.variant}
-        className={tier === "premium" ? "bg-accent text-accent-foreground" : ""}
+        className={normalizedTier === "premium" ? "bg-accent text-accent-foreground" : ""}
       >
         {Icon && <Icon className="h-3 w-3 mr-1" />}
-        {tier.charAt(0).toUpperCase() + tier.slice(1)}
+        {normalizedTier.charAt(0).toUpperCase() + normalizedTier.slice(1)}
       </Badge>
     );
   };
@@ -327,7 +333,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                   Loading your company profile…
                 </div>
               ))}
-            {false && activeTab === "profile" && (
+            {showLegacyProfile && activeTab === "profile" && (
               <>
                 <div className="grid md:grid-cols-3 gap-4">
                   <Card>
@@ -888,7 +894,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             {activeTab === "applicants" && companyProfile && (
               <JobApplicants
                 companyId={companyProfile.id}
-                subscriptionTier={companyProfile.subscription_tier}
+                subscriptionTier={companyProfile.subscription_tier ?? "free"}
                 onNavigateToSubscriptions={() => selectTab("subscriptions")}
               />
             )}
@@ -899,7 +905,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                 <div className="mt-8">
                   <InterestedOfficers
                     companyId={companyProfile.id}
-                    subscriptionTier={companyProfile.subscription_tier}
+                    subscriptionTier={companyProfile.subscription_tier ?? "free"}
                   />
                 </div>
               </>
@@ -915,7 +921,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
             {activeTab === "subscriptions" && companyProfile && (
               <SubscriptionManager
-                currentTier={companyProfile.subscription_tier}
+                currentTier={companyProfile.subscription_tier ?? "free"}
                 onUpgrade={(tier) => {
                   toast.success(`Upgrading to ${tier}...`);
                 }}

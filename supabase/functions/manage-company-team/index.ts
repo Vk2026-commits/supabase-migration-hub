@@ -45,7 +45,7 @@ Deno.serve(async (request) => {
 
     const { data: company } = await admin
       .from("company_profiles")
-      .select("id,user_id,company_name")
+      .select("id,user_id,company_name,company_address,company_city,company_state,company_zip,contact_person_name,contact_email,contact_cell_phone")
       .eq("id", companyId)
       .maybeSingle();
     if (!company) return json({ error: "Company not found" }, 404);
@@ -168,6 +168,23 @@ Deno.serve(async (request) => {
         .eq("user_id", authData.user.id);
       if (completionError) throw completionError;
       return json({ success: true, message: "Team profile completed" });
+    }
+
+    const companyProfileComplete = [
+      company.company_name,
+      company.company_address,
+      company.company_city,
+      company.company_state,
+      company.company_zip,
+      company.contact_person_name,
+      company.contact_email,
+      company.contact_cell_phone,
+    ].every((value) => clean(value));
+    if (!companyProfileComplete) {
+      return json(
+        { error: "Complete the company profile before using the hiring workspace" },
+        403,
+      );
     }
 
     const hasAccess = isOwner || actingMember?.status === "active";
@@ -374,19 +391,46 @@ Deno.serve(async (request) => {
       return json({ success: true });
     }
     if (action === "remove") {
-      if (body.confirm_delete !== true) {
-        return json({ error: "Confirm removal before deleting this team member" }, 400);
+      if (body.confirm_remove !== true) {
+        return json({ error: "Confirm removal before revoking this team member’s access" }, 400);
       }
 
-      // The Team trash flow is a full account deletion for non-owners. Auth
-      // deletion cascades their team membership and frees the email address so
-      // it can only return through a fresh invite and account-creation flow.
-      const { error: deleteUserError } = await admin.auth.admin.deleteUser(target.user_id);
-      if (deleteUserError) throw deleteUserError;
+      // Revoke only this company's membership for established users. An Auth
+      // record is deleted solely when it is an unclaimed invitation account,
+      // which allows a genuinely fresh invitation to be issued later.
+      let deletedUnusedInvitation = false;
+      if (target.status === "invited") {
+        const { data: userLookup, error: userLookupError } = await admin.auth.admin.getUserById(
+          target.user_id,
+        );
+        if (userLookupError) throw userLookupError;
+        const invitedUser = userLookup.user;
+        const unusedInvitation =
+          Boolean(invitedUser?.invited_at) &&
+          !invitedUser?.email_confirmed_at &&
+          !invitedUser?.last_sign_in_at;
+
+        if (unusedInvitation) {
+          const { error: deleteUserError } = await admin.auth.admin.deleteUser(target.user_id);
+          if (deleteUserError) throw deleteUserError;
+          deletedUnusedInvitation = true;
+        }
+      }
+
+      if (!deletedUnusedInvitation) {
+        const { error: membershipError } = await admin
+          .from("company_members")
+          .delete()
+          .eq("id", target.id);
+        if (membershipError) throw membershipError;
+      }
+
       return json({
         success: true,
-        deleted_account: true,
-        message: `${target.email} was deleted and can be invited again`,
+        deleted_account: deletedUnusedInvitation,
+        message: deletedUnusedInvitation
+          ? `The unused invitation for ${target.email} was canceled`
+          : `${target.email} was removed from the company team`,
       });
     }
     return json({ error: "Unknown team action" }, 400);

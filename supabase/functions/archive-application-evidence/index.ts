@@ -14,6 +14,20 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const hex = (buffer: ArrayBuffer) => Array.from(new Uint8Array(buffer)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 const basename = (path: string) => path.split("/").pop() || "file";
 const cleanCertificationPath = (path: string) => path.startsWith("http") ? path.split("certification-documents/").pop() || "" : path;
+const companyProfileReady = (company: Record<string, unknown> | null | undefined) =>
+  Boolean(
+    company &&
+      [
+        company.company_name,
+        company.company_address,
+        company.company_city,
+        company.company_state,
+        company.company_zip,
+        company.contact_person_name,
+        company.contact_email,
+        company.contact_cell_phone,
+      ].every((value) => String(value ?? "").trim()),
+  );
 const photoLabels: Record<string, string> = {
   headshot: "Professional headshot",
   "full-body": "Full-body photo",
@@ -59,14 +73,15 @@ serve(async (request) => {
         ? await admin.from("job_postings").select("company_id").eq("id", jobApplication.job_posting_id).maybeSingle()
         : { data: null };
       const { data: company } = jobPosting?.company_id
-        ? await admin.from("company_profiles").select("user_id,subscription_tier").eq("id", jobPosting.company_id).maybeSingle()
+        ? await admin.from("company_profiles").select("user_id,subscription_tier,company_name,company_address,company_city,company_state,company_zip,contact_person_name,contact_email,contact_cell_phone").eq("id", jobPosting.company_id).maybeSingle()
         : { data: null };
       const { data: member } = jobPosting?.company_id
         ? await admin.from("company_members").select("status").eq("company_id", jobPosting.company_id).eq("user_id", authData.user.id).maybeSingle()
         : { data: null };
       isCompany = Boolean(
         company
-        && (company.user_id === authData.user.id || ["active", "invited"].includes(member?.status || ""))
+        && (company.user_id === authData.user.id || member?.status === "active")
+        && companyProfileReady(company)
         && ["professional", "premium"].includes(company.subscription_tier),
       );
     }

@@ -105,7 +105,10 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
   }, [load]);
 
   const invite = async () => {
-    if (!email.trim()) return toast.error("Enter the team member’s email address");
+    if (!email.trim()) {
+      toast.error("Enter the team member’s email address");
+      return;
+    }
     setSubmitting(true);
     try {
       const data = await invoke({ action: "invite", email: email.trim(), role });
@@ -140,7 +143,7 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
       const data = await invoke({
         action: "remove",
         member_id: memberToRemove.id,
-        confirm_delete: true,
+        confirm_remove: true,
       });
       toast.success(data.message || "Team member removed");
       setMemberToRemove(null);
@@ -217,8 +220,8 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
         <CardHeader>
           <CardTitle>Team members</CardTitle>
           <CardDescription>
-            {members.length} {members.length === 1 ? "person has" : "people have"} access to this
-            company.
+            {members.length} {members.length === 1 ? "person is" : "people are"} listed for this
+            company. Only active members have access.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -294,9 +297,15 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete team member and account?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {memberToRemove?.status === "invited"
+                ? "Cancel this invitation?"
+                : "Remove team access?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {`This permanently deletes the We Find Guards account for ${memberToRemove?.email}, including its team access. You can then invite this same email again, and it will receive a brand-new account-creation email.`}
+              {memberToRemove?.status === "invited"
+                ? `This cancels the unused invitation for ${memberToRemove.email}. You can send a fresh invitation later.`
+                : `${memberToRemove?.email} will immediately lose access to this company. Their personal We Find Guards login will not be deleted.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -309,7 +318,11 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
                 void confirmRemove();
               }}
             >
-              {removing ? "Deleting…" : "Confirm delete account"}
+              {removing
+                ? "Removing…"
+                : memberToRemove?.status === "invited"
+                  ? "Cancel invitation"
+                  : "Remove access"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
