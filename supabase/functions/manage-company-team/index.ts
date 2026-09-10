@@ -11,7 +11,7 @@ const json = (body: unknown, status = 200) =>
   });
 const clean = (value: unknown) => String(value ?? "").trim();
 const roles = new Set(["admin", "hiring_manager", "reviewer"]);
-const invitationSetupWindowMs = 15 * 60 * 1000;
+const invitationSetupWindowMs = 7 * 24 * 60 * 60 * 1000;
 // Keep invitations on the We Find Guards domain. APP_URL supports a controlled
 // deployment override without trusting a client-provided redirect origin.
 const appUrl = (Deno.env.get("APP_URL") || "https://wefindguards.com").replace(/\/+$/, "");

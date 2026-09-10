@@ -125,7 +125,7 @@ const ResetPassword = () => {
           </CardTitle>
           <CardDescription className="text-center">
             {isTeamInvitation
-              ? "Create a password within 15 minutes to activate your We Find Guards account and access your company workspace."
+              ? "Create a password within 7 days to activate your We Find Guards account and access your company workspace."
               : "Choose a strong password for your account"}
           </CardDescription>
         </CardHeader>
