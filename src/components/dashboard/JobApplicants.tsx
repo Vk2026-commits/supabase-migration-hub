@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Lock, User, MessageCircle, ClipboardCheck } from "lucide-react";
+import { Download, Lock, User, MessageCircle, ClipboardCheck, Mail, Phone } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -53,7 +53,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       .select(`
         *,
         job_posting:job_postings(title),
-        officer:officer_profiles(id, user_id),
+        officer:officer_profiles(id, user_id, phone),
         profile:officer_profiles(user_id),
         hiring_application:guard_hiring_applications(id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
       `)
@@ -68,7 +68,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     // Get display names and non-sensitive onboarding progress for accepted offers.
     const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
     const [profilesResult, offersResult, progressResult] = await Promise.all([
-      officerUserIds.length ? supabase.from("profiles").select("id, full_name").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
+      officerUserIds.length ? supabase.from("profiles").select("id, full_name, email").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
       (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
       (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
     ]);
@@ -76,11 +76,17 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     if (progressResult.error) console.error("Failed to load onboarding progress", progressResult.error);
     const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
     const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
-    setApplications((data || []).map((app: any) => ({
-      ...app,
-      officerName: profilesResult.data?.find((profile: any) => profile.id === app.officer?.user_id)?.full_name || "Unknown",
-      onboardingProgress: progressByHire.get(hireByApplication.get(app.id)) || null,
-    })));
+    setApplications((data || []).map((app: any) => {
+      const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
+      const applicationSnapshot = app.hiring_application?.[0]?.application_data || {};
+      return {
+        ...app,
+        officerName: profile?.full_name || applicationSnapshot.applicantName || "Unknown",
+        officerEmail: applicationSnapshot.email || profile?.email || "",
+        officerPhone: applicationSnapshot.phone || app.officer?.phone || "",
+        onboardingProgress: progressByHire.get(hireByApplication.get(app.id)) || null,
+      };
+    }));
   };
 
   const getMaskedName = (fullName: string) => {
@@ -135,11 +141,23 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
               <div key={app.id} className="border rounded-lg p-4">
                 <div className="flex justify-between items-start mb-2">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                       <User className="h-4 w-4 text-muted-foreground" />
                       <span className="font-semibold">
                         {isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}
                       </span>
+                      {isPaidSubscriber && app.officerPhone && (
+                        <a href={`tel:${app.officerPhone}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
+                          <Phone className="h-3.5 w-3.5" />
+                          {app.officerPhone}
+                        </a>
+                      )}
+                      {isPaidSubscriber && app.officerEmail && (
+                        <a href={`mailto:${app.officerEmail}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
+                          <Mail className="h-3.5 w-3.5" />
+                          {app.officerEmail}
+                        </a>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Applied to: {app.job_posting?.title}
