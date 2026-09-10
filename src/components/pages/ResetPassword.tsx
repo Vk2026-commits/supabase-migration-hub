@@ -102,10 +102,10 @@ const ResetPassword = () => {
     }
     toast.success(
       isTeamInvitation
-        ? "Account activated! Redirecting to your team..."
+        ? "Account activated! Redirecting to Browse Guards..."
         : "Password updated! Redirecting...",
     );
-    setTimeout(() => navigate(isTeamInvitation ? "/dashboard?tab=team" : "/dashboard"), 1000);
+    setTimeout(() => navigate(isTeamInvitation ? "/browse" : "/dashboard"), 1000);
   };
 
   return (
