@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2 } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
+import { createZip } from "@/lib/createZip";
 
 interface EmploymentTrackingProps {
   companyId: string;
@@ -25,7 +26,8 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [rating, setRating] = useState(5);
   const [complianceHire, setComplianceHire] = useState<any>(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
-  const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number; submittedAt: string; sha256: string; url: string }>>([]);
+  const [downloadingDocuments, setDownloadingDocuments] = useState(false);
+  const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string }>>([]);
 
   useEffect(() => {
     void loadHires();
@@ -72,13 +74,26 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
     setComplianceLoading(true);
     setComplianceDocuments([]);
     try {
-      const result = await (supabase as any).from("officer_compliance_documents").select("id,document_label,version,submitted_at,sha256,storage_path,document_type").eq("officer_id", hire.officer_id).order("submitted_at", { ascending: false });
+      const packetId = hire.onboarding_progress?.packet_id;
+      if (!packetId) throw new Error("This officer does not have an onboarding packet yet");
+      const [result, packetResult] = await Promise.all([
+        (supabase as any).from("officer_compliance_documents").select("id,document_label,version,submitted_at,sha256,storage_path,document_type").eq("packet_id", packetId).order("submitted_at", { ascending: false }),
+        (supabase as any).from("officer_onboarding_packets").select("id,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("id", packetId).maybeSingle(),
+      ]);
       if (result.error) throw result.error;
-      const documents = (await Promise.all((result.data || []).map(async (document: any) => {
+      if (packetResult.error) throw packetResult.error;
+      const entries = (result.data || []).map((document: any) => ({ ...document, legacy: false }));
+      if (!entries.some((document: any) => document.document_type === "form-i9") && packetResult.data?.i9_document_path && packetResult.data?.i9_submitted_at) entries.push({ id: `legacy-i9-${packetId}`, document_label: "Signed Form I-9", version: null, submitted_at: packetResult.data.i9_submitted_at, sha256: null, storage_path: packetResult.data.i9_document_path, document_type: "form-i9", legacy: true });
+      if (!entries.some((document: any) => document.document_type === "form-w4") && packetResult.data?.w4_document_path && packetResult.data?.w4_submitted_at) entries.push({ id: `legacy-w4-${packetId}`, document_label: "Signed Form W-4", version: null, submitted_at: packetResult.data.w4_submitted_at, sha256: null, storage_path: packetResult.data.w4_document_path, document_type: "form-w4", legacy: true });
+      const paths = entries.map((document: any) => document.storage_path);
+      const signedResult = paths.length ? await supabase.storage.from("onboarding-documents").createSignedUrls(paths, 3600) : { data: [], error: null };
+      if (signedResult.error) throw signedResult.error;
+      const urls = new Map((signedResult.data || []).map((item: any) => [item.path, item.signedUrl]));
+      const documents = (await Promise.all(entries.map(async (document: any) => {
         await (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: hire.officer_id } });
-        const signed = await supabase.storage.from("onboarding-documents").createSignedUrl(document.storage_path, 3600);
-        if (signed.error || !signed.data?.signedUrl) return null;
-        return { id: document.id, label: document.document_label, version: document.version, submittedAt: document.submitted_at, sha256: document.sha256, url: signed.data.signedUrl };
+        const url = urls.get(document.storage_path);
+        if (!url) return null;
+        return { id: document.id, label: document.document_label, version: document.version, submittedAt: document.submitted_at, sha256: document.sha256, url, filename: `${document.document_type}${document.version ? `-v${document.version}` : ""}.pdf` };
       }))).filter(Boolean);
       setComplianceDocuments(documents);
     } catch (error) {
@@ -86,6 +101,41 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       toast.error("The officer compliance file could not be loaded");
     } finally {
       setComplianceLoading(false);
+    }
+  };
+
+  const downloadDocument = async (file: typeof complianceDocuments[number]) => {
+    const response = await fetch(file.url);
+    if (!response.ok) throw new Error(`Could not download ${file.label}`);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadAllDocuments = async () => {
+    if (!complianceDocuments.length) return;
+    setDownloadingDocuments(true);
+    try {
+      const files = await Promise.all(complianceDocuments.map(async (document) => {
+        const response = await fetch(document.url);
+        if (!response.ok) throw new Error(`Could not download ${document.label}`);
+        return { name: document.filename, data: await response.blob() };
+      }));
+      const archive = await createZip(files);
+      const url = URL.createObjectURL(archive);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${(complianceHire?.officer_profiles?.profiles?.full_name || "officer").replace(/[^a-z0-9]+/gi, "-")}-onboarding-documents.zip`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Onboarding documents downloaded");
+    } catch (error: any) {
+      toast.error(error.message || "The onboarding documents could not be downloaded");
+    } finally {
+      setDownloadingDocuments(false);
     }
   };
 
@@ -285,7 +335,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                   </div>
                   <div className="mt-3 h-2 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
                 </div>
-                <Button type="button" variant="outline" className="w-full" onClick={() => openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Open audit-ready officer file</Button>
+                <Button type="button" variant="outline" className="w-full" disabled={!hire.onboarding_progress?.packet_id} onClick={() => openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />{onboarding.percent === 100 ? "View and download onboarding documents" : "View available onboarding documents"}</Button>
 
                 {hire.evaluations && hire.evaluations.length > 0 && (
                   <div className="space-y-2 border-t pt-3">
@@ -375,12 +425,12 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       </Card>
       <Dialog open={Boolean(complianceHire)} onOpenChange={(open) => !open && setComplianceHire(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} compliance file</DialogTitle><DialogDescription>Immutable signed documents are retained by version. Opening this file is recorded in the security audit log.</DialogDescription></DialogHeader>
-          {complianceLoading ? <p className="py-8 text-center text-muted-foreground">Loading compliance documents...</p> : complianceDocuments.length ? (
-            <div className="space-y-3 py-4">{complianceDocuments.map((document) => (
+          <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} onboarding documents</DialogTitle><DialogDescription>Review and download the forms this officer completed. Signed records are retained by version and protected by expiring links.</DialogDescription></DialogHeader>
+          {complianceLoading ? <p className="flex items-center justify-center gap-2 py-8 text-center text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading onboarding documents...</p> : complianceDocuments.length ? (
+            <div className="space-y-4 py-4"><div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-4"><div><strong className="block text-green-950">{complianceDocuments.length} completed document{complianceDocuments.length === 1 ? "" : "s"}</strong><span className="text-xs text-green-900/70">Ready for company records</span></div><Button type="button" onClick={() => void downloadAllDocuments()} disabled={downloadingDocuments}><Archive className="mr-2 h-4 w-4" />{downloadingDocuments ? "Preparing ZIP…" : "Download all"}</Button></div>{complianceDocuments.map((document) => (
               <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
-                <div className="min-w-0"><strong className="block">{document.label} <Badge variant="secondary">Version {document.version}</Badge></strong><span className="block text-xs text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</span><span className="block truncate font-mono text-[10px] text-muted-foreground" title={document.sha256}>SHA-256: {document.sha256}</span></div>
-                <Button type="button" size="sm" onClick={() => window.open(document.url, "_blank", "noopener,noreferrer")}><Eye className="mr-2 h-4 w-4" />View PDF</Button>
+                <div className="min-w-0"><strong className="block">{document.label} {document.version && <Badge variant="secondary">Version {document.version}</Badge>}</strong><span className="block text-xs text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</span>{document.sha256 && <span className="block truncate font-mono text-[10px] text-muted-foreground" title={document.sha256}>SHA-256: {document.sha256}</span>}</div>
+                <div className="flex gap-2"><Button type="button" size="sm" onClick={() => window.open(document.url, "_blank", "noopener,noreferrer")}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" onClick={() => void downloadDocument(document).catch(() => toast.error(`Could not download ${document.label}`))}><Download className="mr-2 h-4 w-4" />Download</Button></div>
               </div>
             ))}</div>
           ) : <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong className="block">No archived compliance documents yet</strong>Documents will appear here as the officer verifies and saves each onboarding form.</div>}
