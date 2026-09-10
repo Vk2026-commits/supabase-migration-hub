@@ -152,8 +152,6 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
     }
   };
 
-  const pendingInvitation = memberToRemove?.status === "invited";
-
   return (
     <div className="space-y-6">
       <Card className="rounded-2xl">
@@ -244,7 +242,11 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
                   <p className="truncate text-sm text-muted-foreground">{member.email}</p>
                 </div>
                 <Badge variant={member.status === "active" ? "secondary" : "outline"}>
-                  {member.status === "invited" ? "Invitation sent" : "Active"}
+                  {member.status === "invited"
+                    ? "Invite pending"
+                    : member.status === "accepted"
+                      ? "Account setup in progress"
+                      : "Active"}
                 </Badge>
                 {member.role === "owner" ? (
                   <Badge>{roleLabels.owner}</Badge>
@@ -292,13 +294,9 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {pendingInvitation ? "Delete pending invitation?" : "Remove team member?"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Delete team member and account?</AlertDialogTitle>
             <AlertDialogDescription>
-              {pendingInvitation
-                ? `This will permanently delete the unused account for ${memberToRemove?.email}. You can immediately invite this email again, and it will receive a brand-new We Find Guards account-creation email.`
-                : `This will remove ${memberToRemove?.full_name || memberToRemove?.email} from this company team. Their separate We Find Guards account will not be deleted.`}
+              {`This permanently deletes the We Find Guards account for ${memberToRemove?.email}, including its team access. You can then invite this same email again, and it will receive a brand-new account-creation email.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -311,11 +309,7 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
                 void confirmRemove();
               }}
             >
-              {removing
-                ? "Deleting…"
-                : pendingInvitation
-                  ? "Confirm delete invitation"
-                  : "Confirm remove member"}
+              {removing ? "Deleting…" : "Confirm delete account"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

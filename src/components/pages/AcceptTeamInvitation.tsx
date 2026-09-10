@@ -22,8 +22,20 @@ const AcceptTeamInvitation = () => {
         return;
       }
 
-      const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" });
-      if (error) {
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "invite" });
+      const companyId = user?.user_metadata?.company_team_invite;
+      if (error || typeof companyId !== "string" || !companyId) {
+        setState("invalid");
+        return;
+      }
+
+      const acceptance = await supabase.functions.invoke("manage-company-team", {
+        body: { action: "accept_invitation", company_id: companyId },
+      });
+      if (acceptance.error || acceptance.data?.error) {
         setState("invalid");
         return;
       }

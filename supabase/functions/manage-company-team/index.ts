@@ -11,10 +11,15 @@ const json = (body: unknown, status = 200) =>
   });
 const clean = (value: unknown) => String(value ?? "").trim();
 const roles = new Set(["admin", "hiring_manager", "reviewer"]);
+const invitationSetupWindowMs = 15 * 60 * 1000;
 // Keep invitations on the We Find Guards domain. APP_URL supports a controlled
 // deployment override without trusting a client-provided redirect origin.
 const appUrl = (Deno.env.get("APP_URL") || "https://wefindguards.com").replace(/\/+$/, "");
 const teamInvitationRedirect = `${appUrl}/reset-password?invite=company-team`;
+const invitationSetupExpired = (acceptedAt: string | null | undefined) => {
+  const acceptedAtMs = acceptedAt ? Date.parse(acceptedAt) : Number.NaN;
+  return !Number.isFinite(acceptedAtMs) || Date.now() - acceptedAtMs > invitationSetupWindowMs;
+};
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -49,17 +54,59 @@ Deno.serve(async (request) => {
       ? { data: null }
       : await admin
           .from("company_members")
-          .select("role,status")
+          .select("role,status,invite_accepted_at")
           .eq("company_id", companyId)
           .eq("user_id", authData.user.id)
           .maybeSingle();
+
+    if (action === "accept_invitation") {
+      if (isOwner || actingMember?.status === "active") {
+        return json({ success: true, message: "Invitation already activated" });
+      }
+      if (actingMember?.status === "accepted") {
+        return json(
+          {
+            error:
+              "This invitation link has already been used. Complete account setup from the open page.",
+          },
+          409,
+        );
+      }
+      if (actingMember?.status !== "invited") {
+        return json({ error: "This team invitation is no longer available" }, 403);
+      }
+      const { error: acceptanceError } = await admin
+        .from("company_members")
+        .update({
+          status: "accepted",
+          invite_accepted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("company_id", companyId)
+        .eq("user_id", authData.user.id);
+      if (acceptanceError) throw acceptanceError;
+      return json({ success: true, message: "Invitation accepted" });
+    }
 
     if (action === "activate_invitation") {
       if (isOwner || actingMember?.status === "active") {
         return json({ success: true, message: "Invitation already activated" });
       }
-      if (actingMember?.status !== "invited") {
+      if (actingMember?.status !== "accepted") {
         return json({ error: "This team invitation is no longer available" }, 403);
+      }
+      if (invitationSetupExpired(actingMember.invite_accepted_at)) {
+        const { error: deleteExpiredUserError } = await admin.auth.admin.deleteUser(
+          authData.user.id,
+        );
+        if (deleteExpiredUserError) throw deleteExpiredUserError;
+        return json(
+          {
+            error:
+              "Account setup expired. Ask the team administrator to send you a new invitation.",
+          },
+          410,
+        );
       }
       const { error: activationError } = await admin
         .from("company_members")
@@ -81,7 +128,7 @@ Deno.serve(async (request) => {
     if (action === "list") {
       const { data: members, error: memberError } = await admin
         .from("company_members")
-        .select("id,user_id,email,role,status,invited_at,joined_at")
+        .select("id,user_id,email,role,status,invited_at,invite_accepted_at,joined_at")
         .eq("company_id", companyId)
         .order("invited_at");
       if (memberError) throw memberError;
@@ -139,6 +186,24 @@ Deno.serve(async (request) => {
             },
             409,
           );
+        }
+
+        if (pendingMembership?.status === "accepted") {
+          if (!invitationSetupExpired(pendingMembership.invite_accepted_at)) {
+            return json(
+              {
+                error:
+                  "This invitation link was already accepted and account setup is still in progress. The recipient must finish creating the account or wait for the setup window to expire before requesting a new invitation.",
+              },
+              409,
+            );
+          }
+          const { error: deleteExpiredInviteError } = await admin.auth.admin.deleteUser(
+            invitedUser.id,
+          );
+          if (deleteExpiredInviteError) throw deleteExpiredInviteError;
+          invitedUser = null;
+          renewedUnusedInvitation = true;
         }
 
         // Team members removed while their original invitation was still unused
@@ -264,24 +329,16 @@ Deno.serve(async (request) => {
         return json({ error: "Confirm removal before deleting this team member" }, 400);
       }
 
-      // An invited member has not completed password setup. Delete that unused
-      // Auth account as well, which cascades the membership and lets the owner
-      // re-invite the same email as a completely new We Find Guards account.
-      if (target.status === "invited") {
-        const { error: deleteUserError } = await admin.auth.admin.deleteUser(target.user_id);
-        if (deleteUserError) throw deleteUserError;
-        return json({
-          success: true,
-          deleted_account: true,
-          message: `${target.email} was deleted and can be invited again`,
-        });
-      }
-
-      // Active members may have an established We Find Guards account. Removing
-      // them from one company does not delete that separate account or its data.
-      const { error } = await admin.from("company_members").delete().eq("id", memberId);
-      if (error) throw error;
-      return json({ success: true, deleted_account: false, message: "Team member removed" });
+      // The Team trash flow is a full account deletion for non-owners. Auth
+      // deletion cascades their team membership and frees the email address so
+      // it can only return through a fresh invite and account-creation flow.
+      const { error: deleteUserError } = await admin.auth.admin.deleteUser(target.user_id);
+      if (deleteUserError) throw deleteUserError;
+      return json({
+        success: true,
+        deleted_account: true,
+        message: `${target.email} was deleted and can be invited again`,
+      });
     }
     return json({ error: "Unknown team action" }, 400);
   } catch (error) {

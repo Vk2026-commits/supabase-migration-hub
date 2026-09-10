@@ -68,7 +68,7 @@ const Dashboard = () => {
             .from("company_members")
             .select("id")
             .eq("user_id", session.user.id)
-            .eq("status", "invited")
+            .in("status", ["invited", "accepted"])
             .maybeSingle();
 
           if (membershipError) throw membershipError;
