@@ -32,7 +32,7 @@ A person who is not signed in is taken to **We Find Guards sign in** first. Afte
 
 Notification content is intentionally limited to status, company name, position, and next action. It does not include the employment-offer PDF, personal identifiers, bank details, government-form answers, or direct links to private files. Sensitive documents remain behind the authenticated We Find Guards workspace.
 
-The database queues notifications at the event that changes workflow state. A protected dispatcher runs every 15 minutes and only sends an email when its scheduled send time is due. Reminder records are rescheduled exactly 24 hours after successful delivery and immediately stop when completion is recorded.
+The database queues notifications at the event that changes workflow state and requests an immediate asynchronous delivery. A protected dispatcher also runs every 15 minutes to catch due work and send the scheduled reminders. Reminder records are rescheduled exactly 24 hours after successful delivery and immediately stop when completion is recorded.
 
 ## Deployment
 

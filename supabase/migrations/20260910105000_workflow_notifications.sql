@@ -57,6 +57,45 @@ ALTER TABLE public.notification_action_links ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.notification_workflows FROM anon, authenticated;
 REVOKE ALL ON TABLE public.notification_action_links FROM anon, authenticated;
 
+CREATE OR REPLACE FUNCTION public.request_notification_dispatch()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, vault, extensions
+AS $$
+DECLARE
+  project_url text;
+  publishable_key text;
+  scheduler_secret text;
+BEGIN
+  SELECT decrypted_secret INTO project_url
+  FROM vault.decrypted_secrets
+  WHERE name = 'notification_project_url';
+  SELECT decrypted_secret INTO publishable_key
+  FROM vault.decrypted_secrets
+  WHERE name = 'notification_publishable_key';
+  SELECT decrypted_secret INTO scheduler_secret
+  FROM vault.decrypted_secrets
+  WHERE name = 'notification_cron_secret';
+
+  IF coalesce(project_url, '') = ''
+     OR coalesce(publishable_key, '') = ''
+     OR coalesce(scheduler_secret, '') = '' THEN
+    RETURN;
+  END IF;
+
+  PERFORM net.http_post(
+    url := rtrim(project_url, '/') || '/functions/v1/send-workflow-notifications',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'apikey', publishable_key,
+      'x-notification-cron', scheduler_secret
+    ),
+    body := jsonb_build_object('action', 'dispatch')
+  );
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.enqueue_notification_workflow(
   _kind text,
   _recipient_user_id uuid,
@@ -95,6 +134,10 @@ BEGIN
       context = public.notification_workflows.context || EXCLUDED.context,
       updated_at = now()
   RETURNING id INTO workflow_id;
+
+  IF _next_send_at <= now() THEN
+    PERFORM public.request_notification_dispatch();
+  END IF;
 
   RETURN workflow_id;
 END;
@@ -428,3 +471,4 @@ ON CONFLICT (kind, recipient_user_id, target_key) DO NOTHING;
 
 REVOKE ALL ON FUNCTION public.enqueue_notification_workflow(text, uuid, text, text, uuid, uuid, uuid, uuid, uuid, uuid, jsonb, timestamptz) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.company_notification_recipients(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.request_notification_dispatch() FROM PUBLIC, anon, authenticated;

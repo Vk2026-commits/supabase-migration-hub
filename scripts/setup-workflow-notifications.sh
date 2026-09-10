@@ -5,6 +5,7 @@ set -euo pipefail
 
 PROJECT_REF="${PROJECT_REF:-yatawyeamsaxemjctggp}"
 APP_URL="${APP_URL:-https://wefindguards.com}"
+FUNCTION_ORIGIN="https://${PROJECT_REF}.supabase.co"
 : "${SUPABASE_ACCESS_TOKEN:?Set a Supabase personal access token in SUPABASE_ACCESS_TOKEN.}"
 : "${RESEND_API_KEY:?Set the Resend API key in RESEND_API_KEY.}"
 : "${SUPABASE_ANON_KEY:?Set the Supabase publishable/anon key in SUPABASE_ANON_KEY.}"
@@ -51,7 +52,7 @@ run_query() {
     --data "$payload" >/dev/null
 }
 
-run_query "$(vault_upsert_sql notification_project_url "$APP_URL")"
+run_query "$(vault_upsert_sql notification_project_url "$FUNCTION_ORIGIN")"
 run_query "$(vault_upsert_sql notification_publishable_key "$SUPABASE_ANON_KEY")"
 run_query "$(vault_upsert_sql notification_cron_secret "$CRON_SECRET")"
 
