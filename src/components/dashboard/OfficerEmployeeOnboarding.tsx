@@ -366,6 +366,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [data, setData] = useState(initialData);
   const [currentStep, setCurrentStep] = useState(0);
   const [status, setStatus] = useState<"draft" | "submitted">("draft");
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -500,6 +501,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       setPacketId(existing?.id || null);
       setCurrentStep(Math.min(Number(existing?.current_step || 0), 7));
       setStatus(existing?.status === "submitted" ? "submitted" : "draft");
+      setSubmittedAt(existing?.submitted_at || null);
       setI9SubmittedAt(existing?.i9_submitted_at || null);
       setW4SubmittedAt(existing?.w4_submitted_at || null);
       setSsnMasked(maskedResult.data?.data?.ssn_last_four || "");
@@ -805,7 +807,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       toast.error("Complete each required onboarding step before submitting");
       return;
     }
-    if (!isValidSsn(ssn)) {
+    const governmentFormsNeedArchiving = !i9SubmittedAt || !w4SubmittedAt;
+    if (governmentFormsNeedArchiving && !isValidSsn(ssn)) {
       toast.error("Re-enter your SSN on the I-9 step so the official I-9 and W-4 can be securely generated");
       setCurrentStep(1);
       return;
@@ -813,32 +816,43 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     setSubmitting(true);
     try {
       await saveSensitiveForStep(currentStep);
-      const normalizedSsn = formatSsn(ssn);
-      const [i9Bytes, w4Bytes] = await Promise.all([buildI9(data, normalizedSsn), buildW4(data, normalizedSsn)]);
-      const i9Archive = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureDate, { form: "USCIS I-9", packetSubmission: true });
-      const w4Archive = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureDate, { form: "IRS W-4", packetSubmission: true });
-      const i9Path = i9Archive.storagePath;
-      const w4Path = w4Archive.storagePath;
+      let i9Path: string | undefined;
+      let w4Path: string | undefined;
+      if (governmentFormsNeedArchiving) {
+        const normalizedSsn = formatSsn(ssn);
+        const [i9Bytes, w4Bytes] = await Promise.all([buildI9(data, normalizedSsn), buildW4(data, normalizedSsn)]);
+        if (!i9SubmittedAt) {
+          const i9Archive = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureDate, { form: "USCIS I-9", packetSubmission: true });
+          i9Path = i9Archive.storagePath;
+        }
+        if (!w4SubmittedAt) {
+          const w4Archive = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureDate, { form: "IRS W-4", packetSubmission: true });
+          w4Path = w4Archive.storagePath;
+        }
+      }
       const submittedAt = new Date().toISOString();
+      const submissionUpdate: Record<string, unknown> = {
+        status: "submitted",
+        current_step: 7,
+        form_data: data,
+        signature_name: data.signatureName,
+        signature_date: data.signatureDate,
+        i9_submitted_at: i9SubmittedAt || submittedAt,
+        w4_submitted_at: w4SubmittedAt || submittedAt,
+        submitted_at: submittedAt,
+        updated_at: submittedAt,
+      };
+      if (i9Path) submissionUpdate.i9_document_path = i9Path;
+      if (w4Path) submissionUpdate.w4_document_path = w4Path;
       const { error } = await (supabase as any)
         .from("officer_onboarding_packets")
-        .update({
-          status: "submitted",
-          current_step: 7,
-          form_data: data,
-          signature_name: data.signatureName,
-          signature_date: data.signatureDate,
-          i9_document_path: i9Path,
-          w4_document_path: w4Path,
-          i9_submitted_at: i9SubmittedAt || submittedAt,
-          w4_submitted_at: w4SubmittedAt || submittedAt,
-          submitted_at: submittedAt,
-          updated_at: submittedAt,
-        })
+        .update(submissionUpdate)
         .eq("id", packetIdRef.current);
       if (error) throw error;
+      setCurrentStep(7);
       setStatus("submitted");
-      toast.success("Employee onboarding packet submitted");
+      setSubmittedAt(submittedAt);
+      toast.success(`Onboarding complete — your packet was sent to ${data.employerName}`);
       onChanged?.();
     } catch (error: any) {
       toast.error(error.message || "Onboarding could not be submitted");
@@ -970,6 +984,36 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           </div>
         </CardContent>
       </Card>
+    );
+
+  if (status === "submitted")
+    return (
+      <div className="mx-auto w-full max-w-3xl space-y-6 py-4 sm:py-8">
+        <Card className="overflow-hidden rounded-3xl border-green-200 shadow-sm">
+          <div className="h-2 bg-green-600" />
+          <CardContent className="flex flex-col items-center px-6 py-10 text-center sm:px-12 sm:py-14">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-green-700">
+              <CheckCircle2 className="h-11 w-11" />
+            </div>
+            <p className="mt-6 text-xs font-bold uppercase tracking-[.2em] text-green-700">Onboarding complete</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Your onboarding packet has been submitted</h2>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+              {data.employerName} can now review your completed forms and signed documents. Someone from the company will contact you with your next steps.
+            </p>
+            <div className="mt-8 grid w-full gap-3 text-left sm:grid-cols-2">
+              <div className="flex gap-3 rounded-2xl border border-green-200 bg-green-50 p-4">
+                <FileCheck2 className="mt-0.5 h-5 w-5 shrink-0 text-green-700" />
+                <div><p className="font-semibold text-green-950">All onboarding steps completed</p><p className="mt-1 text-sm text-green-900/70">Your completed packet is preserved for the company’s records.</p></div>
+              </div>
+              <div className="flex gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div><p className="font-semibold">Waiting for company follow-up</p><p className="mt-1 text-sm text-muted-foreground">There is nothing else you need to complete right now.</p></div>
+              </div>
+            </div>
+            {submittedAt && <p className="mt-6 text-sm text-muted-foreground">Submitted {new Date(submittedAt).toLocaleString()}</p>}
+          </CardContent>
+        </Card>
+      </div>
     );
 
   return (
