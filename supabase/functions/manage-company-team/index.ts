@@ -54,7 +54,7 @@ Deno.serve(async (request) => {
       ? { data: null }
       : await admin
           .from("company_members")
-          .select("role,status,invite_accepted_at")
+          .select("role,status,invite_accepted_at,password_created_at")
           .eq("company_id", companyId)
           .eq("user_id", authData.user.id)
           .maybeSingle();
@@ -88,7 +88,7 @@ Deno.serve(async (request) => {
       return json({ success: true, message: "Invitation accepted" });
     }
 
-    if (action === "activate_invitation") {
+    if (action === "record_password_created") {
       if (isOwner || actingMember?.status === "active") {
         return json({ success: true, message: "Invitation already activated" });
       }
@@ -111,14 +111,63 @@ Deno.serve(async (request) => {
       const { error: activationError } = await admin
         .from("company_members")
         .update({
-          status: "active",
-          joined_at: new Date().toISOString(),
+          password_created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq("company_id", companyId)
         .eq("user_id", authData.user.id);
       if (activationError) throw activationError;
-      return json({ success: true, message: "Invitation activated" });
+      return json({ success: true, message: "Password recorded" });
+    }
+
+    if (action === "complete_invitation_profile") {
+      if (isOwner || actingMember?.status === "active") {
+        return json({ success: true, message: "Profile already completed" });
+      }
+      if (actingMember?.status !== "accepted" || !actingMember.password_created_at) {
+        return json({ error: "Create a password before completing your team profile" }, 403);
+      }
+      if (invitationSetupExpired(actingMember.invite_accepted_at)) {
+        const { error: deleteExpiredUserError } = await admin.auth.admin.deleteUser(
+          authData.user.id,
+        );
+        if (deleteExpiredUserError) throw deleteExpiredUserError;
+        return json(
+          {
+            error:
+              "Account setup expired. Ask the team administrator to send you a new invitation.",
+          },
+          410,
+        );
+      }
+
+      const fullName = clean(body.full_name);
+      const phone = clean(body.phone);
+      const jobTitle = clean(body.job_title);
+      if (fullName.length < 2) return json({ error: "Enter your full name" }, 400);
+      if (phone.replace(/\D/g, "").length < 7)
+        return json({ error: "Enter a valid mobile phone number" }, 400);
+
+      const now = new Date().toISOString();
+      const { error: profileError } = await admin
+        .from("profiles")
+        .update({ full_name: fullName, updated_at: now })
+        .eq("id", authData.user.id);
+      if (profileError) throw profileError;
+      const { error: completionError } = await admin
+        .from("company_members")
+        .update({
+          phone,
+          job_title: jobTitle || null,
+          profile_completed_at: now,
+          status: "active",
+          joined_at: now,
+          updated_at: now,
+        })
+        .eq("company_id", companyId)
+        .eq("user_id", authData.user.id);
+      if (completionError) throw completionError;
+      return json({ success: true, message: "Team profile completed" });
     }
 
     const hasAccess = isOwner || actingMember?.status === "active";

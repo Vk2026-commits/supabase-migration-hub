@@ -66,14 +66,19 @@ const Dashboard = () => {
         if (!previewRole && profileData?.role === "company") {
           const { data: pendingMembership, error: membershipError } = await supabase
             .from("company_members")
-            .select("id")
+            .select("id,status,password_created_at")
             .eq("user_id", session.user.id)
             .in("status", ["invited", "accepted"])
             .maybeSingle();
 
           if (membershipError) throw membershipError;
           if (pendingMembership) {
-            navigate("/reset-password?invite=company-team", { replace: true });
+            navigate(
+              pendingMembership.status === "accepted" && pendingMembership.password_created_at
+                ? "/complete-team-profile"
+                : "/reset-password?invite=company-team",
+              { replace: true },
+            );
             return;
           }
         }

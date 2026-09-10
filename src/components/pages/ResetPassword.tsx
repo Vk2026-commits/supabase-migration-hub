@@ -89,7 +89,7 @@ const ResetPassword = () => {
         return;
       }
       const activation = await supabase.functions.invoke("manage-company-team", {
-        body: { action: "activate_invitation", company_id: companyId },
+        body: { action: "record_password_created", company_id: companyId },
       });
       if (activation.error || activation.data?.error) {
         toast.error(
@@ -102,10 +102,10 @@ const ResetPassword = () => {
     }
     toast.success(
       isTeamInvitation
-        ? "Account activated! Redirecting to Browse Guards..."
+        ? "Password saved! Complete your profile to activate your account."
         : "Password updated! Redirecting...",
     );
-    setTimeout(() => navigate(isTeamInvitation ? "/browse" : "/dashboard"), 1000);
+    setTimeout(() => navigate(isTeamInvitation ? "/complete-team-profile" : "/dashboard"), 1000);
   };
 
   return (

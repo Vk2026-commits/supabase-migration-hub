@@ -14,6 +14,7 @@ import { Route as AcceptTeamInvitationRouteImport } from './routes/accept-team-i
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BrowseRouteImport } from './routes/browse'
+import { Route as CompleteTeamProfileRouteImport } from './routes/complete-team-profile'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -43,6 +44,11 @@ const BrowseRoute = BrowseRouteImport.update({
   path: '/browse',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CompleteTeamProfileRoute = CompleteTeamProfileRouteImport.update({
+  id: '/complete-team-profile',
+  path: '/complete-team-profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/browse': typeof BrowseRoute
+  '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/browse': typeof BrowseRoute
+  '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
   '/browse': typeof BrowseRoute
+  '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/browse'
+    | '/complete-team-profile'
     | '/dashboard'
     | '/privacy'
     | '/reset-password'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/browse'
+    | '/complete-team-profile'
     | '/dashboard'
     | '/privacy'
     | '/reset-password'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/auth'
     | '/browse'
+    | '/complete-team-profile'
     | '/dashboard'
     | '/privacy'
     | '/reset-password'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
   BrowseRoute: typeof BrowseRoute
+  CompleteTeamProfileRoute: typeof CompleteTeamProfileRoute
   DashboardRoute: typeof DashboardRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BrowseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/complete-team-profile': {
+      id: '/complete-team-profile'
+      path: '/complete-team-profile'
+      fullPath: '/complete-team-profile'
+      preLoaderRoute: typeof CompleteTeamProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
   BrowseRoute: BrowseRoute,
+  CompleteTeamProfileRoute: CompleteTeamProfileRoute,
   DashboardRoute: DashboardRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,

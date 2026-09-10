@@ -1,1858 +1,1939 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
+    PostgrestVersion: "14.5";
+  };
   public: {
     Tables: {
       assigned_sites: {
         Row: {
-          created_at: string | null
-          effective_rate_date: string | null
-          id: string
-          is_primary: boolean | null
-          officer_id: string
-          rate: number | null
-          site_name: string
-          start_date: string | null
-          status: string | null
-          updated_at: string | null
-        }
+          created_at: string | null;
+          effective_rate_date: string | null;
+          id: string;
+          is_primary: boolean | null;
+          officer_id: string;
+          rate: number | null;
+          site_name: string;
+          start_date: string | null;
+          status: string | null;
+          updated_at: string | null;
+        };
         Insert: {
-          created_at?: string | null
-          effective_rate_date?: string | null
-          id?: string
-          is_primary?: boolean | null
-          officer_id: string
-          rate?: number | null
-          site_name: string
-          start_date?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
+          created_at?: string | null;
+          effective_rate_date?: string | null;
+          id?: string;
+          is_primary?: boolean | null;
+          officer_id: string;
+          rate?: number | null;
+          site_name: string;
+          start_date?: string | null;
+          status?: string | null;
+          updated_at?: string | null;
+        };
         Update: {
-          created_at?: string | null
-          effective_rate_date?: string | null
-          id?: string
-          is_primary?: boolean | null
-          officer_id?: string
-          rate?: number | null
-          site_name?: string
-          start_date?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
+          created_at?: string | null;
+          effective_rate_date?: string | null;
+          id?: string;
+          is_primary?: boolean | null;
+          officer_id?: string;
+          rate?: number | null;
+          site_name?: string;
+          start_date?: string | null;
+          status?: string | null;
+          updated_at?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "assigned_sites_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "assigned_sites_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       certifications: {
         Row: {
-          certification_number: string | null
-          certification_type: string | null
-          created_at: string | null
-          credential_id: string | null
-          description: string | null
-          document_back_url: string | null
-          document_front_url: string | null
-          expiry_date: string | null
-          id: string
-          issue_date: string | null
-          issuing_organization: string | null
-          license_level: string | null
-          name: string
-          officer_id: string
-        }
+          certification_number: string | null;
+          certification_type: string | null;
+          created_at: string | null;
+          credential_id: string | null;
+          description: string | null;
+          document_back_url: string | null;
+          document_front_url: string | null;
+          expiry_date: string | null;
+          id: string;
+          issue_date: string | null;
+          issuing_organization: string | null;
+          license_level: string | null;
+          name: string;
+          officer_id: string;
+        };
         Insert: {
-          certification_number?: string | null
-          certification_type?: string | null
-          created_at?: string | null
-          credential_id?: string | null
-          description?: string | null
-          document_back_url?: string | null
-          document_front_url?: string | null
-          expiry_date?: string | null
-          id?: string
-          issue_date?: string | null
-          issuing_organization?: string | null
-          license_level?: string | null
-          name: string
-          officer_id: string
-        }
+          certification_number?: string | null;
+          certification_type?: string | null;
+          created_at?: string | null;
+          credential_id?: string | null;
+          description?: string | null;
+          document_back_url?: string | null;
+          document_front_url?: string | null;
+          expiry_date?: string | null;
+          id?: string;
+          issue_date?: string | null;
+          issuing_organization?: string | null;
+          license_level?: string | null;
+          name: string;
+          officer_id: string;
+        };
         Update: {
-          certification_number?: string | null
-          certification_type?: string | null
-          created_at?: string | null
-          credential_id?: string | null
-          description?: string | null
-          document_back_url?: string | null
-          document_front_url?: string | null
-          expiry_date?: string | null
-          id?: string
-          issue_date?: string | null
-          issuing_organization?: string | null
-          license_level?: string | null
-          name?: string
-          officer_id?: string
-        }
+          certification_number?: string | null;
+          certification_type?: string | null;
+          created_at?: string | null;
+          credential_id?: string | null;
+          description?: string | null;
+          document_back_url?: string | null;
+          document_front_url?: string | null;
+          expiry_date?: string | null;
+          id?: string;
+          issue_date?: string | null;
+          issuing_organization?: string | null;
+          license_level?: string | null;
+          name?: string;
+          officer_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "certifications_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "certifications_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       company_members: {
         Row: {
-          company_id: string
-          email: string
-          id: string
-          invited_at: string
-          invited_by: string | null
-          joined_at: string | null
-          role: Database["public"]["Enums"]["company_member_role"]
-          status: string
-          updated_at: string
-          user_id: string
-        }
+          company_id: string;
+          email: string;
+          id: string;
+          invite_accepted_at: string | null;
+          invited_at: string;
+          invited_by: string | null;
+          joined_at: string | null;
+          job_title: string | null;
+          password_created_at: string | null;
+          phone: string | null;
+          profile_completed_at: string | null;
+          role: Database["public"]["Enums"]["company_member_role"];
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
         Insert: {
-          company_id: string
-          email: string
-          id?: string
-          invited_at?: string
-          invited_by?: string | null
-          joined_at?: string | null
-          role?: Database["public"]["Enums"]["company_member_role"]
-          status?: string
-          updated_at?: string
-          user_id: string
-        }
+          company_id: string;
+          email: string;
+          id?: string;
+          invite_accepted_at?: string | null;
+          invited_at?: string;
+          invited_by?: string | null;
+          joined_at?: string | null;
+          job_title?: string | null;
+          password_created_at?: string | null;
+          phone?: string | null;
+          profile_completed_at?: string | null;
+          role?: Database["public"]["Enums"]["company_member_role"];
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
         Update: {
-          company_id?: string
-          email?: string
-          id?: string
-          invited_at?: string
-          invited_by?: string | null
-          joined_at?: string | null
-          role?: Database["public"]["Enums"]["company_member_role"]
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
+          company_id?: string;
+          email?: string;
+          id?: string;
+          invite_accepted_at?: string | null;
+          invited_at?: string;
+          invited_by?: string | null;
+          joined_at?: string | null;
+          job_title?: string | null;
+          password_created_at?: string | null;
+          phone?: string | null;
+          profile_completed_at?: string | null;
+          role?: Database["public"]["Enums"]["company_member_role"];
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "company_members_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "company_members_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       company_profiles: {
         Row: {
-          account_status: string | null
-          company_name: string
-          company_address: string | null
-          company_address_unit: string | null
-          company_city: string | null
-          company_number: string | null
-          company_phone: string | null
-          company_phone_ext: string | null
-          company_size: string | null
-          company_state: string | null
-          company_zip: string | null
-          contact_cell_phone: string | null
-          contact_email: string | null
-          contact_person_name: string | null
-          contact_person_position: string | null
-          contact_person_title: string | null
-          created_at: string | null
-          facebook_url: string | null
-          id: string
-          industry: string | null
-          instagram_url: string | null
-          last_payment_date: string | null
-          license_number: string | null
-          license_types: string[] | null
-          licensed_states: string[] | null
-          linkedin_url: string | null
-          logo_url: string | null
-          payment_due_date: string | null
-          payment_status: string | null
-          subscription_start_date: string | null
-          subscription_status: string | null
-          subscription_tier:
-            | Database["public"]["Enums"]["subscription_tier"]
-            | null
-          trial_end_date: string | null
-          trial_start_date: string | null
-          twitter_url: string | null
-          updated_at: string | null
-          user_id: string
-          website_url: string | null
-          year_founded: number | null
-          years_in_business: string | null
-        }
+          account_status: string | null;
+          company_name: string;
+          company_address: string | null;
+          company_address_unit: string | null;
+          company_city: string | null;
+          company_number: string | null;
+          company_phone: string | null;
+          company_phone_ext: string | null;
+          company_size: string | null;
+          company_state: string | null;
+          company_zip: string | null;
+          contact_cell_phone: string | null;
+          contact_email: string | null;
+          contact_person_name: string | null;
+          contact_person_position: string | null;
+          contact_person_title: string | null;
+          created_at: string | null;
+          facebook_url: string | null;
+          id: string;
+          industry: string | null;
+          instagram_url: string | null;
+          last_payment_date: string | null;
+          license_number: string | null;
+          license_types: string[] | null;
+          licensed_states: string[] | null;
+          linkedin_url: string | null;
+          logo_url: string | null;
+          payment_due_date: string | null;
+          payment_status: string | null;
+          subscription_start_date: string | null;
+          subscription_status: string | null;
+          subscription_tier: Database["public"]["Enums"]["subscription_tier"] | null;
+          trial_end_date: string | null;
+          trial_start_date: string | null;
+          twitter_url: string | null;
+          updated_at: string | null;
+          user_id: string;
+          website_url: string | null;
+          year_founded: number | null;
+          years_in_business: string | null;
+        };
         Insert: {
-          account_status?: string | null
-          company_name: string
-          company_address?: string | null
-          company_address_unit?: string | null
-          company_city?: string | null
-          company_number?: string | null
-          company_phone?: string | null
-          company_phone_ext?: string | null
-          company_size?: string | null
-          company_state?: string | null
-          company_zip?: string | null
-          contact_cell_phone?: string | null
-          contact_email?: string | null
-          contact_person_name?: string | null
-          contact_person_position?: string | null
-          contact_person_title?: string | null
-          created_at?: string | null
-          facebook_url?: string | null
-          id?: string
-          industry?: string | null
-          instagram_url?: string | null
-          last_payment_date?: string | null
-          license_number?: string | null
-          license_types?: string[] | null
-          licensed_states?: string[] | null
-          linkedin_url?: string | null
-          logo_url?: string | null
-          payment_due_date?: string | null
-          payment_status?: string | null
-          subscription_start_date?: string | null
-          subscription_status?: string | null
-          subscription_tier?:
-            | Database["public"]["Enums"]["subscription_tier"]
-            | null
-          trial_end_date?: string | null
-          trial_start_date?: string | null
-          twitter_url?: string | null
-          updated_at?: string | null
-          user_id: string
-          website_url?: string | null
-          year_founded?: number | null
-          years_in_business?: string | null
-        }
+          account_status?: string | null;
+          company_name: string;
+          company_address?: string | null;
+          company_address_unit?: string | null;
+          company_city?: string | null;
+          company_number?: string | null;
+          company_phone?: string | null;
+          company_phone_ext?: string | null;
+          company_size?: string | null;
+          company_state?: string | null;
+          company_zip?: string | null;
+          contact_cell_phone?: string | null;
+          contact_email?: string | null;
+          contact_person_name?: string | null;
+          contact_person_position?: string | null;
+          contact_person_title?: string | null;
+          created_at?: string | null;
+          facebook_url?: string | null;
+          id?: string;
+          industry?: string | null;
+          instagram_url?: string | null;
+          last_payment_date?: string | null;
+          license_number?: string | null;
+          license_types?: string[] | null;
+          licensed_states?: string[] | null;
+          linkedin_url?: string | null;
+          logo_url?: string | null;
+          payment_due_date?: string | null;
+          payment_status?: string | null;
+          subscription_start_date?: string | null;
+          subscription_status?: string | null;
+          subscription_tier?: Database["public"]["Enums"]["subscription_tier"] | null;
+          trial_end_date?: string | null;
+          trial_start_date?: string | null;
+          twitter_url?: string | null;
+          updated_at?: string | null;
+          user_id: string;
+          website_url?: string | null;
+          year_founded?: number | null;
+          years_in_business?: string | null;
+        };
         Update: {
-          account_status?: string | null
-          company_name?: string
-          company_address?: string | null
-          company_address_unit?: string | null
-          company_city?: string | null
-          company_number?: string | null
-          company_phone?: string | null
-          company_phone_ext?: string | null
-          company_size?: string | null
-          company_state?: string | null
-          company_zip?: string | null
-          contact_cell_phone?: string | null
-          contact_email?: string | null
-          contact_person_name?: string | null
-          contact_person_position?: string | null
-          contact_person_title?: string | null
-          created_at?: string | null
-          facebook_url?: string | null
-          id?: string
-          industry?: string | null
-          instagram_url?: string | null
-          last_payment_date?: string | null
-          license_number?: string | null
-          license_types?: string[] | null
-          licensed_states?: string[] | null
-          linkedin_url?: string | null
-          logo_url?: string | null
-          payment_due_date?: string | null
-          payment_status?: string | null
-          subscription_start_date?: string | null
-          subscription_status?: string | null
-          subscription_tier?:
-            | Database["public"]["Enums"]["subscription_tier"]
-            | null
-          trial_end_date?: string | null
-          trial_start_date?: string | null
-          twitter_url?: string | null
-          updated_at?: string | null
-          user_id?: string
-          website_url?: string | null
-          year_founded?: number | null
-          years_in_business?: string | null
-        }
+          account_status?: string | null;
+          company_name?: string;
+          company_address?: string | null;
+          company_address_unit?: string | null;
+          company_city?: string | null;
+          company_number?: string | null;
+          company_phone?: string | null;
+          company_phone_ext?: string | null;
+          company_size?: string | null;
+          company_state?: string | null;
+          company_zip?: string | null;
+          contact_cell_phone?: string | null;
+          contact_email?: string | null;
+          contact_person_name?: string | null;
+          contact_person_position?: string | null;
+          contact_person_title?: string | null;
+          created_at?: string | null;
+          facebook_url?: string | null;
+          id?: string;
+          industry?: string | null;
+          instagram_url?: string | null;
+          last_payment_date?: string | null;
+          license_number?: string | null;
+          license_types?: string[] | null;
+          licensed_states?: string[] | null;
+          linkedin_url?: string | null;
+          logo_url?: string | null;
+          payment_due_date?: string | null;
+          payment_status?: string | null;
+          subscription_start_date?: string | null;
+          subscription_status?: string | null;
+          subscription_tier?: Database["public"]["Enums"]["subscription_tier"] | null;
+          trial_end_date?: string | null;
+          trial_start_date?: string | null;
+          twitter_url?: string | null;
+          updated_at?: string | null;
+          user_id?: string;
+          website_url?: string | null;
+          year_founded?: number | null;
+          years_in_business?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "company_profiles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "company_profiles_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       employment_offers: {
         Row: {
-          id: string
-          company_id: string
-          officer_id: string
-          hiring_application_id: string | null
-          job_application_id: string | null
-          job_posting_id: string | null
-          hire_id: string | null
-          supersedes_offer_id: string | null
-          version: number
-          status: string
-          terms: Json
-          employer_signature_name: string
-          employer_signature_title: string
-          employer_signed_at: string
-          offer_document_path: string | null
-          offer_document_sha256: string | null
-          accepted_document_path: string | null
-          accepted_document_sha256: string | null
-          prepared_at: string
-          sent_at: string | null
-          viewed_at: string | null
-          accepted_at: string | null
-          declined_at: string | null
-          expired_at: string | null
-          withdrawn_at: string | null
-          officer_printed_name: string | null
-          decline_reason: string | null
-          legacy_acceptance_unverified: boolean
-          created_by: string
-          created_at: string
-          updated_at: string
-        }
+          id: string;
+          company_id: string;
+          officer_id: string;
+          hiring_application_id: string | null;
+          job_application_id: string | null;
+          job_posting_id: string | null;
+          hire_id: string | null;
+          supersedes_offer_id: string | null;
+          version: number;
+          status: string;
+          terms: Json;
+          employer_signature_name: string;
+          employer_signature_title: string;
+          employer_signed_at: string;
+          offer_document_path: string | null;
+          offer_document_sha256: string | null;
+          accepted_document_path: string | null;
+          accepted_document_sha256: string | null;
+          prepared_at: string;
+          sent_at: string | null;
+          viewed_at: string | null;
+          accepted_at: string | null;
+          declined_at: string | null;
+          expired_at: string | null;
+          withdrawn_at: string | null;
+          officer_printed_name: string | null;
+          decline_reason: string | null;
+          legacy_acceptance_unverified: boolean;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
-          id?: string; company_id: string; officer_id: string; hiring_application_id?: string | null; job_application_id?: string | null; job_posting_id?: string | null; hire_id?: string | null; supersedes_offer_id?: string | null; version: number; status?: string; terms?: Json; employer_signature_name: string; employer_signature_title: string; employer_signed_at?: string; offer_document_path?: string | null; offer_document_sha256?: string | null; accepted_document_path?: string | null; accepted_document_sha256?: string | null; prepared_at?: string; sent_at?: string | null; viewed_at?: string | null; accepted_at?: string | null; declined_at?: string | null; expired_at?: string | null; withdrawn_at?: string | null; officer_printed_name?: string | null; decline_reason?: string | null; legacy_acceptance_unverified?: boolean; created_by?: string; created_at?: string; updated_at?: string
-        }
+          id?: string;
+          company_id: string;
+          officer_id: string;
+          hiring_application_id?: string | null;
+          job_application_id?: string | null;
+          job_posting_id?: string | null;
+          hire_id?: string | null;
+          supersedes_offer_id?: string | null;
+          version: number;
+          status?: string;
+          terms?: Json;
+          employer_signature_name: string;
+          employer_signature_title: string;
+          employer_signed_at?: string;
+          offer_document_path?: string | null;
+          offer_document_sha256?: string | null;
+          accepted_document_path?: string | null;
+          accepted_document_sha256?: string | null;
+          prepared_at?: string;
+          sent_at?: string | null;
+          viewed_at?: string | null;
+          accepted_at?: string | null;
+          declined_at?: string | null;
+          expired_at?: string | null;
+          withdrawn_at?: string | null;
+          officer_printed_name?: string | null;
+          decline_reason?: string | null;
+          legacy_acceptance_unverified?: boolean;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
         Update: {
-          id?: string; company_id?: string; officer_id?: string; hiring_application_id?: string | null; job_application_id?: string | null; job_posting_id?: string | null; hire_id?: string | null; supersedes_offer_id?: string | null; version?: number; status?: string; terms?: Json; employer_signature_name?: string; employer_signature_title?: string; employer_signed_at?: string; offer_document_path?: string | null; offer_document_sha256?: string | null; accepted_document_path?: string | null; accepted_document_sha256?: string | null; prepared_at?: string; sent_at?: string | null; viewed_at?: string | null; accepted_at?: string | null; declined_at?: string | null; expired_at?: string | null; withdrawn_at?: string | null; officer_printed_name?: string | null; decline_reason?: string | null; legacy_acceptance_unverified?: boolean; created_by?: string; created_at?: string; updated_at?: string
-        }
+          id?: string;
+          company_id?: string;
+          officer_id?: string;
+          hiring_application_id?: string | null;
+          job_application_id?: string | null;
+          job_posting_id?: string | null;
+          hire_id?: string | null;
+          supersedes_offer_id?: string | null;
+          version?: number;
+          status?: string;
+          terms?: Json;
+          employer_signature_name?: string;
+          employer_signature_title?: string;
+          employer_signed_at?: string;
+          offer_document_path?: string | null;
+          offer_document_sha256?: string | null;
+          accepted_document_path?: string | null;
+          accepted_document_sha256?: string | null;
+          prepared_at?: string;
+          sent_at?: string | null;
+          viewed_at?: string | null;
+          accepted_at?: string | null;
+          declined_at?: string | null;
+          expired_at?: string | null;
+          withdrawn_at?: string | null;
+          officer_printed_name?: string | null;
+          decline_reason?: string | null;
+          legacy_acceptance_unverified?: boolean;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [
-          { foreignKeyName: "employment_offers_company_id_fkey"; columns: ["company_id"]; isOneToOne: false; referencedRelation: "company_profiles"; referencedColumns: ["id"] },
-          { foreignKeyName: "employment_offers_officer_id_fkey"; columns: ["officer_id"]; isOneToOne: false; referencedRelation: "officer_profiles"; referencedColumns: ["id"] },
-          { foreignKeyName: "employment_offers_hiring_application_id_fkey"; columns: ["hiring_application_id"]; isOneToOne: false; referencedRelation: "guard_hiring_applications"; referencedColumns: ["id"] },
-        ]
-      }
+          {
+            foreignKeyName: "employment_offers_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "employment_offers_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "employment_offers_hiring_application_id_fkey";
+            columns: ["hiring_application_id"];
+            isOneToOne: false;
+            referencedRelation: "guard_hiring_applications";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       employment_updates: {
         Row: {
-          created_at: string | null
-          created_by_user_id: string
-          document_url: string | null
-          hire_id: string
-          id: string
-          notes: string | null
-          rating: number | null
-          update_type: string
-        }
+          created_at: string | null;
+          created_by_user_id: string;
+          document_url: string | null;
+          hire_id: string;
+          id: string;
+          notes: string | null;
+          rating: number | null;
+          update_type: string;
+        };
         Insert: {
-          created_at?: string | null
-          created_by_user_id: string
-          document_url?: string | null
-          hire_id: string
-          id?: string
-          notes?: string | null
-          rating?: number | null
-          update_type: string
-        }
+          created_at?: string | null;
+          created_by_user_id: string;
+          document_url?: string | null;
+          hire_id: string;
+          id?: string;
+          notes?: string | null;
+          rating?: number | null;
+          update_type: string;
+        };
         Update: {
-          created_at?: string | null
-          created_by_user_id?: string
-          document_url?: string | null
-          hire_id?: string
-          id?: string
-          notes?: string | null
-          rating?: number | null
-          update_type?: string
-        }
+          created_at?: string | null;
+          created_by_user_id?: string;
+          document_url?: string | null;
+          hire_id?: string;
+          id?: string;
+          notes?: string | null;
+          rating?: number | null;
+          update_type?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "employment_updates_hire_id_fkey"
-            columns: ["hire_id"]
-            isOneToOne: false
-            referencedRelation: "hires"
-            referencedColumns: ["id"]
+            foreignKeyName: "employment_updates_hire_id_fkey";
+            columns: ["hire_id"];
+            isOneToOne: false;
+            referencedRelation: "hires";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       evaluations: {
         Row: {
-          areas_of_improvement: string | null
-          attendance_rating: number | null
-          completed_date: string | null
-          created_at: string | null
-          due_date: string
-          evaluation_period: string
-          hire_id: string
-          id: string
-          overall_rating: number | null
-          performance_notes: string | null
-          professionalism_rating: number | null
-          quality_of_work_rating: number | null
-          reliability_rating: number | null
-          sent_date: string | null
-          updated_at: string | null
-          would_rehire: boolean | null
-        }
+          areas_of_improvement: string | null;
+          attendance_rating: number | null;
+          completed_date: string | null;
+          created_at: string | null;
+          due_date: string;
+          evaluation_period: string;
+          hire_id: string;
+          id: string;
+          overall_rating: number | null;
+          performance_notes: string | null;
+          professionalism_rating: number | null;
+          quality_of_work_rating: number | null;
+          reliability_rating: number | null;
+          sent_date: string | null;
+          updated_at: string | null;
+          would_rehire: boolean | null;
+        };
         Insert: {
-          areas_of_improvement?: string | null
-          attendance_rating?: number | null
-          completed_date?: string | null
-          created_at?: string | null
-          due_date: string
-          evaluation_period: string
-          hire_id: string
-          id?: string
-          overall_rating?: number | null
-          performance_notes?: string | null
-          professionalism_rating?: number | null
-          quality_of_work_rating?: number | null
-          reliability_rating?: number | null
-          sent_date?: string | null
-          updated_at?: string | null
-          would_rehire?: boolean | null
-        }
+          areas_of_improvement?: string | null;
+          attendance_rating?: number | null;
+          completed_date?: string | null;
+          created_at?: string | null;
+          due_date: string;
+          evaluation_period: string;
+          hire_id: string;
+          id?: string;
+          overall_rating?: number | null;
+          performance_notes?: string | null;
+          professionalism_rating?: number | null;
+          quality_of_work_rating?: number | null;
+          reliability_rating?: number | null;
+          sent_date?: string | null;
+          updated_at?: string | null;
+          would_rehire?: boolean | null;
+        };
         Update: {
-          areas_of_improvement?: string | null
-          attendance_rating?: number | null
-          completed_date?: string | null
-          created_at?: string | null
-          due_date?: string
-          evaluation_period?: string
-          hire_id?: string
-          id?: string
-          overall_rating?: number | null
-          performance_notes?: string | null
-          professionalism_rating?: number | null
-          quality_of_work_rating?: number | null
-          reliability_rating?: number | null
-          sent_date?: string | null
-          updated_at?: string | null
-          would_rehire?: boolean | null
-        }
+          areas_of_improvement?: string | null;
+          attendance_rating?: number | null;
+          completed_date?: string | null;
+          created_at?: string | null;
+          due_date?: string;
+          evaluation_period?: string;
+          hire_id?: string;
+          id?: string;
+          overall_rating?: number | null;
+          performance_notes?: string | null;
+          professionalism_rating?: number | null;
+          quality_of_work_rating?: number | null;
+          reliability_rating?: number | null;
+          sent_date?: string | null;
+          updated_at?: string | null;
+          would_rehire?: boolean | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "evaluations_hire_id_fkey"
-            columns: ["hire_id"]
-            isOneToOne: false
-            referencedRelation: "hires"
-            referencedColumns: ["id"]
+            foreignKeyName: "evaluations_hire_id_fkey";
+            columns: ["hire_id"];
+            isOneToOne: false;
+            referencedRelation: "hires";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       application_evidence_files: {
         Row: {
-          archive_kind: string
-          archived_at: string
-          byte_size: number
-          created_by: string | null
-          evidence_kind: string
-          evidence_role: string
-          hiring_application_id: string
-          id: string
-          is_required: boolean
-          label: string
-          metadata: Json
-          mime_type: string
-          officer_id: string
-          offer_id: string | null
-          original_filename: string
-          sha256: string
-          source_bucket: string
-          source_path: string
-          source_record_id: string | null
-          storage_path: string
-        }
+          archive_kind: string;
+          archived_at: string;
+          byte_size: number;
+          created_by: string | null;
+          evidence_kind: string;
+          evidence_role: string;
+          hiring_application_id: string;
+          id: string;
+          is_required: boolean;
+          label: string;
+          metadata: Json;
+          mime_type: string;
+          officer_id: string;
+          offer_id: string | null;
+          original_filename: string;
+          sha256: string;
+          source_bucket: string;
+          source_path: string;
+          source_record_id: string | null;
+          storage_path: string;
+        };
         Insert: {
-          archive_kind: string
-          archived_at?: string
-          byte_size: number
-          created_by?: string | null
-          evidence_kind: string
-          evidence_role: string
-          hiring_application_id: string
-          id?: string
-          is_required?: boolean
-          label: string
-          metadata?: Json
-          mime_type: string
-          officer_id: string
-          offer_id?: string | null
-          original_filename: string
-          sha256: string
-          source_bucket: string
-          source_path: string
-          source_record_id?: string | null
-          storage_path: string
-        }
+          archive_kind: string;
+          archived_at?: string;
+          byte_size: number;
+          created_by?: string | null;
+          evidence_kind: string;
+          evidence_role: string;
+          hiring_application_id: string;
+          id?: string;
+          is_required?: boolean;
+          label: string;
+          metadata?: Json;
+          mime_type: string;
+          officer_id: string;
+          offer_id?: string | null;
+          original_filename: string;
+          sha256: string;
+          source_bucket: string;
+          source_path: string;
+          source_record_id?: string | null;
+          storage_path: string;
+        };
         Update: {
-          archive_kind?: string
-          archived_at?: string
-          byte_size?: number
-          created_by?: string | null
-          evidence_kind?: string
-          evidence_role?: string
-          hiring_application_id?: string
-          id?: string
-          is_required?: boolean
-          label?: string
-          metadata?: Json
-          mime_type?: string
-          officer_id?: string
-          offer_id?: string | null
-          original_filename?: string
-          sha256?: string
-          source_bucket?: string
-          source_path?: string
-          source_record_id?: string | null
-          storage_path?: string
-        }
+          archive_kind?: string;
+          archived_at?: string;
+          byte_size?: number;
+          created_by?: string | null;
+          evidence_kind?: string;
+          evidence_role?: string;
+          hiring_application_id?: string;
+          id?: string;
+          is_required?: boolean;
+          label?: string;
+          metadata?: Json;
+          mime_type?: string;
+          officer_id?: string;
+          offer_id?: string | null;
+          original_filename?: string;
+          sha256?: string;
+          source_bucket?: string;
+          source_path?: string;
+          source_record_id?: string | null;
+          storage_path?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "application_evidence_files_hiring_application_id_fkey"
-            columns: ["hiring_application_id"]
-            isOneToOne: false
-            referencedRelation: "guard_hiring_applications"
-            referencedColumns: ["id"]
+            foreignKeyName: "application_evidence_files_hiring_application_id_fkey";
+            columns: ["hiring_application_id"];
+            isOneToOne: false;
+            referencedRelation: "guard_hiring_applications";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "application_evidence_files_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "application_evidence_files_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       guard_hiring_applications: {
         Row: {
-          applicant_email: string
-          applicant_name: string
-          application_data: Json
-          application_type: string
-          company_name: string
-          created_at: string
-          current_step: number
-          evidence_snapshot_completed_at: string | null
-          evidence_snapshot_kind: string | null
-          evidence_snapshot_status: string
-          id: string
-          job_application_id: string | null
-          officer_id: string
-          position: string
-          signature_date: string | null
-          signature_name: string | null
-          source_application_id: string | null
-          status: string
-          submitted_at: string | null
-          updated_at: string
-          user_id: string
-        }
+          applicant_email: string;
+          applicant_name: string;
+          application_data: Json;
+          application_type: string;
+          company_name: string;
+          created_at: string;
+          current_step: number;
+          evidence_snapshot_completed_at: string | null;
+          evidence_snapshot_kind: string | null;
+          evidence_snapshot_status: string;
+          id: string;
+          job_application_id: string | null;
+          officer_id: string;
+          position: string;
+          signature_date: string | null;
+          signature_name: string | null;
+          source_application_id: string | null;
+          status: string;
+          submitted_at: string | null;
+          updated_at: string;
+          user_id: string;
+        };
         Insert: {
-          applicant_email: string
-          applicant_name: string
-          application_data?: Json
-          application_type?: string
-          company_name: string
-          created_at?: string
-          current_step?: number
-          evidence_snapshot_completed_at?: string | null
-          evidence_snapshot_kind?: string | null
-          evidence_snapshot_status?: string
-          id?: string
-          job_application_id?: string | null
-          officer_id: string
-          position?: string
-          signature_date?: string | null
-          signature_name?: string | null
-          source_application_id?: string | null
-          status?: string
-          submitted_at?: string | null
-          updated_at?: string
-          user_id: string
-        }
+          applicant_email: string;
+          applicant_name: string;
+          application_data?: Json;
+          application_type?: string;
+          company_name: string;
+          created_at?: string;
+          current_step?: number;
+          evidence_snapshot_completed_at?: string | null;
+          evidence_snapshot_kind?: string | null;
+          evidence_snapshot_status?: string;
+          id?: string;
+          job_application_id?: string | null;
+          officer_id: string;
+          position?: string;
+          signature_date?: string | null;
+          signature_name?: string | null;
+          source_application_id?: string | null;
+          status?: string;
+          submitted_at?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
         Update: {
-          applicant_email?: string
-          applicant_name?: string
-          application_data?: Json
-          application_type?: string
-          company_name?: string
-          created_at?: string
-          current_step?: number
-          evidence_snapshot_completed_at?: string | null
-          evidence_snapshot_kind?: string | null
-          evidence_snapshot_status?: string
-          id?: string
-          job_application_id?: string | null
-          officer_id?: string
-          position?: string
-          signature_date?: string | null
-          signature_name?: string | null
-          source_application_id?: string | null
-          status?: string
-          submitted_at?: string | null
-          updated_at?: string
-          user_id?: string
-        }
+          applicant_email?: string;
+          applicant_name?: string;
+          application_data?: Json;
+          application_type?: string;
+          company_name?: string;
+          created_at?: string;
+          current_step?: number;
+          evidence_snapshot_completed_at?: string | null;
+          evidence_snapshot_kind?: string | null;
+          evidence_snapshot_status?: string;
+          id?: string;
+          job_application_id?: string | null;
+          officer_id?: string;
+          position?: string;
+          signature_date?: string | null;
+          signature_name?: string | null;
+          source_application_id?: string | null;
+          status?: string;
+          submitted_at?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "guard_hiring_applications_job_application_id_fkey"
-            columns: ["job_application_id"]
-            isOneToOne: false
-            referencedRelation: "job_applications"
-            referencedColumns: ["id"]
+            foreignKeyName: "guard_hiring_applications_job_application_id_fkey";
+            columns: ["job_application_id"];
+            isOneToOne: false;
+            referencedRelation: "job_applications";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "guard_hiring_applications_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "guard_hiring_applications_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       hires: {
         Row: {
-          company_id: string
-          created_at: string | null
-          hire_date: string
-          hired_by_user_id: string
-          id: string
-          hiring_application_id: string | null
-          officer_id: string
-          offer_id: string | null
-          offer_prepared_at: string | null
-          offer_terms: Json
-          position_title: string | null
-          status: string | null
-          updated_at: string | null
-        }
+          company_id: string;
+          created_at: string | null;
+          hire_date: string;
+          hired_by_user_id: string;
+          id: string;
+          hiring_application_id: string | null;
+          officer_id: string;
+          offer_id: string | null;
+          offer_prepared_at: string | null;
+          offer_terms: Json;
+          position_title: string | null;
+          status: string | null;
+          updated_at: string | null;
+        };
         Insert: {
-          company_id: string
-          created_at?: string | null
-          hire_date: string
-          hired_by_user_id: string
-          id?: string
-          hiring_application_id?: string | null
-          officer_id: string
-          offer_id?: string | null
-          offer_prepared_at?: string | null
-          offer_terms?: Json
-          position_title?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
+          company_id: string;
+          created_at?: string | null;
+          hire_date: string;
+          hired_by_user_id: string;
+          id?: string;
+          hiring_application_id?: string | null;
+          officer_id: string;
+          offer_id?: string | null;
+          offer_prepared_at?: string | null;
+          offer_terms?: Json;
+          position_title?: string | null;
+          status?: string | null;
+          updated_at?: string | null;
+        };
         Update: {
-          company_id?: string
-          created_at?: string | null
-          hire_date?: string
-          hired_by_user_id?: string
-          id?: string
-          hiring_application_id?: string | null
-          officer_id?: string
-          offer_id?: string | null
-          offer_prepared_at?: string | null
-          offer_terms?: Json
-          position_title?: string | null
-          status?: string | null
-          updated_at?: string | null
-        }
+          company_id?: string;
+          created_at?: string | null;
+          hire_date?: string;
+          hired_by_user_id?: string;
+          id?: string;
+          hiring_application_id?: string | null;
+          officer_id?: string;
+          offer_id?: string | null;
+          offer_prepared_at?: string | null;
+          offer_terms?: Json;
+          position_title?: string | null;
+          status?: string | null;
+          updated_at?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "hires_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "hires_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "hires_hiring_application_id_fkey"
-            columns: ["hiring_application_id"]
-            isOneToOne: false
-            referencedRelation: "guard_hiring_applications"
-            referencedColumns: ["id"]
+            foreignKeyName: "hires_hiring_application_id_fkey";
+            columns: ["hiring_application_id"];
+            isOneToOne: false;
+            referencedRelation: "guard_hiring_applications";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "hires_offer_id_fkey"
-            columns: ["offer_id"]
-            isOneToOne: true
-            referencedRelation: "employment_offers"
-            referencedColumns: ["id"]
+            foreignKeyName: "hires_offer_id_fkey";
+            columns: ["offer_id"];
+            isOneToOne: true;
+            referencedRelation: "employment_offers";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "hires_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "hires_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       job_applications: {
         Row: {
-          created_at: string | null
-          id: string
-          job_posting_id: string
-          message: string | null
-          officer_id: string
-          status: string
-        }
+          created_at: string | null;
+          id: string;
+          job_posting_id: string;
+          message: string | null;
+          officer_id: string;
+          status: string;
+        };
         Insert: {
-          created_at?: string | null
-          id?: string
-          job_posting_id: string
-          message?: string | null
-          officer_id: string
-          status?: string
-        }
+          created_at?: string | null;
+          id?: string;
+          job_posting_id: string;
+          message?: string | null;
+          officer_id: string;
+          status?: string;
+        };
         Update: {
-          created_at?: string | null
-          id?: string
-          job_posting_id?: string
-          message?: string | null
-          officer_id?: string
-          status?: string
-        }
+          created_at?: string | null;
+          id?: string;
+          job_posting_id?: string;
+          message?: string | null;
+          officer_id?: string;
+          status?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "job_applications_job_posting_id_fkey"
-            columns: ["job_posting_id"]
-            isOneToOne: false
-            referencedRelation: "job_postings"
-            referencedColumns: ["id"]
+            foreignKeyName: "job_applications_job_posting_id_fkey";
+            columns: ["job_posting_id"];
+            isOneToOne: false;
+            referencedRelation: "job_postings";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "job_applications_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "job_applications_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       job_postings: {
         Row: {
-          company_id: string
-          created_at: string | null
-          description: string | null
-          employment_type: string[] | null
-          hourly_rate_max: number | null
-          hourly_rate_min: number | null
-          id: string
-          location: string | null
-          requirements: string | null
-          shift_type: string[] | null
-          status: string
-          title: string
-          updated_at: string | null
-        }
+          company_id: string;
+          created_at: string | null;
+          description: string | null;
+          employment_type: string[] | null;
+          hourly_rate_max: number | null;
+          hourly_rate_min: number | null;
+          id: string;
+          location: string | null;
+          requirements: string | null;
+          shift_type: string[] | null;
+          status: string;
+          title: string;
+          updated_at: string | null;
+        };
         Insert: {
-          company_id: string
-          created_at?: string | null
-          description?: string | null
-          employment_type?: string[] | null
-          hourly_rate_max?: number | null
-          hourly_rate_min?: number | null
-          id?: string
-          location?: string | null
-          requirements?: string | null
-          shift_type?: string[] | null
-          status?: string
-          title: string
-          updated_at?: string | null
-        }
+          company_id: string;
+          created_at?: string | null;
+          description?: string | null;
+          employment_type?: string[] | null;
+          hourly_rate_max?: number | null;
+          hourly_rate_min?: number | null;
+          id?: string;
+          location?: string | null;
+          requirements?: string | null;
+          shift_type?: string[] | null;
+          status?: string;
+          title: string;
+          updated_at?: string | null;
+        };
         Update: {
-          company_id?: string
-          created_at?: string | null
-          description?: string | null
-          employment_type?: string[] | null
-          hourly_rate_max?: number | null
-          hourly_rate_min?: number | null
-          id?: string
-          location?: string | null
-          requirements?: string | null
-          shift_type?: string[] | null
-          status?: string
-          title?: string
-          updated_at?: string | null
-        }
+          company_id?: string;
+          created_at?: string | null;
+          description?: string | null;
+          employment_type?: string[] | null;
+          hourly_rate_max?: number | null;
+          hourly_rate_min?: number | null;
+          id?: string;
+          location?: string | null;
+          requirements?: string | null;
+          shift_type?: string[] | null;
+          status?: string;
+          title?: string;
+          updated_at?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "job_postings_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "job_postings_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       messages: {
         Row: {
-          company_id: string
-          created_at: string
-          id: string
-          is_read: boolean
-          job_application_id: string | null
-          legal_hold: boolean
-          message: string
-          officer_id: string
-          read_at: string | null
-          retention_until: string | null
-          sender_type: string
-          sender_user_id: string | null
-          updated_at: string
-        }
+          company_id: string;
+          created_at: string;
+          id: string;
+          is_read: boolean;
+          job_application_id: string | null;
+          legal_hold: boolean;
+          message: string;
+          officer_id: string;
+          read_at: string | null;
+          retention_until: string | null;
+          sender_type: string;
+          sender_user_id: string | null;
+          updated_at: string;
+        };
         Insert: {
-          company_id: string
-          created_at?: string
-          id?: string
-          is_read?: boolean
-          job_application_id?: string | null
-          legal_hold?: boolean
-          message: string
-          officer_id: string
-          read_at?: string | null
-          retention_until?: string | null
-          sender_type: string
-          sender_user_id?: string | null
-          updated_at?: string
-        }
+          company_id: string;
+          created_at?: string;
+          id?: string;
+          is_read?: boolean;
+          job_application_id?: string | null;
+          legal_hold?: boolean;
+          message: string;
+          officer_id: string;
+          read_at?: string | null;
+          retention_until?: string | null;
+          sender_type: string;
+          sender_user_id?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          company_id?: string
-          created_at?: string
-          id?: string
-          is_read?: boolean
-          job_application_id?: string | null
-          legal_hold?: boolean
-          message?: string
-          officer_id?: string
-          read_at?: string | null
-          retention_until?: string | null
-          sender_type?: string
-          sender_user_id?: string | null
-          updated_at?: string
-        }
+          company_id?: string;
+          created_at?: string;
+          id?: string;
+          is_read?: boolean;
+          job_application_id?: string | null;
+          legal_hold?: boolean;
+          message?: string;
+          officer_id?: string;
+          read_at?: string | null;
+          retention_until?: string | null;
+          sender_type?: string;
+          sender_user_id?: string | null;
+          updated_at?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "messages_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "messages_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "messages_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "messages_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "messages_job_application_id_fkey"
-            columns: ["job_application_id"]
-            isOneToOne: false
-            referencedRelation: "job_applications"
-            referencedColumns: ["id"]
+            foreignKeyName: "messages_job_application_id_fkey";
+            columns: ["job_application_id"];
+            isOneToOne: false;
+            referencedRelation: "job_applications";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       message_audit_events: {
         Row: {
-          action: string
-          actor_user_id: string | null
-          company_id: string
-          id: string
-          message_id: string
-          metadata: Json
-          occurred_at: string
-          officer_id: string
-        }
+          action: string;
+          actor_user_id: string | null;
+          company_id: string;
+          id: string;
+          message_id: string;
+          metadata: Json;
+          occurred_at: string;
+          officer_id: string;
+        };
         Insert: {
-          action: string
-          actor_user_id?: string | null
-          company_id: string
-          id?: string
-          message_id: string
-          metadata?: Json
-          occurred_at?: string
-          officer_id: string
-        }
+          action: string;
+          actor_user_id?: string | null;
+          company_id: string;
+          id?: string;
+          message_id: string;
+          metadata?: Json;
+          occurred_at?: string;
+          officer_id: string;
+        };
         Update: {
-          action?: string
-          actor_user_id?: string | null
-          company_id?: string
-          id?: string
-          message_id?: string
-          metadata?: Json
-          occurred_at?: string
-          officer_id?: string
-        }
+          action?: string;
+          actor_user_id?: string | null;
+          company_id?: string;
+          id?: string;
+          message_id?: string;
+          metadata?: Json;
+          occurred_at?: string;
+          officer_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "message_audit_events_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
+            foreignKeyName: "message_audit_events_message_id_fkey";
+            columns: ["message_id"];
+            isOneToOne: false;
+            referencedRelation: "messages";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       officer_certifications_safe: {
         Row: {
-          certification_id: string
-          certification_type: string | null
-          expiry_date: string | null
-          issue_date: string | null
-          issuing_organization: string | null
-          license_level: string | null
-          name: string | null
-          officer_id: string | null
-        }
+          certification_id: string;
+          certification_type: string | null;
+          expiry_date: string | null;
+          issue_date: string | null;
+          issuing_organization: string | null;
+          license_level: string | null;
+          name: string | null;
+          officer_id: string | null;
+        };
         Insert: {
-          certification_id: string
-          certification_type?: string | null
-          expiry_date?: string | null
-          issue_date?: string | null
-          issuing_organization?: string | null
-          license_level?: string | null
-          name?: string | null
-          officer_id?: string | null
-        }
+          certification_id: string;
+          certification_type?: string | null;
+          expiry_date?: string | null;
+          issue_date?: string | null;
+          issuing_organization?: string | null;
+          license_level?: string | null;
+          name?: string | null;
+          officer_id?: string | null;
+        };
         Update: {
-          certification_id?: string
-          certification_type?: string | null
-          expiry_date?: string | null
-          issue_date?: string | null
-          issuing_organization?: string | null
-          license_level?: string | null
-          name?: string | null
-          officer_id?: string | null
-        }
-        Relationships: []
-      }
+          certification_id?: string;
+          certification_type?: string | null;
+          expiry_date?: string | null;
+          issue_date?: string | null;
+          issuing_organization?: string | null;
+          license_level?: string | null;
+          name?: string | null;
+          officer_id?: string | null;
+        };
+        Relationships: [];
+      };
       officer_interests: {
         Row: {
-          company_id: string
-          created_at: string | null
-          id: string
-          officer_id: string
-          status: string
-          updated_at: string | null
-        }
+          company_id: string;
+          created_at: string | null;
+          id: string;
+          officer_id: string;
+          status: string;
+          updated_at: string | null;
+        };
         Insert: {
-          company_id: string
-          created_at?: string | null
-          id?: string
-          officer_id: string
-          status: string
-          updated_at?: string | null
-        }
+          company_id: string;
+          created_at?: string | null;
+          id?: string;
+          officer_id: string;
+          status: string;
+          updated_at?: string | null;
+        };
         Update: {
-          company_id?: string
-          created_at?: string | null
-          id?: string
-          officer_id?: string
-          status?: string
-          updated_at?: string | null
-        }
+          company_id?: string;
+          created_at?: string | null;
+          id?: string;
+          officer_id?: string;
+          status?: string;
+          updated_at?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "officer_interests_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "officer_interests_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "officer_interests_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "officer_interests_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       officer_profiles: {
         Row: {
-          account_status: string | null
-          address_city: string | null
-          address_country: string | null
-          address_state: string | null
-          address_street: string | null
-          address_unit: string | null
-          address_zip: string | null
-          availability_schedule: Json | null
-          availability_status: string | null
-          avatar_url: string | null
-          bio: string | null
-          created_at: string | null
-          date_of_birth: string | null
-          desired_salary: number | null
-          employment_type: string[] | null
-          hourly_rate: number | null
-          id: string
-          linkedin_url: string | null
-          location: string | null
-          main_region: string | null
-          officer_number: string | null
-          phone: string | null
-          resume_url: string | null
-          shift_preference: string[] | null
-          title: string | null
-          updated_at: string | null
-          user_id: string
-          years_experience: number | null
-        }
+          account_status: string | null;
+          address_city: string | null;
+          address_country: string | null;
+          address_state: string | null;
+          address_street: string | null;
+          address_unit: string | null;
+          address_zip: string | null;
+          availability_schedule: Json | null;
+          availability_status: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string | null;
+          date_of_birth: string | null;
+          desired_salary: number | null;
+          employment_type: string[] | null;
+          hourly_rate: number | null;
+          id: string;
+          linkedin_url: string | null;
+          location: string | null;
+          main_region: string | null;
+          officer_number: string | null;
+          phone: string | null;
+          resume_url: string | null;
+          shift_preference: string[] | null;
+          title: string | null;
+          updated_at: string | null;
+          user_id: string;
+          years_experience: number | null;
+        };
         Insert: {
-          account_status?: string | null
-          address_city?: string | null
-          address_country?: string | null
-          address_state?: string | null
-          address_street?: string | null
-          address_unit?: string | null
-          address_zip?: string | null
-          availability_schedule?: Json | null
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          date_of_birth?: string | null
-          desired_salary?: number | null
-          employment_type?: string[] | null
-          hourly_rate?: number | null
-          id?: string
-          linkedin_url?: string | null
-          location?: string | null
-          main_region?: string | null
-          officer_number?: string | null
-          phone?: string | null
-          resume_url?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id: string
-          years_experience?: number | null
-        }
+          account_status?: string | null;
+          address_city?: string | null;
+          address_country?: string | null;
+          address_state?: string | null;
+          address_street?: string | null;
+          address_unit?: string | null;
+          address_zip?: string | null;
+          availability_schedule?: Json | null;
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          date_of_birth?: string | null;
+          desired_salary?: number | null;
+          employment_type?: string[] | null;
+          hourly_rate?: number | null;
+          id?: string;
+          linkedin_url?: string | null;
+          location?: string | null;
+          main_region?: string | null;
+          officer_number?: string | null;
+          phone?: string | null;
+          resume_url?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id: string;
+          years_experience?: number | null;
+        };
         Update: {
-          account_status?: string | null
-          address_city?: string | null
-          address_country?: string | null
-          address_state?: string | null
-          address_street?: string | null
-          address_unit?: string | null
-          address_zip?: string | null
-          availability_schedule?: Json | null
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          date_of_birth?: string | null
-          desired_salary?: number | null
-          employment_type?: string[] | null
-          hourly_rate?: number | null
-          id?: string
-          linkedin_url?: string | null
-          location?: string | null
-          main_region?: string | null
-          officer_number?: string | null
-          phone?: string | null
-          resume_url?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string
-          years_experience?: number | null
-        }
+          account_status?: string | null;
+          address_city?: string | null;
+          address_country?: string | null;
+          address_state?: string | null;
+          address_street?: string | null;
+          address_unit?: string | null;
+          address_zip?: string | null;
+          availability_schedule?: Json | null;
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          date_of_birth?: string | null;
+          desired_salary?: number | null;
+          employment_type?: string[] | null;
+          hourly_rate?: number | null;
+          id?: string;
+          linkedin_url?: string | null;
+          location?: string | null;
+          main_region?: string | null;
+          officer_number?: string | null;
+          phone?: string | null;
+          resume_url?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id?: string;
+          years_experience?: number | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "officer_profiles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: true
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "officer_profiles_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       officer_profiles_safe: {
         Row: {
-          account_status: string | null
-          availability_schedule: Json | null
-          availability_status: string | null
-          avatar_url: string | null
-          bio: string | null
-          created_at: string | null
-          employment_type: string[] | null
-          hourly_rate: number | null
-          id: string
-          location: string | null
-          main_region: string | null
-          shift_preference: string[] | null
-          title: string | null
-          updated_at: string | null
-          user_id: string
-          years_experience: number | null
-        }
+          account_status: string | null;
+          availability_schedule: Json | null;
+          availability_status: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string | null;
+          employment_type: string[] | null;
+          hourly_rate: number | null;
+          id: string;
+          location: string | null;
+          main_region: string | null;
+          shift_preference: string[] | null;
+          title: string | null;
+          updated_at: string | null;
+          user_id: string;
+          years_experience: number | null;
+        };
         Insert: {
-          account_status?: string | null
-          availability_schedule?: Json | null
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          employment_type?: string[] | null
-          hourly_rate?: number | null
-          id: string
-          location?: string | null
-          main_region?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id: string
-          years_experience?: number | null
-        }
+          account_status?: string | null;
+          availability_schedule?: Json | null;
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          employment_type?: string[] | null;
+          hourly_rate?: number | null;
+          id: string;
+          location?: string | null;
+          main_region?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id: string;
+          years_experience?: number | null;
+        };
         Update: {
-          account_status?: string | null
-          availability_schedule?: Json | null
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          employment_type?: string[] | null
-          hourly_rate?: number | null
-          id?: string
-          location?: string | null
-          main_region?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string
-          years_experience?: number | null
-        }
-        Relationships: []
-      }
+          account_status?: string | null;
+          availability_schedule?: Json | null;
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          employment_type?: string[] | null;
+          hourly_rate?: number | null;
+          id?: string;
+          location?: string | null;
+          main_region?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id?: string;
+          years_experience?: number | null;
+        };
+        Relationships: [];
+      };
       officer_sensitive_data: {
         Row: {
-          created_at: string
-          drivers_license_back_url: string | null
-          drivers_license_expiry: string | null
-          drivers_license_front_url: string | null
-          drivers_license_number_encrypted: string | null
-          drivers_license_state: string | null
-          drivers_license_verified: boolean | null
-          id: string
-          officer_id: string
-          ssn_document_url: string | null
-          ssn_encrypted: string | null
-          ssn_last_four: string | null
-          ssn_verified: boolean | null
-          updated_at: string
-          verified_at: string | null
-          verified_by: string | null
-        }
+          created_at: string;
+          drivers_license_back_url: string | null;
+          drivers_license_expiry: string | null;
+          drivers_license_front_url: string | null;
+          drivers_license_number_encrypted: string | null;
+          drivers_license_state: string | null;
+          drivers_license_verified: boolean | null;
+          id: string;
+          officer_id: string;
+          ssn_document_url: string | null;
+          ssn_encrypted: string | null;
+          ssn_last_four: string | null;
+          ssn_verified: boolean | null;
+          updated_at: string;
+          verified_at: string | null;
+          verified_by: string | null;
+        };
         Insert: {
-          created_at?: string
-          drivers_license_back_url?: string | null
-          drivers_license_expiry?: string | null
-          drivers_license_front_url?: string | null
-          drivers_license_number_encrypted?: string | null
-          drivers_license_state?: string | null
-          drivers_license_verified?: boolean | null
-          id?: string
-          officer_id: string
-          ssn_document_url?: string | null
-          ssn_encrypted?: string | null
-          ssn_last_four?: string | null
-          ssn_verified?: boolean | null
-          updated_at?: string
-          verified_at?: string | null
-          verified_by?: string | null
-        }
+          created_at?: string;
+          drivers_license_back_url?: string | null;
+          drivers_license_expiry?: string | null;
+          drivers_license_front_url?: string | null;
+          drivers_license_number_encrypted?: string | null;
+          drivers_license_state?: string | null;
+          drivers_license_verified?: boolean | null;
+          id?: string;
+          officer_id: string;
+          ssn_document_url?: string | null;
+          ssn_encrypted?: string | null;
+          ssn_last_four?: string | null;
+          ssn_verified?: boolean | null;
+          updated_at?: string;
+          verified_at?: string | null;
+          verified_by?: string | null;
+        };
         Update: {
-          created_at?: string
-          drivers_license_back_url?: string | null
-          drivers_license_expiry?: string | null
-          drivers_license_front_url?: string | null
-          drivers_license_number_encrypted?: string | null
-          drivers_license_state?: string | null
-          drivers_license_verified?: boolean | null
-          id?: string
-          officer_id?: string
-          ssn_document_url?: string | null
-          ssn_encrypted?: string | null
-          ssn_last_four?: string | null
-          ssn_verified?: boolean | null
-          updated_at?: string
-          verified_at?: string | null
-          verified_by?: string | null
-        }
+          created_at?: string;
+          drivers_license_back_url?: string | null;
+          drivers_license_expiry?: string | null;
+          drivers_license_front_url?: string | null;
+          drivers_license_number_encrypted?: string | null;
+          drivers_license_state?: string | null;
+          drivers_license_verified?: boolean | null;
+          id?: string;
+          officer_id?: string;
+          ssn_document_url?: string | null;
+          ssn_encrypted?: string | null;
+          ssn_last_four?: string | null;
+          ssn_verified?: boolean | null;
+          updated_at?: string;
+          verified_at?: string | null;
+          verified_by?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "officer_sensitive_data_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: true
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "officer_sensitive_data_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: true;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       profile_views: {
         Row: {
-          company_id: string
-          id: string
-          officer_id: string
-          viewed_at: string | null
-          viewer_user_id: string
-        }
+          company_id: string;
+          id: string;
+          officer_id: string;
+          viewed_at: string | null;
+          viewer_user_id: string;
+        };
         Insert: {
-          company_id: string
-          id?: string
-          officer_id: string
-          viewed_at?: string | null
-          viewer_user_id: string
-        }
+          company_id: string;
+          id?: string;
+          officer_id: string;
+          viewed_at?: string | null;
+          viewer_user_id: string;
+        };
         Update: {
-          company_id?: string
-          id?: string
-          officer_id?: string
-          viewed_at?: string | null
-          viewer_user_id?: string
-        }
+          company_id?: string;
+          id?: string;
+          officer_id?: string;
+          viewed_at?: string | null;
+          viewer_user_id?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "profile_views_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "company_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "profile_views_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "profile_views_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "profile_views_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       profiles: {
         Row: {
-          avatar_url: string | null
-          created_at: string | null
-          email: string
-          full_name: string | null
-          id: string
-          role: Database["public"]["Enums"]["user_role"]
-          updated_at: string | null
-          username: string | null
-        }
+          avatar_url: string | null;
+          created_at: string | null;
+          email: string;
+          full_name: string | null;
+          id: string;
+          role: Database["public"]["Enums"]["user_role"];
+          updated_at: string | null;
+          username: string | null;
+        };
         Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          email: string
-          full_name?: string | null
-          id: string
-          role: Database["public"]["Enums"]["user_role"]
-          updated_at?: string | null
-          username?: string | null
-        }
+          avatar_url?: string | null;
+          created_at?: string | null;
+          email: string;
+          full_name?: string | null;
+          id: string;
+          role: Database["public"]["Enums"]["user_role"];
+          updated_at?: string | null;
+          username?: string | null;
+        };
         Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          email?: string
-          full_name?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["user_role"]
-          updated_at?: string | null
-          username?: string | null
-        }
-        Relationships: []
-      }
+          avatar_url?: string | null;
+          created_at?: string | null;
+          email?: string;
+          full_name?: string | null;
+          id?: string;
+          role?: Database["public"]["Enums"]["user_role"];
+          updated_at?: string | null;
+          username?: string | null;
+        };
+        Relationships: [];
+      };
       public_profiles: {
         Row: {
-          avatar_url: string | null
-          created_at: string | null
-          full_name: string | null
-          id: string
-          role: Database["public"]["Enums"]["user_role"] | null
-          updated_at: string | null
-          username: string | null
-        }
+          avatar_url: string | null;
+          created_at: string | null;
+          full_name: string | null;
+          id: string;
+          role: Database["public"]["Enums"]["user_role"] | null;
+          updated_at: string | null;
+          username: string | null;
+        };
         Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          full_name?: string | null
-          id: string
-          role?: Database["public"]["Enums"]["user_role"] | null
-          updated_at?: string | null
-          username?: string | null
-        }
+          avatar_url?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          id: string;
+          role?: Database["public"]["Enums"]["user_role"] | null;
+          updated_at?: string | null;
+          username?: string | null;
+        };
         Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          full_name?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["user_role"] | null
-          updated_at?: string | null
-          username?: string | null
-        }
-        Relationships: []
-      }
+          avatar_url?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          id?: string;
+          role?: Database["public"]["Enums"]["user_role"] | null;
+          updated_at?: string | null;
+          username?: string | null;
+        };
+        Relationships: [];
+      };
       security_audit_log: {
         Row: {
-          action: string
-          created_at: string
-          details: Json | null
-          id: string
-          ip_address: string | null
-          record_id: string | null
-          table_name: string
-          user_agent: string | null
-          user_id: string
-        }
+          action: string;
+          created_at: string;
+          details: Json | null;
+          id: string;
+          ip_address: string | null;
+          record_id: string | null;
+          table_name: string;
+          user_agent: string | null;
+          user_id: string;
+        };
         Insert: {
-          action: string
-          created_at?: string
-          details?: Json | null
-          id?: string
-          ip_address?: string | null
-          record_id?: string | null
-          table_name: string
-          user_agent?: string | null
-          user_id: string
-        }
+          action: string;
+          created_at?: string;
+          details?: Json | null;
+          id?: string;
+          ip_address?: string | null;
+          record_id?: string | null;
+          table_name: string;
+          user_agent?: string | null;
+          user_id: string;
+        };
         Update: {
-          action?: string
-          created_at?: string
-          details?: Json | null
-          id?: string
-          ip_address?: string | null
-          record_id?: string | null
-          table_name?: string
-          user_agent?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
+          action?: string;
+          created_at?: string;
+          details?: Json | null;
+          id?: string;
+          ip_address?: string | null;
+          record_id?: string | null;
+          table_name?: string;
+          user_agent?: string | null;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       user_roles: {
         Row: {
-          created_at: string | null
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          created_at: string | null;
+          id: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Insert: {
-          created_at?: string | null
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          created_at?: string | null;
+          id?: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Update: {
-          created_at?: string | null
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
+          created_at?: string | null;
+          id?: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       video_interviews: {
         Row: {
-          created_at: string | null
-          description: string | null
-          duration_seconds: number | null
-          id: string
-          officer_id: string
-          title: string | null
-          video_url: string
-        }
+          created_at: string | null;
+          description: string | null;
+          duration_seconds: number | null;
+          id: string;
+          officer_id: string;
+          title: string | null;
+          video_url: string;
+        };
         Insert: {
-          created_at?: string | null
-          description?: string | null
-          duration_seconds?: number | null
-          id?: string
-          officer_id: string
-          title?: string | null
-          video_url: string
-        }
+          created_at?: string | null;
+          description?: string | null;
+          duration_seconds?: number | null;
+          id?: string;
+          officer_id: string;
+          title?: string | null;
+          video_url: string;
+        };
         Update: {
-          created_at?: string | null
-          description?: string | null
-          duration_seconds?: number | null
-          id?: string
-          officer_id?: string
-          title?: string | null
-          video_url?: string
-        }
+          created_at?: string | null;
+          description?: string | null;
+          duration_seconds?: number | null;
+          id?: string;
+          officer_id?: string;
+          title?: string | null;
+          video_url?: string;
+        };
         Relationships: [
           {
-            foreignKeyName: "video_interviews_officer_id_fkey"
-            columns: ["officer_id"]
-            isOneToOne: false
-            referencedRelation: "officer_profiles"
-            referencedColumns: ["id"]
+            foreignKeyName: "video_interviews_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       work_history: {
         Row: {
-          company_address: string | null
-          company_city: string | null
-          company_name: string
-          company_phone: string | null
-          company_state: string | null
-          company_zip: string | null
-          created_at: string
-          end_date: string | null
-          id: string
-          job_description: string | null
-          may_contact: boolean | null
-          officer_id: string
-          position_title: string | null
-          reason_for_leaving: string | null
-          start_date: string | null
-          supervisor_name: string | null
-          supervisor_phone: string | null
-          updated_at: string
-        }
+          company_address: string | null;
+          company_city: string | null;
+          company_name: string;
+          company_phone: string | null;
+          company_state: string | null;
+          company_zip: string | null;
+          created_at: string;
+          end_date: string | null;
+          id: string;
+          job_description: string | null;
+          may_contact: boolean | null;
+          officer_id: string;
+          position_title: string | null;
+          reason_for_leaving: string | null;
+          start_date: string | null;
+          supervisor_name: string | null;
+          supervisor_phone: string | null;
+          updated_at: string;
+        };
         Insert: {
-          company_address?: string | null
-          company_city?: string | null
-          company_name: string
-          company_phone?: string | null
-          company_state?: string | null
-          company_zip?: string | null
-          created_at?: string
-          end_date?: string | null
-          id?: string
-          job_description?: string | null
-          may_contact?: boolean | null
-          officer_id: string
-          position_title?: string | null
-          reason_for_leaving?: string | null
-          start_date?: string | null
-          supervisor_name?: string | null
-          supervisor_phone?: string | null
-          updated_at?: string
-        }
+          company_address?: string | null;
+          company_city?: string | null;
+          company_name: string;
+          company_phone?: string | null;
+          company_state?: string | null;
+          company_zip?: string | null;
+          created_at?: string;
+          end_date?: string | null;
+          id?: string;
+          job_description?: string | null;
+          may_contact?: boolean | null;
+          officer_id: string;
+          position_title?: string | null;
+          reason_for_leaving?: string | null;
+          start_date?: string | null;
+          supervisor_name?: string | null;
+          supervisor_phone?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          company_address?: string | null
-          company_city?: string | null
-          company_name?: string
-          company_phone?: string | null
-          company_state?: string | null
-          company_zip?: string | null
-          created_at?: string
-          end_date?: string | null
-          id?: string
-          job_description?: string | null
-          may_contact?: boolean | null
-          officer_id?: string
-          position_title?: string | null
-          reason_for_leaving?: string | null
-          start_date?: string | null
-          supervisor_name?: string | null
-          supervisor_phone?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
-    }
+          company_address?: string | null;
+          company_city?: string | null;
+          company_name?: string;
+          company_phone?: string | null;
+          company_state?: string | null;
+          company_zip?: string | null;
+          created_at?: string;
+          end_date?: string | null;
+          id?: string;
+          job_description?: string | null;
+          may_contact?: boolean | null;
+          officer_id?: string;
+          position_title?: string | null;
+          reason_for_leaving?: string | null;
+          start_date?: string | null;
+          supervisor_name?: string | null;
+          supervisor_phone?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
       officer_certifications_summary: {
         Row: {
-          certification_type: string | null
-          expiry_date: string | null
-          issue_date: string | null
-          issuing_organization: string | null
-          license_level: string | null
-          name: string | null
-          officer_id: string | null
-        }
+          certification_type: string | null;
+          expiry_date: string | null;
+          issue_date: string | null;
+          issuing_organization: string | null;
+          license_level: string | null;
+          name: string | null;
+          officer_id: string | null;
+        };
         Insert: {
-          certification_type?: string | null
-          expiry_date?: string | null
-          issue_date?: string | null
-          issuing_organization?: string | null
-          license_level?: string | null
-          name?: string | null
-          officer_id?: string | null
-        }
+          certification_type?: string | null;
+          expiry_date?: string | null;
+          issue_date?: string | null;
+          issuing_organization?: string | null;
+          license_level?: string | null;
+          name?: string | null;
+          officer_id?: string | null;
+        };
         Update: {
-          certification_type?: string | null
-          expiry_date?: string | null
-          issue_date?: string | null
-          issuing_organization?: string | null
-          license_level?: string | null
-          name?: string | null
-          officer_id?: string | null
-        }
-        Relationships: []
-      }
+          certification_type?: string | null;
+          expiry_date?: string | null;
+          issue_date?: string | null;
+          issuing_organization?: string | null;
+          license_level?: string | null;
+          name?: string | null;
+          officer_id?: string | null;
+        };
+        Relationships: [];
+      };
       officer_profiles_limited: {
         Row: {
-          availability_status: string | null
-          avatar_url: string | null
-          bio: string | null
-          created_at: string | null
-          employment_type: string[] | null
-          id: string | null
-          location: string | null
-          main_region: string | null
-          shift_preference: string[] | null
-          title: string | null
-          updated_at: string | null
-          user_id: string | null
-          years_experience: number | null
-        }
+          availability_status: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string | null;
+          employment_type: string[] | null;
+          id: string | null;
+          location: string | null;
+          main_region: string | null;
+          shift_preference: string[] | null;
+          title: string | null;
+          updated_at: string | null;
+          user_id: string | null;
+          years_experience: number | null;
+        };
         Insert: {
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          employment_type?: string[] | null
-          id?: string | null
-          location?: string | null
-          main_region?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          years_experience?: number | null
-        }
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          employment_type?: string[] | null;
+          id?: string | null;
+          location?: string | null;
+          main_region?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+          years_experience?: number | null;
+        };
         Update: {
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          employment_type?: string[] | null
-          id?: string | null
-          location?: string | null
-          main_region?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          years_experience?: number | null
-        }
-        Relationships: []
-      }
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          employment_type?: string[] | null;
+          id?: string | null;
+          location?: string | null;
+          main_region?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+          years_experience?: number | null;
+        };
+        Relationships: [];
+      };
       officer_profiles_public: {
         Row: {
-          availability_schedule: Json | null
-          availability_status: string | null
-          avatar_url: string | null
-          bio: string | null
-          created_at: string | null
-          employment_type: string[] | null
-          hourly_rate: number | null
-          id: string | null
-          location: string | null
-          main_region: string | null
-          shift_preference: string[] | null
-          title: string | null
-          updated_at: string | null
-          user_id: string | null
-          years_experience: number | null
-        }
+          availability_schedule: Json | null;
+          availability_status: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string | null;
+          employment_type: string[] | null;
+          hourly_rate: number | null;
+          id: string | null;
+          location: string | null;
+          main_region: string | null;
+          shift_preference: string[] | null;
+          title: string | null;
+          updated_at: string | null;
+          user_id: string | null;
+          years_experience: number | null;
+        };
         Insert: {
-          availability_schedule?: Json | null
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          employment_type?: string[] | null
-          hourly_rate?: number | null
-          id?: string | null
-          location?: string | null
-          main_region?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          years_experience?: number | null
-        }
+          availability_schedule?: Json | null;
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          employment_type?: string[] | null;
+          hourly_rate?: number | null;
+          id?: string | null;
+          location?: string | null;
+          main_region?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+          years_experience?: number | null;
+        };
         Update: {
-          availability_schedule?: Json | null
-          availability_status?: string | null
-          avatar_url?: string | null
-          bio?: string | null
-          created_at?: string | null
-          employment_type?: string[] | null
-          hourly_rate?: number | null
-          id?: string | null
-          location?: string | null
-          main_region?: string | null
-          shift_preference?: string[] | null
-          title?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-          years_experience?: number | null
-        }
-        Relationships: []
-      }
+          availability_schedule?: Json | null;
+          availability_status?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string | null;
+          employment_type?: string[] | null;
+          hourly_rate?: number | null;
+          id?: string | null;
+          location?: string | null;
+          main_region?: string | null;
+          shift_preference?: string[] | null;
+          title?: string | null;
+          updated_at?: string | null;
+          user_id?: string | null;
+          years_experience?: number | null;
+        };
+        Relationships: [];
+      };
       safe_officer_profiles: {
         Row: {
-          avatar_url: string | null
-          created_at: string | null
-          full_name: string | null
-          id: string | null
-          role: Database["public"]["Enums"]["user_role"] | null
-          updated_at: string | null
-          username: string | null
-        }
+          avatar_url: string | null;
+          created_at: string | null;
+          full_name: string | null;
+          id: string | null;
+          role: Database["public"]["Enums"]["user_role"] | null;
+          updated_at: string | null;
+          username: string | null;
+        };
         Insert: {
-          avatar_url?: string | null
-          created_at?: string | null
-          full_name?: string | null
-          id?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-          updated_at?: string | null
-          username?: string | null
-        }
+          avatar_url?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          id?: string | null;
+          role?: Database["public"]["Enums"]["user_role"] | null;
+          updated_at?: string | null;
+          username?: string | null;
+        };
         Update: {
-          avatar_url?: string | null
-          created_at?: string | null
-          full_name?: string | null
-          id?: string | null
-          role?: Database["public"]["Enums"]["user_role"] | null
-          updated_at?: string | null
-          username?: string | null
-        }
-        Relationships: []
-      }
-    }
+          avatar_url?: string | null;
+          created_at?: string | null;
+          full_name?: string | null;
+          id?: string | null;
+          role?: Database["public"]["Enums"]["user_role"] | null;
+          updated_at?: string | null;
+          username?: string | null;
+        };
+        Relationships: [];
+      };
+    };
     Functions: {
       can_view_application_evidence: {
-        Args: { _application_id: string }
-        Returns: boolean
-      }
+        Args: { _application_id: string };
+        Returns: boolean;
+      };
       decline_employment_offer: {
-        Args: { _offer_id: string; _reason?: string | null }
-        Returns: undefined
-      }
+        Args: { _offer_id: string; _reason?: string | null };
+        Returns: undefined;
+      };
       finalize_employment_offer_acceptance: {
-        Args: { _offer_id: string; _accepted_document_path: string; _accepted_document_sha256: string; _officer_printed_name: string; _acting_user_id: string }
-        Returns: string
-      }
-      check_overdue_payments: { Args: never; Returns: undefined }
+        Args: {
+          _offer_id: string;
+          _accepted_document_path: string;
+          _accepted_document_sha256: string;
+          _officer_printed_name: string;
+          _acting_user_id: string;
+        };
+        Returns: string;
+      };
+      check_overdue_payments: { Args: never; Returns: undefined };
       company_can_view_officer_contact: {
-        Args: { _company_user_id: string; _officer_id: string }
-        Returns: boolean
-      }
+        Args: { _company_user_id: string; _officer_id: string };
+        Returns: boolean;
+      };
       company_has_paid_tier: {
-        Args: { _company_user_id: string }
-        Returns: boolean
-      }
+        Args: { _company_user_id: string };
+        Returns: boolean;
+      };
       company_hired_officer: {
-        Args: { _company_user_id: string; _officer_id: string }
-        Returns: boolean
-      }
+        Args: { _company_user_id: string; _officer_id: string };
+        Returns: boolean;
+      };
       company_interested_in_officer: {
-        Args: { _company_user_id: string; _officer_id: string }
-        Returns: boolean
-      }
+        Args: { _company_user_id: string; _officer_id: string };
+        Returns: boolean;
+      };
       company_received_application: {
-        Args: { _company_user_id: string; _officer_id: string }
-        Returns: boolean
-      }
-      get_officer_user_id: { Args: { _officer_id: string }; Returns: string }
+        Args: { _company_user_id: string; _officer_id: string };
+        Returns: boolean;
+      };
+      get_officer_user_id: { Args: { _officer_id: string }; Returns: string };
       ensure_officer_onboarding_packet: {
-        Args: { _hire_id: string }
-        Returns: Database["public"]["Tables"]["officer_onboarding_packets"]["Row"]
-      }
+        Args: { _hire_id: string };
+        Returns: Database["public"]["Tables"]["officer_onboarding_packets"]["Row"];
+      };
       get_company_onboarding_progress: {
-        Args: { _company_id: string }
+        Args: { _company_id: string };
         Returns: {
-          current_step: number
-          hire_id: string
-          officer_id: string
-          packet_id: string | null
-          status: string
-          submitted_at: string | null
-          updated_at: string | null
-        }[]
-      }
+          current_step: number;
+          hire_id: string;
+          officer_id: string;
+          packet_id: string | null;
+          status: string;
+          submitted_at: string | null;
+          updated_at: string | null;
+        }[];
+      };
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+          _role: Database["public"]["Enums"]["app_role"];
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
       company_team_has_access: {
         Args: {
-          _allowed_roles?: Database["public"]["Enums"]["company_member_role"][]
-          _company_id: string
-        }
-        Returns: boolean
-      }
+          _allowed_roles?: Database["public"]["Enums"]["company_member_role"][];
+          _company_id: string;
+        };
+        Returns: boolean;
+      };
       is_officer_owner: {
-        Args: { _officer_id: string; _user_id: string }
-        Returns: boolean
-      }
+        Args: { _officer_id: string; _user_id: string };
+        Returns: boolean;
+      };
       log_sensitive_access: {
         Args: {
-          _action: string
-          _details?: Json
-          _record_id: string
-          _table_name: string
-        }
-        Returns: undefined
-      }
+          _action: string;
+          _details?: Json;
+          _record_id: string;
+          _table_name: string;
+        };
+        Returns: undefined;
+      };
       mark_employment_offer_viewed: {
-        Args: { _offer_id: string }
-        Returns: Database["public"]["Tables"]["employment_offers"]["Row"]
-      }
-    }
+        Args: { _offer_id: string };
+        Returns: Database["public"]["Tables"]["employment_offers"]["Row"];
+      };
+    };
     Enums: {
-      app_role: "admin" | "company" | "officer" | "view_only" | "full_access"
-      company_member_role: "owner" | "admin" | "hiring_manager" | "reviewer"
-      subscription_tier: "free" | "professional" | "premium"
-      user_role: "officer" | "company"
-    }
+      app_role: "admin" | "company" | "officer" | "view_only" | "full_access";
+      company_member_role: "owner" | "admin" | "hiring_manager" | "reviewer";
+      subscription_tier: "free" | "professional" | "premium";
+      user_role: "officer" | "company";
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
+      [_ in never]: never;
+    };
+  };
+};
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
+      Row: infer R;
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
       }
       ? R
       : never
-    : never
+    : never;
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
+      Insert: infer I;
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
+        Insert: infer I;
       }
       ? I
       : never
-    : never
+    : never;
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
+      Update: infer U;
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
+        Update: infer U;
       }
       ? U
       : never
-    : never
+    : never;
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+    : never;
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+    : never;
 
 export const Constants = {
   public: {
@@ -1863,4 +1944,4 @@ export const Constants = {
       user_role: ["officer", "company"],
     },
   },
-} as const
+} as const;
