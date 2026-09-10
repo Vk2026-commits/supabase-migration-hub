@@ -6,8 +6,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, DollarSign, Briefcase, Search, Heart, HeartOff, Lock, Calendar, MessageCircle } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  MapPin,
+  DollarSign,
+  Briefcase,
+  Search,
+  Heart,
+  HeartOff,
+  Lock,
+  Calendar,
+  MessageCircle,
+} from "lucide-react";
 import { Link } from "@/lib/router-compat";
 import { ChatDialog } from "@/components/dashboard/ChatDialog";
 import {
@@ -17,11 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import HireButton from "@/components/dashboard/HireButton";
 import { toast } from "sonner";
 import { ApplicantReviewDialog } from "@/components/dashboard/ApplicantReviewDialog";
@@ -46,13 +58,36 @@ const Browse = () => {
   const [officerInterests, setOfficerInterests] = useState<Record<string, string>>({});
   const [chatOpen, setChatOpen] = useState(false);
 
+  const companyProfileIsComplete = (company: Record<string, unknown> | null) =>
+    Boolean(
+      company &&
+      typeof company.company_name === "string" &&
+      company.company_name.trim() &&
+      typeof company.company_address === "string" &&
+      company.company_address.trim() &&
+      typeof company.company_city === "string" &&
+      company.company_city.trim() &&
+      typeof company.company_state === "string" &&
+      company.company_state.trim() &&
+      typeof company.company_zip === "string" &&
+      company.company_zip.trim() &&
+      typeof company.contact_person_name === "string" &&
+      company.contact_person_name.trim() &&
+      typeof company.contact_email === "string" &&
+      company.contact_email.trim() &&
+      typeof company.contact_cell_phone === "string" &&
+      company.contact_cell_phone.trim(),
+    );
+
   useEffect(() => {
     checkAccess();
   }, []);
 
   const checkAccess = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     if (!session) {
       toast.error("Please create a company account to browse security professionals");
       navigate("/auth?role=company");
@@ -75,15 +110,36 @@ const Browse = () => {
       return;
     }
 
-    // Check if user has company profile
-    const { data: companyData } = await supabase
+    // Company owners use their own profile. Invited company team members use
+    // the active membership's company profile after their own setup completes.
+    const { data: ownedCompany } = await supabase
       .from("company_profiles")
       .select("*")
       .eq("user_id", session.user.id)
       .maybeSingle();
 
+    let companyData = ownedCompany;
     if (!companyData) {
-      toast.error("Please complete your company profile to browse security professionals");
+      const { data: membership } = await supabase
+        .from("company_members")
+        .select("company_id")
+        .eq("user_id", session.user.id)
+        .eq("status", "active")
+        .maybeSingle();
+      if (membership?.company_id) {
+        const { data: memberCompany } = await supabase
+          .from("company_profiles")
+          .select("*")
+          .eq("id", membership.company_id)
+          .maybeSingle();
+        companyData = memberCompany;
+      }
+    }
+
+    if (!companyProfileIsComplete(companyData)) {
+      toast.error(
+        "Complete the company profile, including the hiring contact mobile number, before browsing security professionals",
+      );
       navigate("/dashboard");
       return;
     }
@@ -95,7 +151,9 @@ const Browse = () => {
   };
 
   const loadUserProfile = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (session) {
       setCurrentUser(session.user);
       const { data } = await supabase
@@ -117,7 +175,7 @@ const Browse = () => {
       if (error) throw error;
 
       const interestsMap: Record<string, string> = {};
-      data?.forEach(interest => {
+      data?.forEach((interest) => {
         interestsMap[interest.officer_id] = interest.status;
       });
       setOfficerInterests(interestsMap);
@@ -130,14 +188,16 @@ const Browse = () => {
     try {
       const { data, error } = await supabase
         .from("officer_profiles")
-        .select(`
+        .select(
+          `
           *,
           profiles:user_id (
             id,
             full_name,
             avatar_url
           )
-        `)
+        `,
+        )
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -156,14 +216,14 @@ const Browse = () => {
 
   const filteredOfficers = officers.filter((officer) => {
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = (
+    const matchesSearch =
       officer.title?.toLowerCase().includes(searchLower) ||
       officer.location?.toLowerCase().includes(searchLower) ||
-      officer.profiles?.full_name?.toLowerCase().includes(searchLower)
-    );
+      officer.profiles?.full_name?.toLowerCase().includes(searchLower);
 
     const matchesState = stateFilter === "all" || officer.address_state === stateFilter;
-    const matchesCity = !cityFilter || officer.address_city?.toLowerCase().includes(cityFilter.toLowerCase());
+    const matchesCity =
+      !cityFilter || officer.address_city?.toLowerCase().includes(cityFilter.toLowerCase());
     const matchesZip = !zipFilter || officer.address_zip?.includes(zipFilter);
 
     let matchesAvailability = true;
@@ -171,9 +231,9 @@ const Browse = () => {
       const schedule = officer.availability_schedule;
       if (availabilityFilter === "weekdays") {
         const weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday"];
-        matchesAvailability = weekdays.some(day => schedule[day]?.available === true);
+        matchesAvailability = weekdays.some((day) => schedule[day]?.available === true);
       } else if (availabilityFilter === "weekends") {
-        matchesAvailability = 
+        matchesAvailability =
           schedule.saturday?.available === true || schedule.sunday?.available === true;
       }
     }
@@ -188,47 +248,100 @@ const Browse = () => {
       matchesEmploymentType = officer.employment_type.includes(employmentTypeFilter);
     }
 
-    return matchesSearch && matchesState && matchesCity && matchesZip && matchesAvailability && matchesShift && matchesEmploymentType;
+    return (
+      matchesSearch &&
+      matchesState &&
+      matchesCity &&
+      matchesZip &&
+      matchesAvailability &&
+      matchesShift &&
+      matchesEmploymentType
+    );
   });
 
   const usStates = [
-    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware",
-    "Florida", "Georgia", "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky",
-    "Louisiana", "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
-    "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", "New Mexico",
-    "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
-    "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
-    "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"
+    "Alabama",
+    "Alaska",
+    "Arizona",
+    "Arkansas",
+    "California",
+    "Colorado",
+    "Connecticut",
+    "Delaware",
+    "Florida",
+    "Georgia",
+    "Hawaii",
+    "Idaho",
+    "Illinois",
+    "Indiana",
+    "Iowa",
+    "Kansas",
+    "Kentucky",
+    "Louisiana",
+    "Maine",
+    "Maryland",
+    "Massachusetts",
+    "Michigan",
+    "Minnesota",
+    "Mississippi",
+    "Missouri",
+    "Montana",
+    "Nebraska",
+    "Nevada",
+    "New Hampshire",
+    "New Jersey",
+    "New Mexico",
+    "New York",
+    "North Carolina",
+    "North Dakota",
+    "Ohio",
+    "Oklahoma",
+    "Oregon",
+    "Pennsylvania",
+    "Rhode Island",
+    "South Carolina",
+    "South Dakota",
+    "Tennessee",
+    "Texas",
+    "Utah",
+    "Vermont",
+    "Virginia",
+    "Washington",
+    "West Virginia",
+    "Wisconsin",
+    "Wyoming",
   ];
 
   const availabilityOptions = [
     { value: "weekdays", label: "Monday through Friday" },
-    { value: "weekends", label: "Weekends Only" }
+    { value: "weekends", label: "Weekends Only" },
   ];
 
   const shiftOptions = [
     { value: "first_shift", label: "First Shift (Day)" },
     { value: "second_shift", label: "Second Shift (Evening)" },
     { value: "third_shift", label: "Third Shift (Night)" },
-    { value: "weekend", label: "Weekends" }
+    { value: "weekend", label: "Weekends" },
   ];
 
   const employmentTypeOptions = [
     { value: "full_time", label: "Full-time" },
     { value: "part_time", label: "Part-time" },
-    { value: "seasonal", label: "Seasonal" }
+    { value: "seasonal", label: "Seasonal" },
   ];
 
   const handleViewProfile = async (officer: any) => {
-    if (companyProfile && ['professional', 'premium'].includes(companyProfile.subscription_tier)) {
+    if (companyProfile && ["professional", "premium"].includes(companyProfile.subscription_tier)) {
       const { data: applicantRecord, error: applicantError } = await (supabase as any)
         .from("job_applications")
-        .select(`
+        .select(
+          `
           *,
           job_posting:job_postings!inner(title,company_id),
           officer:officer_profiles(id,user_id),
           hiring_application:guard_hiring_applications(application_data,status,submitted_at)
-        `)
+        `,
+        )
         .eq("officer_id", officer.id)
         .eq("job_posting.company_id", companyProfile.id)
         .order("created_at", { ascending: false })
@@ -244,7 +357,7 @@ const Browse = () => {
       }
     }
     setSelectedOfficer(officer);
-    
+
     // Load officer certifications
     try {
       const { data: certs } = await supabase
@@ -253,12 +366,12 @@ const Browse = () => {
         .eq("officer_id", officer.id)
         .eq("certification_type", "license")
         .order("created_at", { ascending: false });
-      
+
       setSelectedOfficerCertifications(certs || []);
     } catch (error) {
       console.error("Error loading certifications:", error);
     }
-    
+
     // Track profile view if user is a company
     if (companyProfile && currentUser) {
       try {
@@ -273,31 +386,31 @@ const Browse = () => {
     }
   };
 
-  const handleInterest = async (officerId: string, status: 'interested' | 'not_interested') => {
+  const handleInterest = async (officerId: string, status: "interested" | "not_interested") => {
     if (!companyProfile) {
       toast.error("Please create a company profile first");
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from("officer_interests")
-        .upsert(
-          {
-            company_id: companyProfile.id,
-            officer_id: officerId,
-            status,
-          },
-          { onConflict: 'company_id,officer_id' }
-        );
+      const { error } = await supabase.from("officer_interests").upsert(
+        {
+          company_id: companyProfile.id,
+          officer_id: officerId,
+          status,
+        },
+        { onConflict: "company_id,officer_id" },
+      );
 
       if (error) throw error;
-      toast.success(`Officer marked as ${status === 'interested' ? 'interested' : 'not interested'}`);
-      
+      toast.success(
+        `Officer marked as ${status === "interested" ? "interested" : "not interested"}`,
+      );
+
       // Update local state
-      setOfficerInterests(prev => ({
+      setOfficerInterests((prev) => ({
         ...prev,
-        [officerId]: status
+        [officerId]: status,
       }));
     } catch (error: any) {
       toast.error(error.message);
@@ -316,29 +429,30 @@ const Browse = () => {
     }
 
     try {
-      const { error } = await supabase.functions.invoke('express-interest', {
-        body: { officerId }
+      const { error } = await supabase.functions.invoke("express-interest", {
+        body: { officerId },
       });
-      
+
       if (error) {
-        console.error('Error sending email:', error);
-        toast.error('Failed to send interest email');
+        console.error("Error sending email:", error);
+        toast.error("Failed to send interest email");
       } else {
-        toast.success('Interest email sent to officer!');
+        toast.success("Interest email sent to officer!");
       }
     } catch (error: any) {
-      console.error('Error:', error);
-      toast.error('Failed to send interest email');
+      console.error("Error:", error);
+      toast.error("Failed to send interest email");
     }
   };
 
-  const isFreeTier = !companyProfile || companyProfile.subscription_tier === 'free';
-  const canViewFullDetails = companyProfile && ['professional', 'premium'].includes(companyProfile.subscription_tier);
+  const isFreeTier = !companyProfile || companyProfile.subscription_tier === "free";
+  const canViewFullDetails =
+    companyProfile && ["professional", "premium"].includes(companyProfile.subscription_tier);
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Browse Security Professionals</h1>
@@ -357,7 +471,7 @@ const Browse = () => {
               className="pl-10"
             />
           </div>
-          
+
           <div className="flex gap-4 overflow-x-auto pb-2">
             <div className="min-w-[180px]">
               <Select value={stateFilter} onValueChange={setStateFilter}>
@@ -368,7 +482,9 @@ const Browse = () => {
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">All States</SelectItem>
                   {usStates.map((state) => (
-                    <SelectItem key={state} value={state}>{state}</SelectItem>
+                    <SelectItem key={state} value={state}>
+                      {state}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -399,7 +515,9 @@ const Browse = () => {
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">All Availability</SelectItem>
                   {availabilityOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -414,7 +532,9 @@ const Browse = () => {
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">All Shifts</SelectItem>
                   {shiftOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -429,7 +549,9 @@ const Browse = () => {
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">All Types</SelectItem>
                   {employmentTypeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -467,8 +589,12 @@ const Browse = () => {
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="text-xl">
-                        {isFreeTier && officer.profiles?.full_name 
-                          ? `${officer.profiles.full_name.split(' ')[0]} ${officer.profiles.full_name.split(' ').slice(1).map((n: string) => n[0]).join('')}.`
+                        {isFreeTier && officer.profiles?.full_name
+                          ? `${officer.profiles.full_name.split(" ")[0]} ${officer.profiles.full_name
+                              .split(" ")
+                              .slice(1)
+                              .map((n: string) => n[0])
+                              .join("")}.`
                           : officer.profiles?.full_name || "Anonymous"}
                       </CardTitle>
                       <CardDescription className="mt-1">
@@ -476,7 +602,10 @@ const Browse = () => {
                       </CardDescription>
                     </div>
                     {officer.availability_status === "available" && (
-                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                      <Badge
+                        variant="secondary"
+                        className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
+                      >
                         Available
                       </Badge>
                     )}
@@ -494,7 +623,7 @@ const Browse = () => {
                         <span>{officer.location}</span>
                       </div>
                     )}
-                    
+
                     {officer.years_experience && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Briefcase className="h-4 w-4" />
@@ -510,10 +639,7 @@ const Browse = () => {
                     )}
                   </div>
 
-                  <Button 
-                    className="w-full" 
-                    onClick={() => handleViewProfile(officer)}
-                  >
+                  <Button className="w-full" onClick={() => handleViewProfile(officer)}>
                     View Profile
                   </Button>
                 </CardContent>
@@ -528,15 +654,17 @@ const Browse = () => {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl">
-              {isFreeTier && selectedOfficer?.profiles?.full_name 
-                ? `${selectedOfficer.profiles.full_name.split(' ')[0]} ${selectedOfficer.profiles.full_name.split(' ').slice(1).map((n: string) => n[0]).join('')}.`
+              {isFreeTier && selectedOfficer?.profiles?.full_name
+                ? `${selectedOfficer.profiles.full_name.split(" ")[0]} ${selectedOfficer.profiles.full_name
+                    .split(" ")
+                    .slice(1)
+                    .map((n: string) => n[0])
+                    .join("")}.`
                 : selectedOfficer?.profiles?.full_name || "Officer Profile"}
             </DialogTitle>
-            <DialogDescription>
-              {selectedOfficer?.title || "Security Officer"}
-            </DialogDescription>
+            <DialogDescription>{selectedOfficer?.title || "Security Officer"}</DialogDescription>
           </DialogHeader>
-          
+
           {selectedOfficer && (
             <div className="space-y-4">
               {isFreeTier && (
@@ -544,9 +672,12 @@ const Browse = () => {
                   <Lock className="h-4 w-4" />
                   <AlertTitle>Limited Information Available</AlertTitle>
                   <AlertDescription>
-                    Upgrade to Professional or Premium to view full officer details, including contact information, work history, and certifications.
+                    Upgrade to Professional or Premium to view full officer details, including
+                    contact information, work history, and certifications.
                     <Link to="/auth?role=company" className="block mt-2">
-                      <Button variant="link" className="p-0 h-auto">Upgrade Now</Button>
+                      <Button variant="link" className="p-0 h-auto">
+                        Upgrade Now
+                      </Button>
                     </Link>
                   </AlertDescription>
                 </Alert>
@@ -577,11 +708,13 @@ const Browse = () => {
                     <span className="text-sm">{selectedOfficer.location}</span>
                   </div>
                 )}
-                
+
                 {selectedOfficer.years_experience && (
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{selectedOfficer.years_experience} years experience</span>
+                    <span className="text-sm">
+                      {selectedOfficer.years_experience} years experience
+                    </span>
                   </div>
                 )}
 
@@ -592,7 +725,7 @@ const Browse = () => {
                   </div>
                 )}
 
-                {companyProfile?.subscription_tier === 'premium' && selectedOfficer.phone && (
+                {companyProfile?.subscription_tier === "premium" && selectedOfficer.phone && (
                   <div className="text-sm">
                     <span className="font-medium">Phone: </span>
                     {selectedOfficer.phone}
@@ -647,10 +780,7 @@ const Browse = () => {
                       };
 
                       return (
-                        <Badge 
-                          key={cert.id}
-                          className={getBadgeColor(cert.license_level)}
-                        >
+                        <Badge key={cert.id} className={getBadgeColor(cert.license_level)}>
                           {getLicenseLabel(cert.license_level)}
                         </Badge>
                       );
@@ -660,52 +790,56 @@ const Browse = () => {
               )}
 
               {/* Employment Type */}
-              {canViewFullDetails && selectedOfficer.employment_type && selectedOfficer.employment_type.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-2">Employment Type Preference</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedOfficer.employment_type.map((type: string) => {
-                      const getTypeLabel = (empType: string) => {
-                        switch (empType) {
-                          case "full_time":
-                            return "Full-time";
-                          case "part_time":
-                            return "Part-time";
-                          case "seasonal":
-                            return "Seasonal";
-                          default:
-                            return empType;
-                        }
-                      };
+              {canViewFullDetails &&
+                selectedOfficer.employment_type &&
+                selectedOfficer.employment_type.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Employment Type Preference</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedOfficer.employment_type.map((type: string) => {
+                        const getTypeLabel = (empType: string) => {
+                          switch (empType) {
+                            case "full_time":
+                              return "Full-time";
+                            case "part_time":
+                              return "Part-time";
+                            case "seasonal":
+                              return "Seasonal";
+                            default:
+                              return empType;
+                          }
+                        };
 
-                      return (
-                        <Badge key={type} variant="outline">
-                          {getTypeLabel(type)}
-                        </Badge>
-                      );
-                    })}
+                        return (
+                          <Badge key={type} variant="outline">
+                            {getTypeLabel(type)}
+                          </Badge>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* Availability Schedule */}
               {canViewFullDetails && selectedOfficer.availability_schedule && (
                 <div>
                   <h3 className="font-semibold mb-2">Weekly Availability</h3>
                   <div className="space-y-2 text-sm">
-                    {Object.entries(selectedOfficer.availability_schedule).map(([day, schedule]: [string, any]) => {
-                      if (schedule?.start && schedule?.end) {
-                        return (
-                          <div key={day} className="flex justify-between items-center">
-                            <span className="font-medium capitalize">{day}:</span>
-                            <span className="text-muted-foreground">
-                              {schedule.start} - {schedule.end}
-                            </span>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })}
+                    {Object.entries(selectedOfficer.availability_schedule).map(
+                      ([day, schedule]: [string, any]) => {
+                        if (schedule?.start && schedule?.end) {
+                          return (
+                            <div key={day} className="flex justify-between items-center">
+                              <span className="font-medium capitalize">{day}:</span>
+                              <span className="text-muted-foreground">
+                                {schedule.start} - {schedule.end}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      },
+                    )}
                   </div>
                 </div>
               )}
@@ -713,41 +847,38 @@ const Browse = () => {
               {companyProfile && (
                 <div className="pt-4 border-t space-y-3">
                   <div className="flex gap-2">
-                    {officerInterests[selectedOfficer.id] === 'interested' ? (
-                      <Button 
+                    {officerInterests[selectedOfficer.id] === "interested" ? (
+                      <Button
                         variant="outline"
                         className="flex-1 bg-red-500 text-white hover:bg-red-600 hover:text-white border-red-500"
-                        onClick={() => handleInterest(selectedOfficer.id, 'interested')}
+                        onClick={() => handleInterest(selectedOfficer.id, "interested")}
                       >
                         <Heart className="w-4 h-4 mr-2 fill-current" />
                         Interested
                       </Button>
                     ) : (
-                      <Button 
+                      <Button
                         variant="outline"
                         className="flex-1"
-                        onClick={() => handleInterest(selectedOfficer.id, 'interested')}
+                        onClick={() => handleInterest(selectedOfficer.id, "interested")}
                       >
                         <Heart className="w-4 h-4 mr-2" />
                         Interested
                       </Button>
                     )}
-                    <Button 
+                    <Button
                       variant="outline"
                       className="flex-1"
-                      onClick={() => handleInterest(selectedOfficer.id, 'not_interested')}
+                      onClick={() => handleInterest(selectedOfficer.id, "not_interested")}
                     >
                       <HeartOff className="w-4 h-4 mr-2" />
                       Not Interested
                     </Button>
                   </div>
-                  
+
                   {isFreeTier ? (
                     <div className="space-y-2">
-                      <Button 
-                        className="w-full"
-                        disabled
-                      >
+                      <Button className="w-full" disabled>
                         <Lock className="w-4 h-4 mr-2" />
                         Send Interest Email (Premium Feature)
                       </Button>
@@ -756,17 +887,17 @@ const Browse = () => {
                       </p>
                     </div>
                   ) : (
-                    <Button 
+                    <Button
                       className="w-full"
                       onClick={() => handleSendInterestEmail(selectedOfficer.id)}
                     >
                       Send Interest Email to Officer
                     </Button>
                   )}
-                  
+
                   {canViewFullDetails && (
                     <>
-                      <Button 
+                      <Button
                         variant="outline"
                         className="w-full"
                         onClick={async () => {
@@ -775,21 +906,29 @@ const Browse = () => {
                             .from("messages")
                             .select("officer_id")
                             .eq("company_id", companyProfile.id);
-                          
-                          const uniqueOfficers = new Set(companyConversations?.map(m => m.officer_id) || []);
-                          
-                          if (companyProfile.subscription_tier === 'free' && uniqueOfficers.size >= 3 && !uniqueOfficers.has(selectedOfficer.id)) {
-                            toast.error("You've reached the limit of 3 conversations on the free tier. Upgrade to chat with more officers.");
+
+                          const uniqueOfficers = new Set(
+                            companyConversations?.map((m) => m.officer_id) || [],
+                          );
+
+                          if (
+                            companyProfile.subscription_tier === "free" &&
+                            uniqueOfficers.size >= 3 &&
+                            !uniqueOfficers.has(selectedOfficer.id)
+                          ) {
+                            toast.error(
+                              "You've reached the limit of 3 conversations on the free tier. Upgrade to chat with more officers.",
+                            );
                             return;
                           }
-                          
+
                           setChatOpen(true);
                         }}
                       >
                         <MessageCircle className="w-4 h-4 mr-2" />
                         Chat with Officer
                       </Button>
-                      <HireButton 
+                      <HireButton
                         officerId={selectedOfficer.id}
                         officerName={selectedOfficer.profiles?.full_name || "Officer"}
                         companyId={companyProfile.id}

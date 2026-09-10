@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { AlertTriangle, Building2, Crown, Users, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +33,15 @@ interface CompanyDashboardProps {
   userName: string;
 }
 
-const companyTabs = new Set(["profile", "jobs", "applicants", "interested", "employment", "team", "subscriptions"]);
+const companyTabs = new Set([
+  "profile",
+  "jobs",
+  "applicants",
+  "interested",
+  "employment",
+  "team",
+  "subscriptions",
+]);
 
 const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -36,7 +50,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(requestedTab && companyTabs.has(requestedTab) ? requestedTab : "profile");
+  const [activeTab, setActiveTab] = useState(
+    requestedTab && companyTabs.has(requestedTab) ? requestedTab : "profile",
+  );
   const [formData, setFormData] = useState<CompanyProfileForm>({
     company_name: "",
     company_address: "",
@@ -77,10 +93,21 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     companyProfile.company_state?.trim() &&
     companyProfile.company_zip?.trim() &&
     companyProfile.contact_person_name?.trim() &&
-    companyProfile.contact_email?.trim(),
+    companyProfile.contact_email?.trim() &&
+    companyProfile.contact_cell_phone?.trim(),
   );
 
   const selectTab = (tab: string) => {
+    if (!companyProfileComplete && tab !== "profile" && tab !== "subscriptions") {
+      toast.error(
+        "Complete your company profile, including your hiring contact mobile number, before using the hiring workspace",
+      );
+      setActiveTab("profile");
+      const profileParams = new URLSearchParams(searchParams);
+      profileParams.set("tab", "profile");
+      setSearchParams(profileParams, { replace: true });
+      return;
+    }
     setActiveTab(tab);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", tab);
@@ -92,7 +119,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   }, [userId]);
 
   useEffect(() => {
-    requestAnimationFrame(() => document.getElementById("company-dashboard-content")?.scrollIntoView({ behavior: "auto", block: "start" }));
+    requestAnimationFrame(() =>
+      document
+        .getElementById("company-dashboard-content")
+        ?.scrollIntoView({ behavior: "auto", block: "start" }),
+    );
   }, [activeTab]);
 
   const loadProfile = async () => {
@@ -112,7 +143,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         .in("status", ["active", "invited"])
         .maybeSingle();
       if (membership?.company_id) {
-        const { data: memberCompany } = await supabase.from("company_profiles").select("*").eq("id", membership.company_id).maybeSingle();
+        const { data: memberCompany } = await supabase
+          .from("company_profiles")
+          .select("*")
+          .eq("id", membership.company_id)
+          .maybeSingle();
         data = memberCompany;
         teamRole = membership.role;
       }
@@ -156,18 +191,18 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const handleLogoUpload = async (file: File) => {
     setUploadingLogo(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split(".").pop();
       const fileName = `${userId}/${Math.random()}.${fileExt}`;
-      
+
       const { error: uploadError } = await supabase.storage
-        .from('company-logos')
+        .from("company-logos")
         .upload(fileName, file);
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('company-logos')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("company-logos").getPublicUrl(fileName);
 
       setFormData((current) => ({ ...current, logo_url: publicUrl }));
       toast.success("Logo uploaded successfully!");
@@ -206,9 +241,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("company_profiles")
-          .insert(profileData);
+        const { error } = await supabase.from("company_profiles").insert(profileData);
 
         if (error) throw error;
       }
@@ -235,7 +268,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     const Icon = config.icon;
 
     return (
-      <Badge variant={config.variant} className={tier === "premium" ? "bg-accent text-accent-foreground" : ""}>
+      <Badge
+        variant={config.variant}
+        className={tier === "premium" ? "bg-accent text-accent-foreground" : ""}
+      >
         {Icon && <Icon className="h-3 w-3 mr-1" />}
         {tier.charAt(0).toUpperCase() + tier.slice(1)}
       </Badge>
@@ -245,8 +281,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   return (
     <SidebarProvider>
       <div className="flex min-h-[calc(100vh-4rem)] w-full">
-        <CompanySidebar activeTab={activeTab} onTabChange={selectTab} profileComplete={companyProfileComplete} />
-        
+        <CompanySidebar
+          activeTab={activeTab}
+          onTabChange={selectTab}
+          profileComplete={companyProfileComplete}
+        />
+
         <div className="flex-1 flex flex-col min-w-0">
           <div className="border-b bg-background sticky top-0 z-10">
             <div className="flex h-16 items-center px-4 gap-4">
@@ -261,22 +301,32 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
               <h1 className="text-2xl font-bold">Welcome, {formData.company_name || userName}</h1>
             </div>
           </div>
-          
-          <div id="company-dashboard-content" className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6">
-            {activeTab === "profile" && (
-              profileLoaded ? <CompanyProfileWizard
-                formData={formData}
-                setFormData={setFormData}
-                logoFile={logoFile}
-                setLogoFile={setLogoFile}
-                loading={loading}
-                uploadingLogo={uploadingLogo}
-                isComplete={companyProfileComplete}
-                onSave={() => handleSubmit(undefined, false)}
-                onBrowse={() => { window.location.href = "/browse"; }}
-                canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
-              /> : <div className="py-20 text-center text-muted-foreground">Loading your company profile…</div>
-            )}
+
+          <div
+            id="company-dashboard-content"
+            className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6"
+          >
+            {activeTab === "profile" &&
+              (profileLoaded ? (
+                <CompanyProfileWizard
+                  formData={formData}
+                  setFormData={setFormData}
+                  logoFile={logoFile}
+                  setLogoFile={setLogoFile}
+                  loading={loading}
+                  uploadingLogo={uploadingLogo}
+                  isComplete={companyProfileComplete}
+                  onSave={() => handleSubmit(undefined, false)}
+                  onBrowse={() => {
+                    window.location.href = "/browse";
+                  }}
+                  canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
+                />
+              ) : (
+                <div className="py-20 text-center text-muted-foreground">
+                  Loading your company profile…
+                </div>
+              ))}
             {false && activeTab === "profile" && (
               <>
                 <div className="grid md:grid-cols-3 gap-4">
@@ -297,9 +347,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-2">
-                        {companyProfile?.subscription_tier === "free" && "Upgrade for more features"}
-                        {companyProfile?.subscription_tier === "professional" && "Access to direct messaging"}
-                        {companyProfile?.subscription_tier === "premium" && "Full access to all features"}
+                        {companyProfile?.subscription_tier === "free" &&
+                          "Upgrade for more features"}
+                        {companyProfile?.subscription_tier === "professional" &&
+                          "Access to direct messaging"}
+                        {companyProfile?.subscription_tier === "premium" &&
+                          "Full access to all features"}
                       </p>
                     </CardContent>
                   </Card>
@@ -322,13 +375,19 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                   <Card className={urgentExpiring ? "border-destructive/50" : ""}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-sm font-medium">Expiring Officer Skills</CardTitle>
-                      <AlertTriangle className={`h-4 w-4 ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`} />
+                      <AlertTriangle
+                        className={`h-4 w-4 ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`}
+                      />
                     </CardHeader>
                     <CardContent>
-                      <div className={`text-2xl font-bold ${urgentExpiring ? "text-destructive" : ""}`}>
+                      <div
+                        className={`text-2xl font-bold ${urgentExpiring ? "text-destructive" : ""}`}
+                      >
                         {expiringItems.length}
                       </div>
-                      <p className={`text-xs ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`}>
+                      <p
+                        className={`text-xs ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`}
+                      >
                         {expiringItems.length === 0
                           ? "No officer credentials expiring soon"
                           : urgentExpiring
@@ -342,8 +401,14 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               key={item.id}
                               className={`text-xs truncate ${item.daysLeft <= 30 ? "text-destructive" : "text-muted-foreground"}`}
                             >
-                              {item.officerName ? `${item.officerName} — ` : ""}{item.name} (
-                              {item.daysLeft < 0 ? "expired" : item.daysLeft === 0 ? "today" : `${item.daysLeft}d`})
+                              {item.officerName ? `${item.officerName} — ` : ""}
+                              {item.name} (
+                              {item.daysLeft < 0
+                                ? "expired"
+                                : item.daysLeft === 0
+                                  ? "today"
+                                  : `${item.daysLeft}d`}
+                              )
                             </li>
                           ))}
                         </ul>
@@ -355,9 +420,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                 <Card>
                   <CardHeader>
                     <CardTitle>Company Information</CardTitle>
-                    <CardDescription>
-                      Update your company details
-                    </CardDescription>
+                    <CardDescription>Update your company details</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleSubmit} className="space-y-4">
@@ -368,7 +431,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                             id="company_name"
                             placeholder="Acme Security Services"
                             value={formData.company_name}
-                            onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                            onChange={(e) =>
+                              setFormData({ ...formData, company_name: e.target.value })
+                            }
                             required
                           />
                         </div>
@@ -387,7 +452,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                           <Label htmlFor="company_size">Company Size</Label>
                           <Select
                             value={formData.company_size}
-                            onValueChange={(value) => setFormData({ ...formData, company_size: value })}
+                            onValueChange={(value) =>
+                              setFormData({ ...formData, company_size: value })
+                            }
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select company size" />
@@ -407,7 +474,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                           <Label htmlFor="years_in_business">Years in Business</Label>
                           <Select
                             value={formData.years_in_business}
-                            onValueChange={(value) => setFormData({ ...formData, years_in_business: value })}
+                            onValueChange={(value) =>
+                              setFormData({ ...formData, years_in_business: value })
+                            }
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select years in business" />
@@ -432,7 +501,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                             min="1800"
                             max={new Date().getFullYear()}
                             value={formData.year_founded}
-                            onChange={(e) => setFormData({ ...formData, year_founded: e.target.value })}
+                            onChange={(e) =>
+                              setFormData({ ...formData, year_founded: e.target.value })
+                            }
                           />
                         </div>
 
@@ -440,7 +511,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                           <Label htmlFor="logo_url">Company Logo</Label>
                           <div className="flex items-center gap-4">
                             {formData.logo_url && (
-                              <img src={formData.logo_url} alt="Company Logo" className="h-16 w-16 object-contain rounded border" />
+                              <img
+                                src={formData.logo_url}
+                                alt="Company Logo"
+                                className="h-16 w-16 object-contain rounded border"
+                              />
                             )}
                             <Input
                               id="logo_upload"
@@ -453,7 +528,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               disabled={uploadingLogo}
                             />
                           </div>
-                          {uploadingLogo && <p className="text-sm text-muted-foreground">Uploading logo...</p>}
+                          {uploadingLogo && (
+                            <p className="text-sm text-muted-foreground">Uploading logo...</p>
+                          )}
                         </div>
                       </div>
 
@@ -467,7 +544,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="url"
                               placeholder="https://example.com"
                               value={formData.website_url}
-                              onChange={(e) => setFormData({ ...formData, website_url: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, website_url: e.target.value })
+                              }
                             />
                           </div>
 
@@ -478,7 +557,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="url"
                               placeholder="https://linkedin.com/company/yourcompany"
                               value={formData.linkedin_url}
-                              onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, linkedin_url: e.target.value })
+                              }
                             />
                           </div>
 
@@ -489,7 +570,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="url"
                               placeholder="https://facebook.com/yourcompany"
                               value={formData.facebook_url}
-                              onChange={(e) => setFormData({ ...formData, facebook_url: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, facebook_url: e.target.value })
+                              }
                             />
                           </div>
 
@@ -500,7 +583,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="url"
                               placeholder="https://twitter.com/yourcompany"
                               value={formData.twitter_url}
-                              onChange={(e) => setFormData({ ...formData, twitter_url: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, twitter_url: e.target.value })
+                              }
                             />
                           </div>
 
@@ -511,7 +596,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="url"
                               placeholder="https://instagram.com/yourcompany"
                               value={formData.instagram_url}
-                              onChange={(e) => setFormData({ ...formData, instagram_url: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, instagram_url: e.target.value })
+                              }
                             />
                           </div>
                         </div>
@@ -526,7 +613,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               id="contact_person_name"
                               placeholder="John Doe"
                               value={formData.contact_person_name}
-                              onChange={(e) => setFormData({ ...formData, contact_person_name: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, contact_person_name: e.target.value })
+                              }
                             />
                           </div>
 
@@ -536,7 +625,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               id="contact_person_title"
                               placeholder="HR Manager"
                               value={formData.contact_person_title}
-                              onChange={(e) => setFormData({ ...formData, contact_person_title: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, contact_person_title: e.target.value })
+                              }
                             />
                           </div>
 
@@ -546,7 +637,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               id="contact_person_position"
                               placeholder="Director of Operations"
                               value={formData.contact_person_position}
-                              onChange={(e) => setFormData({ ...formData, contact_person_position: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  contact_person_position: e.target.value,
+                                })
+                              }
                             />
                           </div>
 
@@ -557,7 +653,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="email"
                               placeholder="contact@company.com"
                               value={formData.contact_email}
-                              onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, contact_email: e.target.value })
+                              }
                             />
                           </div>
 
@@ -568,7 +666,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="tel"
                               placeholder="(555) 123-4567"
                               value={formData.company_phone}
-                              onChange={(e) => setFormData({ ...formData, company_phone: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, company_phone: e.target.value })
+                              }
                             />
                           </div>
 
@@ -578,7 +678,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               id="company_phone_ext"
                               placeholder="1234"
                               value={formData.company_phone_ext}
-                              onChange={(e) => setFormData({ ...formData, company_phone_ext: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, company_phone_ext: e.target.value })
+                              }
                             />
                           </div>
 
@@ -589,7 +691,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="tel"
                               placeholder="(555) 987-6543"
                               value={formData.contact_cell_phone}
-                              onChange={(e) => setFormData({ ...formData, contact_cell_phone: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, contact_cell_phone: e.target.value })
+                              }
                             />
                           </div>
 
@@ -600,7 +704,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               type="email"
                               placeholder="hiring@company.com"
                               value={formData.contact_email}
-                              onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, contact_email: e.target.value })
+                              }
                             />
                           </div>
 
@@ -610,7 +716,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               id="license_number"
                               placeholder="e.g., A12345"
                               value={formData.license_number}
-                              onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+                              onChange={(e) =>
+                                setFormData({ ...formData, license_number: e.target.value })
+                              }
                             />
                           </div>
 
@@ -621,11 +729,16 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                               placeholder="e.g., TX, CA, FL (comma-separated)"
                               value={formData.licensed_states.join(", ")}
                               onChange={(e) => {
-                                const states = e.target.value.split(",").map(s => s.trim()).filter(s => s);
+                                const states = e.target.value
+                                  .split(",")
+                                  .map((s) => s.trim())
+                                  .filter((s) => s);
                                 setFormData({ ...formData, licensed_states: states });
                               }}
                             />
-                            <p className="text-xs text-muted-foreground">Enter state abbreviations separated by commas</p>
+                            <p className="text-xs text-muted-foreground">
+                              Enter state abbreviations separated by commas
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -651,7 +764,8 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                                 Class A: Private Investigation Company License
                               </Label>
                               <p className="text-sm text-muted-foreground">
-                                Authorized to operate as a private investigations company. Limited to investigations, does not include general security contracting.
+                                Authorized to operate as a private investigations company. Limited
+                                to investigations, does not include general security contracting.
                               </p>
                             </div>
                           </div>
@@ -675,26 +789,41 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                                   Class B: Security Contractor Company License
                                 </Label>
                                 <p className="text-sm text-muted-foreground">
-                                  Authorized to operate as a security contractor. May include one or more subcategories:
+                                  Authorized to operate as a security contractor. May include one or
+                                  more subcategories:
                                 </p>
                               </div>
                             </div>
                             <div className="ml-8 space-y-2 text-sm">
-                              {["Alarm Systems", "Armored Car", "Courier", "Electronic Access", "Guard", "Locksmith"].map((subtype) => (
+                              {[
+                                "Alarm Systems",
+                                "Armored Car",
+                                "Courier",
+                                "Electronic Access",
+                                "Guard",
+                                "Locksmith",
+                              ].map((subtype) => (
                                 <div key={subtype} className="flex items-center space-x-2">
                                   <Checkbox
                                     id={`class-b-${subtype.toLowerCase().replace(" ", "-")}`}
-                                    checked={formData.license_types.includes(`Class B - ${subtype}`)}
+                                    checked={formData.license_types.includes(
+                                      `Class B - ${subtype}`,
+                                    )}
                                     onCheckedChange={(checked) => {
                                       setFormData({
                                         ...formData,
                                         license_types: checked
                                           ? [...formData.license_types, `Class B - ${subtype}`]
-                                          : formData.license_types.filter((t) => t !== `Class B - ${subtype}`),
+                                          : formData.license_types.filter(
+                                              (t) => t !== `Class B - ${subtype}`,
+                                            ),
                                       });
                                     }}
                                   />
-                                  <Label htmlFor={`class-b-${subtype.toLowerCase().replace(" ", "-")}`} className="cursor-pointer font-normal">
+                                  <Label
+                                    htmlFor={`class-b-${subtype.toLowerCase().replace(" ", "-")}`}
+                                    className="cursor-pointer font-normal"
+                                  >
                                     {subtype}
                                   </Label>
                                 </div>
@@ -720,7 +849,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                                 Class C: Investigations and Security Contractor Company License
                               </Label>
                               <p className="text-sm text-muted-foreground">
-                                Provides both private investigation services and all types of security contractor services covered under Class A and Class B licenses.
+                                Provides both private investigation services and all types of
+                                security contractor services covered under Class A and Class B
+                                licenses.
                               </p>
                             </div>
                           </div>
@@ -766,7 +897,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
               <>
                 <JobApplicationsList companyId={companyProfile.id} />
                 <div className="mt-8">
-                  <InterestedOfficers 
+                  <InterestedOfficers
                     companyId={companyProfile.id}
                     subscriptionTier={companyProfile.subscription_tier}
                   />
