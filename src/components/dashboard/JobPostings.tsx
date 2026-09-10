@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Briefcase, MapPin, DollarSign, X } from "lucide-react";
+import { Plus, Briefcase, MapPin, DollarSign, X, Link2, Users, Mail, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface JobPostingsProps {
@@ -20,6 +20,10 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
+  const [leadCounts, setLeadCounts] = useState<Record<string, number>>({});
+  const [leadJob, setLeadJob] = useState<any>(null);
+  const [leads, setLeads] = useState<any[]>([]);
+  const [loadingLeads, setLoadingLeads] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -48,6 +52,16 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
       return;
     }
     setJobs(data || []);
+
+    const { data: leadRows } = await (supabase as any)
+      .from("candidate_job_leads")
+      .select("job_posting_id")
+      .eq("company_id", companyId);
+    const counts = (leadRows || []).reduce((result: Record<string, number>, lead: any) => {
+      result[lead.job_posting_id] = (result[lead.job_posting_id] || 0) + 1;
+      return result;
+    }, {});
+    setLeadCounts(counts);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,6 +159,32 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
         ? formData[field].filter((v) => v !== value)
         : [...formData[field], value],
     });
+  };
+
+  const copyCandidateLink = async (jobId: string) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/jobs/${jobId}`);
+      toast.success("Candidate application link copied");
+    } catch {
+      toast.error("Could not copy the link. Please try again.");
+    }
+  };
+
+  const openCandidateLeads = async (job: any) => {
+    setLeadJob(job);
+    setLoadingLeads(true);
+    const { data, error } = await (supabase as any)
+      .from("candidate_job_leads")
+      .select("id,full_name,email,phone,status,captured_at,user_id")
+      .eq("job_posting_id", job.id)
+      .order("captured_at", { ascending: false });
+    setLoadingLeads(false);
+    if (error) {
+      toast.error("Could not load prospective candidates");
+      setLeads([]);
+      return;
+    }
+    setLeads(data || []);
   };
 
   return (
@@ -315,6 +355,8 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => void copyCandidateLink(job.id)}><Link2 className="mr-2 h-4 w-4" />Copy candidate link</Button>
+                    <Button variant="outline" size="sm" onClick={() => void openCandidateLeads(job)}><Users className="mr-2 h-4 w-4" />Leads ({leadCounts[job.id] || 0})</Button>
                     <Badge variant={job.status === "active" ? "default" : "secondary"}>
                       {job.status}
                     </Badge>
@@ -385,6 +427,18 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
           ))
         )}
       </div>
+
+      <Dialog open={Boolean(leadJob)} onOpenChange={(open) => { if (!open) { setLeadJob(null); setLeads([]); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Prospective candidates</DialogTitle>
+            <DialogDescription>{leadJob?.title} — contact information captured from the public job link.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+            {loadingLeads ? <p className="py-8 text-center text-sm text-muted-foreground">Loading candidates…</p> : leads.length === 0 ? <div className="rounded-lg border border-dashed p-8 text-center"><Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">No prospective candidates yet</p><p className="mt-1 text-sm text-muted-foreground">Share the candidate link to begin capturing interest.</p></div> : leads.map((lead) => <div key={lead.id} className="rounded-lg border p-4"><div className="flex items-start justify-between gap-4"><div><p className="font-semibold">{lead.full_name}</p><div className="mt-2 space-y-1 text-sm text-muted-foreground"><a className="flex items-center gap-2 hover:text-foreground" href={`mailto:${lead.email}`}><Mail className="h-4 w-4" />{lead.email}</a><a className="flex items-center gap-2 hover:text-foreground" href={`tel:${lead.phone}`}><Phone className="h-4 w-4" />{lead.phone}</a></div></div><Badge variant={lead.status === "applied" ? "default" : "secondary"}>{String(lead.status).replaceAll("_", " ")}</Badge></div><p className="mt-3 text-xs text-muted-foreground">Captured {new Date(lead.captured_at).toLocaleString()}</p></div>)}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

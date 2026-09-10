@@ -200,7 +200,8 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         city: item.city || "",
         state: item.state || "",
       }));
-      const savedJobId = (draft as any).jobPostingId || "";
+      const referredJobId = searchParams.get("job") || "";
+      const savedJobId = referredJobId || (draft as any).jobPostingId || "";
       const matchingDestination = destinations.find((item) => item.id === savedJobId) || destinations.find((item) =>
         item.companyName.trim().toLowerCase() === (draft.companyName || initialForm.companyName).trim().toLowerCase()
         && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()

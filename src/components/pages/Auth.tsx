@@ -31,6 +31,7 @@ const Auth = () => {
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
   const urlRole = searchParams.get("role");
   const requestedNext = searchParams.get("next");
+  const candidateLeadId = searchParams.get("lead");
   const nextPath =
     requestedNext?.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : null;
 
@@ -45,6 +46,17 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [confirmationEmail, setConfirmationEmail] = useState("");
+
+  useEffect(() => {
+    if (!candidateLeadId) return;
+    try {
+      const captured = JSON.parse(sessionStorage.getItem(`candidate-lead:${candidateLeadId}`) || "null");
+      if (captured?.fullName) setFullName(captured.fullName);
+      if (captured?.email) setEmailOrUsername(captured.email);
+      setMode("signup");
+      setRole("officer");
+    } catch { /* continue with an empty signup form */ }
+  }, [candidateLeadId]);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -115,6 +127,7 @@ const Auth = () => {
               full_name: fullName,
               username: username,
               role: role,
+              candidate_lead_id: candidateLeadId || undefined,
             },
           },
         });
