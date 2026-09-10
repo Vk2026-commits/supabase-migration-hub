@@ -13,6 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 
 type TeamRole = "owner" | "admin" | "hiring_manager" | "reviewer";
@@ -51,6 +61,8 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
   const [role, setRole] = useState<Exclude<TeamRole, "owner">>("hiring_manager");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const invoke = useCallback(
     async (body: Record<string, unknown>) => {
@@ -118,16 +130,29 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
   };
 
   const remove = async (member: TeamMember) => {
-    if (!window.confirm(`Remove ${member.full_name || member.email} from this company team?`))
-      return;
+    setMemberToRemove(member);
+  };
+
+  const confirmRemove = async () => {
+    if (!memberToRemove) return;
+    setRemoving(true);
     try {
-      await invoke({ action: "remove", member_id: member.id });
-      toast.success("Team member removed");
+      const data = await invoke({
+        action: "remove",
+        member_id: memberToRemove.id,
+        confirm_delete: true,
+      });
+      toast.success(data.message || "Team member removed");
+      setMemberToRemove(null);
       await load();
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Team member could not be removed"));
+    } finally {
+      setRemoving(false);
     }
   };
+
+  const pendingInvitation = memberToRemove?.status === "invited";
 
   return (
     <div className="space-y-6">
@@ -258,6 +283,43 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={Boolean(memberToRemove)}
+        onOpenChange={(open) => {
+          if (!open && !removing) setMemberToRemove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingInvitation ? "Delete pending invitation?" : "Remove team member?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingInvitation
+                ? `This will permanently delete the unused account for ${memberToRemove?.email}. You can immediately invite this email again, and it will receive a brand-new We Find Guards account-creation email.`
+                : `This will remove ${memberToRemove?.full_name || memberToRemove?.email} from this company team. Their separate We Find Guards account will not be deleted.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={removing}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmRemove();
+              }}
+            >
+              {removing
+                ? "Deleting…"
+                : pendingInvitation
+                  ? "Confirm delete invitation"
+                  : "Confirm remove member"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

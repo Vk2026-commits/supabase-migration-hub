@@ -121,6 +121,7 @@ Deno.serve(async (request) => {
       );
       if (lookupError) throw new Error("Team member lookup failed. Please try again.");
       let invitedUser = existingUserId ? { id: existingUserId as string, email } : null;
+      let renewedUnusedInvitation = false;
 
       if (invitedUser) {
         const { data: pendingMembership, error: membershipLookupError } = await admin
@@ -138,6 +139,30 @@ Deno.serve(async (request) => {
             },
             409,
           );
+        }
+
+        // Team members removed while their original invitation was still unused
+        // leave behind an Auth record. Reset only those unclaimed invitations so
+        // the same email can receive a fresh account-creation email on re-invite.
+        if (!pendingMembership) {
+          const { data: userLookup, error: userLookupError } = await admin.auth.admin.getUserById(
+            invitedUser.id,
+          );
+          if (userLookupError) throw userLookupError;
+          const existingUser = userLookup.user;
+          const unusedInvitation =
+            Boolean(existingUser?.invited_at) &&
+            !existingUser?.email_confirmed_at &&
+            !existingUser?.last_sign_in_at;
+
+          if (unusedInvitation) {
+            const { error: deleteUnusedInviteError } = await admin.auth.admin.deleteUser(
+              invitedUser.id,
+            );
+            if (deleteUnusedInviteError) throw deleteUnusedInviteError;
+            invitedUser = null;
+            renewedUnusedInvitation = true;
+          }
         }
       }
 
@@ -202,7 +227,11 @@ Deno.serve(async (request) => {
       return json({
         success: true,
         invited,
-        message: invited ? `Invitation sent to ${email}` : `${email} was added to the team`,
+        message: invited
+          ? renewedUnusedInvitation
+            ? `A fresh invitation was sent to ${email}`
+            : `Invitation sent to ${email}`
+          : `${email} was added to the team`,
       });
     }
 
@@ -210,7 +239,7 @@ Deno.serve(async (request) => {
     if (!memberId) return json({ error: "Team member is required" }, 400);
     const { data: target } = await admin
       .from("company_members")
-      .select("id,user_id,role")
+      .select("id,user_id,email,role,status")
       .eq("id", memberId)
       .eq("company_id", companyId)
       .maybeSingle();
@@ -231,9 +260,28 @@ Deno.serve(async (request) => {
       return json({ success: true });
     }
     if (action === "remove") {
+      if (body.confirm_delete !== true) {
+        return json({ error: "Confirm removal before deleting this team member" }, 400);
+      }
+
+      // An invited member has not completed password setup. Delete that unused
+      // Auth account as well, which cascades the membership and lets the owner
+      // re-invite the same email as a completely new We Find Guards account.
+      if (target.status === "invited") {
+        const { error: deleteUserError } = await admin.auth.admin.deleteUser(target.user_id);
+        if (deleteUserError) throw deleteUserError;
+        return json({
+          success: true,
+          deleted_account: true,
+          message: `${target.email} was deleted and can be invited again`,
+        });
+      }
+
+      // Active members may have an established We Find Guards account. Removing
+      // them from one company does not delete that separate account or its data.
       const { error } = await admin.from("company_members").delete().eq("id", memberId);
       if (error) throw error;
-      return json({ success: true });
+      return json({ success: true, deleted_account: false, message: "Team member removed" });
     }
     return json({ error: "Unknown team action" }, 400);
   } catch (error) {
