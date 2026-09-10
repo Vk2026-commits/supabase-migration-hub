@@ -37,7 +37,16 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
 
   const invoke = useCallback(async (body: Record<string, unknown>) => {
     const result = await supabase.functions.invoke("manage-company-team", { body: { ...body, company_id: companyId } });
-    if (result.error || result.data?.error) throw new Error(result.data?.error || result.error?.message || "Team request failed");
+    if (result.error) {
+      let message = result.error.message || "Team request failed";
+      const context = (result.error as { context?: Response }).context;
+      if (context && typeof context.json === "function") {
+        const responseBody = await context.clone().json().catch(() => null) as { error?: string } | null;
+        if (responseBody?.error) message = responseBody.error;
+      }
+      throw new Error(message);
+    }
+    if (result.data?.error) throw new Error(result.data.error);
     return result.data;
   }, [companyId]);
 

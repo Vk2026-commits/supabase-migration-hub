@@ -56,7 +56,10 @@ Deno.serve(async (request) => {
     if (action === "invite") {
       const email = clean(body.email).toLowerCase();
       const role = clean(body.role);
-      if (!/^\S+@\S+\.\S+$/.test(email) || !roles.has(role)) return json({ error: "Enter a valid email and team role" }, 400);
+      const atIndex = email.indexOf("@");
+      const hasValidEmailShape = atIndex > 0 && email.indexOf(".", atIndex + 2) > atIndex + 1 && !email.includes(" ");
+      if (!hasValidEmailShape) return json({ error: "Enter a valid email address" }, 400);
+      if (!roles.has(role)) return json({ error: "Choose a valid team role" }, 400);
 
       let invitedUser = null as { id: string; email?: string } | null;
       let page = 1;
