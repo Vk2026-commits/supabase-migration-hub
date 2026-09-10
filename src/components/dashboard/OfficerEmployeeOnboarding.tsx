@@ -1492,8 +1492,18 @@ function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onCh
     <section className="space-y-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">TrackTik account information</p>
-        <h4 className="mt-1 text-lg font-semibold">Fill in the login details shown on the document</h4>
-        <p className="mt-1 text-sm text-muted-foreground">Your username and employee number will appear on their matching lines in the PDF preview. For security, We Find Guards records that your password was set but does not store or display the password itself.</p>
+        <h4 className="mt-1 text-lg font-semibold">Set up your TrackTik account</h4>
+        <p className="mt-1 text-sm text-muted-foreground">Complete these instructions before entering the account information below.</p>
+      </div>
+      <div className="rounded-xl border bg-background p-4 sm:p-5">
+        <p className="font-semibold">TrackTik setup instructions</p>
+        <ol className="mt-3 space-y-3 text-sm text-foreground">
+          <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span><span>Download the <strong>TrackTik Shift</strong> app from the Apple App Store or Google Play Store.</span></li>
+          <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span><span>Open the app and enter <strong className="font-mono">kairos.staffr.net</strong> in the URL box.</span></li>
+          <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span><span>Your username is normally your first initial followed by your last name—for example, <strong className="font-mono">jdoe</strong>.</span></li>
+          <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span><span>Sign in with the temporary password <strong className="font-mono">#Security2020</strong>, then create a new private password when prompted.</span></li>
+        </ol>
+        <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">We Find Guards records only that your password was set. Your private password is never stored or displayed in this onboarding packet.</p>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="TrackTik username" value={data.trackTikUsername} onChange={(value) => onChange("trackTikUsername", value)} required placeholder="Example: lrose" />
