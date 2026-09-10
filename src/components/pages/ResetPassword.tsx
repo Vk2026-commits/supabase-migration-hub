@@ -76,6 +76,30 @@ const ResetPassword = () => {
       toast.error(error.message);
       return;
     }
+    if (isTeamInvitation) {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      const companyId = user?.user_metadata?.company_team_invite;
+      if (userError || typeof companyId !== "string" || !companyId) {
+        toast.error(
+          "Your invitation could not be activated. Ask the team administrator for a new invitation.",
+        );
+        return;
+      }
+      const activation = await supabase.functions.invoke("manage-company-team", {
+        body: { action: "activate_invitation", company_id: companyId },
+      });
+      if (activation.error || activation.data?.error) {
+        toast.error(
+          activation.data?.error ||
+            activation.error?.message ||
+            "Your invitation could not be activated.",
+        );
+        return;
+      }
+    }
     toast.success(
       isTeamInvitation
         ? "Account activated! Redirecting to your team..."

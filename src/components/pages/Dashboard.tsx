@@ -23,7 +23,9 @@ const Dashboard = () => {
   useEffect(() => {
     const getProfile = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
         if (!session) {
           navigate("/auth");
@@ -42,22 +44,38 @@ const Dashboard = () => {
               .eq("user_id", session.user.id)
               .eq("role", "admin")
               .maybeSingle(),
-            supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", session.user.id)
-              .maybeSingle(),
+            supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
           ]);
 
         if (rolesError) throw rolesError;
         if (profileError) throw profileError;
 
         const isAdmin = !!roles;
-        const previewRole = isAdmin && (viewAs === "officer" || viewAs === "company") ? viewAs : null;
+        const previewRole =
+          isAdmin && (viewAs === "officer" || viewAs === "company") ? viewAs : null;
 
         if (isAdmin && !previewRole) {
           navigate("/admin");
           return;
+        }
+
+        // Legacy invitation emails authenticated the recipient and sent them
+        // straight to the dashboard. A pending membership must create a
+        // password before gaining workspace access, so route it to the
+        // branded account-activation screen instead.
+        if (!previewRole && profileData?.role === "company") {
+          const { data: pendingMembership, error: membershipError } = await supabase
+            .from("company_members")
+            .select("id")
+            .eq("user_id", session.user.id)
+            .eq("status", "invited")
+            .maybeSingle();
+
+          if (membershipError) throw membershipError;
+          if (pendingMembership) {
+            navigate("/reset-password?invite=company-team", { replace: true });
+            return;
+          }
         }
 
         setProfile(previewRole ? { ...profileData, role: previewRole } : profileData);
@@ -74,7 +92,8 @@ const Dashboard = () => {
           if (companyData) {
             setCompanyProfile(companyData);
 
-            const trialExpired = companyData.trial_end_date && new Date(companyData.trial_end_date) < new Date();
+            const trialExpired =
+              companyData.trial_end_date && new Date(companyData.trial_end_date) < new Date();
             const isFreeTier = companyData.subscription_tier === "free";
 
             if (trialExpired && isFreeTier) {
@@ -91,7 +110,6 @@ const Dashboard = () => {
 
     getProfile();
   }, [navigate, viewAs]);
-
 
   if (loading) {
     return (
@@ -128,7 +146,7 @@ const Dashboard = () => {
       .select("*")
       .eq("user_id", user.id)
       .single();
-    
+
     if (companyData) {
       setCompanyProfile(companyData);
     }
@@ -155,8 +173,8 @@ const Dashboard = () => {
               />
             )}
             <div className="-mx-4 -my-8">
-              <CompanyDashboard 
-                userId={user.id} 
+              <CompanyDashboard
+                userId={user.id}
                 userName={profile?.full_name || user?.email || ""}
               />
             </div>

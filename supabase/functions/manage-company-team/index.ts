@@ -53,11 +53,15 @@ Deno.serve(async (request) => {
           .eq("company_id", companyId)
           .eq("user_id", authData.user.id)
           .maybeSingle();
-    const hasAccess = isOwner || ["active", "invited"].includes(actingMember?.status || "");
-    const canManage = isOwner || actingMember?.role === "admin";
-    if (!hasAccess) return json({ error: "Company access denied" }, 403);
-    if (!isOwner && actingMember?.status === "invited") {
-      await admin
+
+    if (action === "activate_invitation") {
+      if (isOwner || actingMember?.status === "active") {
+        return json({ success: true, message: "Invitation already activated" });
+      }
+      if (actingMember?.status !== "invited") {
+        return json({ error: "This team invitation is no longer available" }, 403);
+      }
+      const { error: activationError } = await admin
         .from("company_members")
         .update({
           status: "active",
@@ -66,7 +70,13 @@ Deno.serve(async (request) => {
         })
         .eq("company_id", companyId)
         .eq("user_id", authData.user.id);
+      if (activationError) throw activationError;
+      return json({ success: true, message: "Invitation activated" });
     }
+
+    const hasAccess = isOwner || actingMember?.status === "active";
+    const canManage = isOwner || actingMember?.role === "admin";
+    if (!hasAccess) return json({ error: "Company access denied" }, 403);
 
     if (action === "list") {
       const { data: members, error: memberError } = await admin
