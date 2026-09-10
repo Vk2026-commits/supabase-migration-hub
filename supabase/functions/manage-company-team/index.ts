@@ -122,6 +122,25 @@ Deno.serve(async (request) => {
       if (lookupError) throw new Error("Team member lookup failed. Please try again.");
       let invitedUser = existingUserId ? { id: existingUserId as string, email } : null;
 
+      if (invitedUser) {
+        const { data: pendingMembership, error: membershipLookupError } = await admin
+          .from("company_members")
+          .select("status")
+          .eq("company_id", companyId)
+          .eq("user_id", invitedUser.id)
+          .maybeSingle();
+        if (membershipLookupError) throw membershipLookupError;
+        if (pendingMembership?.status === "invited") {
+          return json(
+            {
+              error:
+                "An invitation is already pending for this email. The recipient must use the latest We Find Guards invitation email to create a password before gaining access.",
+            },
+            409,
+          );
+        }
+      }
+
       let invited = false;
       if (!invitedUser) {
         const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
