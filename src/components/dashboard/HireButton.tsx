@@ -107,7 +107,19 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     try {
       const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody });
       if (error) throw error; if (data?.error) throw new Error(data.error);
-      finishSuccessfulSend(data?.offer || data);
+      const initialOffer = data?.offer || data;
+      if (initialOffer?.status === "sent") {
+        finishSuccessfulSend(initialOffer);
+      } else {
+        toast.info("Offer saved. Finishing the secure PDF now…", { duration: 8000 });
+        let completed = null;
+        for (let attempt = 0; attempt < 30 && !completed; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          completed = await findCompletedAttempt();
+        }
+        if (completed) finishSuccessfulSend(completed);
+        else toast.error("The offer was saved but its PDF is still processing. You can close this window and check again shortly.", { duration: 12000 });
+      }
     } catch (error: any) {
       const timedOut = error?.name === "AbortError" || error?.context?.name === "AbortError" || /timeout|aborted|failed to fetch/i.test(error?.message || "");
       if (!timedOut) {

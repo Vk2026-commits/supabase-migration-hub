@@ -1,6 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -350,18 +352,29 @@ Deno.serve(async (request) => {
         employer_signature_title: clean(terms.representativeTitle), employer_signed_at: now, prepared_at: now, created_by: authData.user.id,
       });
       if (insertError) throw insertError;
-      const officerAddress = [officer.address_street, officer.address_unit, officer.address_city, officer.address_state, officer.address_zip].filter(Boolean).join(", ");
-      const bytes = await buildOfferPdf({ offerId, version, company, officerName: profile?.full_name || "Officer", officerAddress, terms, employerSignature: body.company_signature });
-      const hash = await sha256(bytes);
-      const path = `${companyId}/${officerId}/${offerId}/offer-v${version}-company-signed.pdf`;
-      const { error: uploadError } = await admin.storage.from("employment-offers").upload(path, bytes, { contentType: "application/pdf", upsert: true });
-      if (uploadError) throw uploadError;
-      if (previous && ["sent", "viewed"].includes(previous.status)) await admin.from("employment_offers").update({ status: "revised", updated_at: now }).eq("id", previous.id);
-      const { data: offer, error: updateError } = await admin.from("employment_offers").update({ status: "sent", sent_at: now, offer_document_path: path, offer_document_sha256: hash, updated_at: now }).eq("id", offerId).select("*").single();
-      if (updateError) throw updateError;
-      await admin.from("job_applications").update({ status: "offer_sent" }).eq("id", jobApplication?.id);
-      await userClient.rpc("log_sensitive_access", { _action: "offer_sent", _table_name: "employment_offers", _record_id: offerId, _details: { company_id: companyId, officer_id: officerId, version } });
-      return json({ offer });
+      const finishOffer = async () => {
+        const officerAddress = [officer.address_street, officer.address_unit, officer.address_city, officer.address_state, officer.address_zip].filter(Boolean).join(", ");
+        const bytes = await buildOfferPdf({ offerId, version, company, officerName: profile?.full_name || "Officer", officerAddress, terms, employerSignature: body.company_signature });
+        const hash = await sha256(bytes);
+        const path = `${companyId}/${officerId}/${offerId}/offer-v${version}-company-signed.pdf`;
+        const { error: uploadError } = await admin.storage.from("employment-offers").upload(path, bytes, { contentType: "application/pdf", upsert: true });
+        if (uploadError) throw uploadError;
+        if (previous && ["sent", "viewed"].includes(previous.status)) await admin.from("employment_offers").update({ status: "revised", updated_at: now }).eq("id", previous.id);
+        const { data: offer, error: updateError } = await admin.from("employment_offers").update({ status: "sent", sent_at: now, offer_document_path: path, offer_document_sha256: hash, updated_at: now }).eq("id", offerId).select("*").single();
+        if (updateError) throw updateError;
+        await admin.from("job_applications").update({ status: "offer_sent" }).eq("id", jobApplication?.id);
+        await userClient.rpc("log_sensitive_access", { _action: "offer_sent", _table_name: "employment_offers", _record_id: offerId, _details: { company_id: companyId, officer_id: officerId, version } });
+        return offer;
+      };
+
+      // Return as soon as the durable draft exists. Supabase keeps this promise alive
+      // after the response, so PDF generation and storage no longer hold the browser open.
+      if (typeof EdgeRuntime !== "undefined") {
+        EdgeRuntime.waitUntil(finishOffer().catch((error) => console.error("Employment offer background processing failed", error)));
+        return json({ offer: existingAttempt || { id: offerId, version, status: "draft", terms }, processing: true }, 202);
+      }
+
+      return json({ offer: await finishOffer() });
     }
 
     const offerId = clean(body.offer_id);
