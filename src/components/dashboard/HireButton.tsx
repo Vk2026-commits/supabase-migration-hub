@@ -93,12 +93,45 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     if (!companySignature) { toast.error("Add the hiring representative's signature"); return; }
     if (!authorized) { toast.error("Authorize the offer before sending"); return; }
     setLoading(true);
+    const requestBody = { action: "send", company_id: companyId, officer_id: officerId, hiring_application_id: hiringApplicationId, job_application_id: jobApplicationId, terms, company_signature: companySignature, idempotency_key: idempotencyKey };
+    const finishSuccessfulSend = (offer: any) => {
+      setPreviousOffer(offer || { ...previousOffer, id: idempotencyKey, status: "sent", version: Number(previousOffer?.version || 0) + 1 });
+      toast.success(previousOffer ? `Revised offer sent to ${officerName}. The earlier version remains archived.` : `Offer sent to ${officerName}. Onboarding unlocks only after acceptance.`);
+      setOpen(false);
+      onChanged?.();
+    };
+    const findCompletedAttempt = async () => {
+      const { data } = await (supabase as any).from("employment_offers").select("id,version,status,terms,sent_at").eq("id", idempotencyKey).maybeSingle();
+      return data?.status === "sent" ? data : null;
+    };
     try {
-      const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 30000, body: { action: "send", company_id: companyId, officer_id: officerId, hiring_application_id: hiringApplicationId, job_application_id: jobApplicationId, terms, company_signature: companySignature, idempotency_key: idempotencyKey } });
+      const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody });
       if (error) throw error; if (data?.error) throw new Error(data.error);
-      setPreviousOffer(data?.offer || data || { ...previousOffer, status: "sent", version: Number(previousOffer?.version || 0) + 1 });
-      toast.success(previousOffer ? `Revised offer sent to ${officerName}. The earlier version remains archived.` : `Offer sent to ${officerName}. Onboarding unlocks only after acceptance.`); setOpen(false); onChanged?.();
-    } catch (error: any) { toast.error(error?.name === "AbortError" || error?.context?.name === "AbortError" || /timeout|aborted/i.test(error?.message || "") ? "The secure offer service took too long. Nothing was duplicated—please try again." : error?.message || "The offer could not be securely generated and sent"); } finally { setLoading(false); }
+      finishSuccessfulSend(data?.offer || data);
+    } catch (error: any) {
+      const timedOut = error?.name === "AbortError" || error?.context?.name === "AbortError" || /timeout|aborted|failed to fetch/i.test(error?.message || "");
+      if (!timedOut) {
+        toast.error(error?.message || "The offer could not be securely generated and sent");
+      } else {
+        toast.info("The offer is still processing. Checking its status…", { duration: 8000 });
+        let completed = null;
+        for (let attempt = 0; attempt < 6 && !completed; attempt += 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1500));
+          completed = await findCompletedAttempt();
+        }
+        if (!completed) {
+          try {
+            const retry = await supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody });
+            if (!retry.error && !retry.data?.error) completed = retry.data?.offer || retry.data;
+            if (!completed) completed = await findCompletedAttempt();
+          } catch {
+            completed = await findCompletedAttempt();
+          }
+        }
+        if (completed) finishSuccessfulSend(completed);
+        else toast.error("The offer could not finish processing. Your entries are still here—please wait a moment and send again.", { duration: 10000 });
+      }
+    } finally { setLoading(false); }
   };
   const offerAction = async (action: "preview" | "withdraw") => {
     if (!previousOffer?.id) return;
