@@ -1,87 +1,173 @@
 import { useEffect, useState } from "react";
-import { Archive, Download, Eye, FileCheck2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileCheck2, Loader2 } from "lucide-react";
+import { PDFDocument } from "pdf-lib";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { createZip } from "@/lib/createZip";
 import { toast } from "sonner";
 
-type DocumentRecord = { id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string };
+type DocumentRecord = {
+  id: string;
+  label: string;
+  version: number | null;
+  submittedAt: string;
+  filename: string;
+  pageStart: number;
+  pageCount: number;
+};
+
 type Props = { open: boolean; onOpenChange: (open: boolean) => void; application: any };
 
 export function OnboardingDocumentsDialog({ open, onOpenChange, application }: Props) {
   const [loading, setLoading] = useState(false);
-  const [downloading, setDownloading] = useState(false);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [packetUrl, setPacketUrl] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageCount, setPageCount] = useState(0);
 
   useEffect(() => {
     if (!open || !application) return;
     let active = true;
+    let createdPacketUrl = "";
+
     const load = async () => {
       setLoading(true);
       setDocuments([]);
+      setPacketUrl("");
+      setCurrentPage(1);
+      setPageCount(0);
       try {
         const packetId = application.onboardingProgress?.packet_id;
         if (!packetId) throw new Error("This officer has not started an onboarding packet yet");
+
         const [recordsResult, packetResult] = await Promise.all([
-          (supabase as any).from("officer_compliance_documents").select("id,document_label,version,submitted_at,sha256,storage_path,document_type").eq("packet_id", packetId).order("submitted_at", { ascending: false }),
-          (supabase as any).from("officer_onboarding_packets").select("i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("id", packetId).maybeSingle(),
+          (supabase as any)
+            .from("officer_compliance_documents")
+            .select("id,document_label,version,submitted_at,storage_path,document_type")
+            .eq("packet_id", packetId)
+            .order("submitted_at", { ascending: true }),
+          (supabase as any)
+            .from("officer_onboarding_packets")
+            .select("i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at")
+            .eq("id", packetId)
+            .maybeSingle(),
         ]);
         if (recordsResult.error) throw recordsResult.error;
         if (packetResult.error) throw packetResult.error;
-        const entries = (recordsResult.data || []).map((document: any) => ({ ...document, legacy: false }));
-        if (!entries.some((document: any) => document.document_type === "form-i9") && packetResult.data?.i9_document_path) entries.push({ id: `legacy-i9-${packetId}`, document_label: "Signed Form I-9", version: null, submitted_at: packetResult.data.i9_submitted_at, sha256: null, storage_path: packetResult.data.i9_document_path, document_type: "form-i9", legacy: true });
-        if (!entries.some((document: any) => document.document_type === "form-w4") && packetResult.data?.w4_document_path) entries.push({ id: `legacy-w4-${packetId}`, document_label: "Signed Form W-4", version: null, submitted_at: packetResult.data.w4_submitted_at, sha256: null, storage_path: packetResult.data.w4_document_path, document_type: "form-w4", legacy: true });
-        const signedResult = entries.length ? await supabase.storage.from("onboarding-documents").createSignedUrls(entries.map((document: any) => document.storage_path), 3600) : { data: [], error: null };
+
+        const entries = (recordsResult.data || []).map((document: any) => ({ ...document }));
+        if (!entries.some((document: any) => document.document_type === "form-i9") && packetResult.data?.i9_document_path) {
+          entries.unshift({ id: `legacy-i9-${packetId}`, document_label: "Signed Form I-9", version: null, submitted_at: packetResult.data.i9_submitted_at, storage_path: packetResult.data.i9_document_path, document_type: "form-i9" });
+        }
+        if (!entries.some((document: any) => document.document_type === "form-w4") && packetResult.data?.w4_document_path) {
+          entries.push({ id: `legacy-w4-${packetId}`, document_label: "Signed Form W-4", version: null, submitted_at: packetResult.data.w4_submitted_at, storage_path: packetResult.data.w4_document_path, document_type: "form-w4" });
+        }
+
+        const signedResult = entries.length
+          ? await supabase.storage.from("onboarding-documents").createSignedUrls(entries.map((document: any) => document.storage_path), 3600)
+          : { data: [], error: null };
         if (signedResult.error) throw signedResult.error;
         const urls = new Map((signedResult.data || []).map((item: any) => [item.path, item.signedUrl]));
-        const nextDocuments = entries.map((document: any) => ({ id: document.id, label: document.document_label, version: document.version, submittedAt: document.submitted_at, sha256: document.sha256, url: urls.get(document.storage_path), filename: `${document.document_type}${document.version ? `-v${document.version}` : ""}.pdf` })).filter((document: any) => document.url) as DocumentRecord[];
-        for (const document of entries) void (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: application.officer?.id } });
-        if (active) setDocuments(nextDocuments);
+
+        const merged = await PDFDocument.create();
+        const prepared: DocumentRecord[] = [];
+        let nextPage = 1;
+        for (const entry of entries) {
+          const url = urls.get(entry.storage_path) as string | undefined;
+          if (!url) continue;
+          const response = await fetch(url);
+          if (!response.ok) continue;
+          const source = await PDFDocument.load(await response.arrayBuffer());
+          const sourcePages = await merged.copyPages(source, source.getPageIndices());
+          sourcePages.forEach(page => merged.addPage(page));
+          prepared.push({
+            id: entry.id,
+            label: entry.document_label,
+            version: entry.version,
+            submittedAt: entry.submitted_at,
+            filename: `${entry.document_type}${entry.version ? `-v${entry.version}` : ""}.pdf`,
+            pageStart: nextPage,
+            pageCount: sourcePages.length,
+          });
+          nextPage += sourcePages.length;
+          void (supabase as any).rpc("log_sensitive_access", {
+            _action: "view",
+            _table_name: "officer_compliance_documents",
+            _record_id: entry.id,
+            _details: { document_type: entry.document_type, officer_id: application.officer?.id },
+          });
+        }
+
+        if (!prepared.length) throw new Error("No completed onboarding documents are available yet");
+        const bytes = await merged.save();
+        createdPacketUrl = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
+        if (active) {
+          setDocuments(prepared);
+          setPageCount(nextPage - 1);
+          setPacketUrl(createdPacketUrl);
+        }
       } catch (error: any) {
-        toast.error(error.message || "The onboarding documents could not be loaded");
+        toast.error(error.message || "The onboarding packet could not be prepared");
       } finally {
         if (active) setLoading(false);
       }
     };
+
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      if (createdPacketUrl) URL.revokeObjectURL(createdPacketUrl);
+    };
   }, [open, application]);
 
-  const downloadFile = async (file: DocumentRecord) => {
-    const response = await fetch(file.url);
-    if (!response.ok) throw new Error(`Could not download ${file.label}`);
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const selectedDocument = documents.find(document => currentPage >= document.pageStart && currentPage < document.pageStart + document.pageCount);
+  const packetFilename = `${(application?.officerName || "officer").replace(/[^a-z0-9]+/gi, "-")}-onboarding-packet.pdf`;
 
-  const downloadAll = async () => {
-    setDownloading(true);
-    try {
-      const files = await Promise.all(documents.map(async document => {
-        const response = await fetch(document.url);
-        if (!response.ok) throw new Error(`Could not download ${document.label}`);
-        return { name: document.filename, data: await response.blob() };
-      }));
-      const archive = await createZip(files);
-      const url = URL.createObjectURL(archive);
-      const link = window.document.createElement("a");
-      link.href = url;
-      link.download = `${(application?.officerName || "officer").replace(/[^a-z0-9]+/gi, "-")}-onboarding-documents.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
-      toast.success("Onboarding documents downloaded");
-    } catch (error: any) {
-      toast.error(error.message || "The onboarding documents could not be downloaded");
-    } finally {
-      setDownloading(false);
-    }
-  };
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[94vh] max-w-[96vw] flex-col overflow-hidden p-0 xl:max-w-7xl">
+        <DialogHeader className="border-b px-5 py-4 pr-12">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <DialogTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-primary" />{application?.officerName || "Officer"} onboarding packet</DialogTitle>
+              <DialogDescription>Preview every completed page here, then print or download the complete packet.</DialogDescription>
+            </div>
+            {packetUrl && <Button asChild size="sm" variant="outline"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download packet PDF</a></Button>}
+          </div>
+        </DialogHeader>
 
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-primary" />{application?.officerName || "Officer"} onboarding documents</DialogTitle><DialogDescription>View individual completed forms or download the officer’s full onboarding packet for company records.</DialogDescription></DialogHeader>{loading ? <p className="flex items-center justify-center gap-2 py-12 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading onboarding documents…</p> : documents.length ? <div className="space-y-4 py-3"><div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-4"><div><strong className="block text-green-950">{documents.length} completed document{documents.length === 1 ? "" : "s"}</strong><span className="text-xs text-green-900/70">Ready to review or save</span></div><Button type="button" onClick={() => void downloadAll()} disabled={downloading}><Archive className="mr-2 h-4 w-4" />{downloading ? "Preparing ZIP…" : "Download all"}</Button></div>{documents.map(document => <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"><div className="min-w-0"><strong>{document.label}</strong>{document.version && <Badge variant="secondary" className="ml-2">Version {document.version}</Badge>}<span className="block text-xs text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</span></div><div className="flex gap-2"><Button type="button" size="sm" onClick={() => window.open(document.url, "_blank", "noopener,noreferrer")}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" onClick={() => void downloadFile(document).catch(() => toast.error(`Could not download ${document.label}`))}><Download className="mr-2 h-4 w-4" />Download</Button></div></div>)}</div> : <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong className="block">No completed documents are available yet</strong>The files will appear here as the officer finishes each onboarding form.</div>}</DialogContent></Dialog>;
+        {loading ? (
+          <p className="flex flex-1 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Preparing print preview…</p>
+        ) : packetUrl ? (
+          <div className="grid min-h-0 flex-1 md:grid-cols-[260px_minmax(0,1fr)]">
+            <aside className="min-h-0 overflow-y-auto border-r bg-muted/30 p-3">
+              <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Completed forms</p>
+              <div className="space-y-1">
+                {documents.map(document => (
+                  <button type="button" key={document.id} onClick={() => setCurrentPage(document.pageStart)} className={`w-full rounded-lg border p-3 text-left transition-colors ${selectedDocument?.id === document.id ? "border-primary bg-primary/10" : "border-transparent hover:bg-background"}`}>
+                    <span className="block text-sm font-semibold">{document.label}{document.version && <Badge variant="secondary" className="ml-2">v{document.version}</Badge>}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{document.pageCount} page{document.pageCount === 1 ? "" : "s"} · starts on page {document.pageStart}</span>
+                  </button>
+                ))}
+              </div>
+            </aside>
+            <section className="flex min-h-0 flex-col bg-zinc-800">
+              <div className="flex items-center justify-between gap-3 border-b border-zinc-700 bg-zinc-900 px-4 py-2 text-white">
+                <span className="truncate text-sm">{selectedDocument?.label || "Complete onboarding packet"}</span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" size="icon" variant="secondary" className="h-8 w-8" disabled={currentPage <= 1} onClick={() => setCurrentPage(page => Math.max(1, page - 1))}><ChevronLeft className="h-4 w-4" /><span className="sr-only">Previous page</span></Button>
+                  <span className="min-w-24 text-center text-sm">Page {currentPage} of {pageCount}</span>
+                  <Button type="button" size="icon" variant="secondary" className="h-8 w-8" disabled={currentPage >= pageCount} onClick={() => setCurrentPage(page => Math.min(pageCount, page + 1))}><ChevronRight className="h-4 w-4" /><span className="sr-only">Next page</span></Button>
+                </div>
+              </div>
+              <iframe key={currentPage} src={`${packetUrl}#page=${currentPage}&toolbar=1&navpanes=0&view=FitH`} title={`${application?.officerName || "Officer"} onboarding print preview`} className="min-h-0 flex-1 bg-zinc-700" />
+            </section>
+          </div>
+        ) : (
+          <div className="m-5 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong className="block">No completed documents are available yet</strong>Documents will appear here as the officer completes the onboarding packet.</div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }

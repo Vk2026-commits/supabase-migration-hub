@@ -3,9 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Lock, User, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List } from "lucide-react";
+import { Lock, User, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
-import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
 import HireButton from "./HireButton";
 import { InterviewScheduler } from "./InterviewScheduler";
@@ -214,33 +213,11 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       jobTitle={app.job_posting?.title || "Security Officer"}
                       applicationStatus={app.status}
                       onChanged={loadApplications}
-                      initialType="video"
                     />
-                    <InterviewScheduler
-                      companyId={companyId}
-                      companyName={companyProfile?.company_name || "The company"}
-                      officerId={app.officer.id}
-                      officerName={app.officerName}
-                      jobApplicationId={app.id}
-                      jobTitle={app.job_posting?.title || "Security Officer"}
-                      applicationStatus={app.status}
-                      onChanged={loadApplications}
-                      initialType="in_person"
-                    />
-                    {app.hiring_application?.[0]?.application_data && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => generateGuardApplicationPDF(app.hiring_application[0].application_data as GuardApplicationData)}
-                      >
-                        <Download className="h-3 w-3 mr-2" />
-                        Download application
-                      </Button>
-                    )}
                     {app.status === "accepted" && app.onboardingProgress?.packet_id && (
                       <Button size="sm" variant="outline" onClick={() => setOnboardingApplication(app)}>
                         <FileCheck2 className="mr-2 h-4 w-4" />
-                        View / download onboarding
+                        View onboarding
                       </Button>
                     )}
                     {app.hiring_application?.[0]?.id && app.status !== "accepted" && (
