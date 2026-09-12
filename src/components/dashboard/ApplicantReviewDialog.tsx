@@ -24,6 +24,7 @@ type ReviewData = {
   snapshotCompletedAt: string | null;
   attachments: EvidenceAttachment[];
   onboardingDocuments: Array<{ label: string; url: string; submittedAt: string }>;
+  resumeUrl: string;
 };
 
 type EvidenceAttachment = {
@@ -55,7 +56,7 @@ const formatTime = (item: string) => {
 
 const embeddedApplication = (application: any) => {
   const record = Array.isArray(application?.hiring_application)
-    ? application.hiring_application[0]
+    ? [...application.hiring_application].sort((left, right) => new Date(right.submitted_at || right.created_at || 0).getTime() - new Date(left.submitted_at || left.created_at || 0).getTime())[0]
     : application?.hiring_application;
   return record || null;
 };
@@ -67,7 +68,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [previewDocument, setPreviewDocument] = useState<{ label: string; url: string; attachment?: EvidenceAttachment } | null>(null);
-  const [review, setReview] = useState<ReviewData>({ applicationId: null, snapshot: null, officer: null, snapshotStatus: "pending", snapshotKind: null, snapshotCompletedAt: null, attachments: [], onboardingDocuments: [] });
+  const [review, setReview] = useState<ReviewData>({ applicationId: null, snapshot: null, officer: null, snapshotStatus: "pending", snapshotKind: null, snapshotCompletedAt: null, attachments: [], onboardingDocuments: [], resumeUrl: "" });
 
   useEffect(() => {
     if (!open || !application?.id || !application?.officer?.id) return;
@@ -83,6 +84,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
       snapshotCompletedAt: embedded?.evidence_snapshot_completed_at || null,
       attachments: [],
       onboardingDocuments: [],
+      resumeUrl: "",
     });
     setLoading(!embedded?.application_data);
     setAttachmentsLoading(true);
@@ -101,6 +103,8 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
         if (error) throw error;
 
         if (active) {
+          const resumePath = snapshotResult.data?.application_data?.resumePath;
+          const resumeResult = resumePath ? await supabase.storage.from("resumes").createSignedUrl(resumePath, 3600) : { data: null, error: null };
           setReview(current => ({
             ...current,
             applicationId: snapshotResult.data?.id || current.applicationId,
@@ -109,6 +113,7 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
             snapshotStatus: snapshotResult.data?.evidence_snapshot_status || current.snapshotStatus,
             snapshotKind: snapshotResult.data?.evidence_snapshot_kind || current.snapshotKind,
             snapshotCompletedAt: snapshotResult.data?.evidence_snapshot_completed_at || current.snapshotCompletedAt,
+            resumeUrl: resumeResult.data?.signedUrl || "",
           }));
           setLoading(false);
         }
@@ -233,28 +238,29 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
     logEvidenceAction("preview", attachment.id, { hiring_application_id: review.applicationId, evidence_kind: attachment.evidence_kind });
     setPreviewDocument({ label: attachment.label, url: attachment.url, attachment });
   };
-  const downloadAll = async () => {
-    if (!review.attachments.length) return;
+  const downloadAll = async (kind?: "photo" | "certification") => {
+    const selectedAttachments = kind ? review.attachments.filter(item => item.evidence_kind === kind) : review.attachments;
+    if (!selectedAttachments.length) return;
     setDownloadingAll(true);
     try {
-      const files = await Promise.all(review.attachments.map(async (attachment) => {
+      const files = await Promise.all(selectedAttachments.map(async (attachment) => {
         const response = await fetch(attachment.url);
         if (!response.ok) throw new Error(`Could not download ${attachment.label}`);
         const folder = attachment.evidence_kind === "photo" ? "Photos" : "Certifications";
         return { name: `${folder}/${safeFilename(`${attachment.label}-${attachment.original_filename}`)}`, data: await response.blob() };
       }));
-      files.push({ name: "attachment-manifest.json", data: new Blob([JSON.stringify(review.attachments.map(({ url, ...attachment }) => attachment), null, 2)], { type: "application/json" }) });
+      files.push({ name: "attachment-manifest.json", data: new Blob([JSON.stringify(selectedAttachments.map(({ url, ...attachment }) => attachment), null, 2)], { type: "application/json" }) });
       const archive = await createZip(files);
       const url = URL.createObjectURL(archive);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${safeFilename(title)}-application-attachments.zip`;
+      link.download = `${safeFilename(title)}-${kind === "photo" ? "photos" : kind === "certification" ? "certificates" : "application-attachments"}.zip`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
       const snapshotId = review.applicationId || review.attachments[0].id;
-      logEvidenceAction("download_bundle", snapshotId, { attachment_count: review.attachments.length });
+      logEvidenceAction("download_bundle", snapshotId, { attachment_count: selectedAttachments.length, evidence_kind: kind || "all" });
       toast.success("Application attachments downloaded");
     } catch (error: any) {
       toast.error(error.message || "Could not download all attachments");
@@ -279,9 +285,11 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
             <DialogDescription>Complete applicant review for {application?.job_posting?.title || "your position"}</DialogDescription>
           </div>
           <div className="flex flex-wrap gap-2">
+            {review.resumeUrl && <Button asChild variant="outline"><a href={review.resumeUrl} download target="_blank" rel="noreferrer"><Download className="mr-2 h-4 w-4" />Download Resume</a></Button>}
             <Button variant="outline" disabled={!applicationReady} onClick={() => download("print")}><Printer className="mr-2 h-4 w-4" />Print PDF</Button>
             <Button disabled={!applicationReady} onClick={() => download("download")}><Download className="mr-2 h-4 w-4" />Download PDF</Button>
-            <Button variant="outline" disabled={!review.attachments.length || downloadingAll} onClick={downloadAll}><Archive className="mr-2 h-4 w-4" />{downloadingAll ? "Preparing ZIP…" : "Download photos & certificates"}</Button>
+            <Button variant="outline" disabled={!review.attachments.some(item => item.evidence_kind === "photo") || downloadingAll} onClick={() => void downloadAll("photo")}><Archive className="mr-2 h-4 w-4" />{downloadingAll ? "Preparing…" : "Download Photos"}</Button>
+            <Button variant="outline" disabled={!review.attachments.some(item => item.evidence_kind === "certification") || downloadingAll} onClick={() => void downloadAll("certification")}><Archive className="mr-2 h-4 w-4" />{downloadingAll ? "Preparing…" : "Download Certificates"}</Button>
           </div>
         </div>
       </DialogHeader>
@@ -290,8 +298,8 @@ export function ApplicantReviewDialog({ open, onOpenChange, application }: Appli
         {loading ? <div className="py-20 text-center text-muted-foreground">Loading the complete application…</div> : <>
           {review.snapshotKind === "legacy" && review.snapshotStatus === "complete" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Legacy attachment archive</p><p className="mt-1">These are the officer files available when this archive was created{review.snapshotCompletedAt ? ` on ${new Date(review.snapshotCompletedAt).toLocaleString()}` : ""}. They are not represented as the original files from the earlier application date.</p></div>}
           {review.snapshotStatus === "legacy_unavailable" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">No legacy attachments were available</p><p className="mt-1">This older application has no preserved photo or certification files. Current profile files are intentionally not substituted.</p></div>}
-          {review.snapshotStatus !== "complete" && review.snapshotKind !== "legacy" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Attachment archive is not complete</p><p className="mt-1">The officer must finish preserving the required photos and certification before this submission can be treated as complete.</p></div>}
-          {review.attachments.length > 0 && <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">Photos and certificates are stored separately</p><p className="mt-1">They are not embedded in the application PDF. Preview them below, download files individually, or use “Download photos & certificates” to save the complete set for your records.</p></div>}
+          {review.snapshotStatus !== "complete" && review.snapshotKind !== "legacy" && <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-semibold">Attachment archive is still processing</p><p className="mt-1">The application is available now. Any optional photos or credentials are still being preserved.</p></div>}
+          {review.attachments.length > 0 && <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">Photos and certificates are stored separately</p><p className="mt-1">They are not embedded in the application PDF. Preview files below or use the separate photo and certificate downloads above.</p></div>}
           <Card className="overflow-hidden border-primary/20 bg-primary/5">
             <CardContent className="grid gap-5 p-5 sm:grid-cols-[140px_1fr] sm:p-6">
               <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border bg-background sm:w-36">

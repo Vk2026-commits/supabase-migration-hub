@@ -10,6 +10,7 @@ import { CheckCircle2, Save, Upload, X } from "lucide-react";
 interface OfficerPhotosProps {
   userId: string;
   embedded?: boolean;
+  optional?: boolean;
   onChanged?: (photos: Record<string, string>) => void;
   onSaved?: (complete: boolean) => void;
 }
@@ -21,7 +22,7 @@ const PHOTO_TYPES = [
   { id: "action-2", label: "Action Shot 2", description: "On duty or training" },
 ];
 
-export function OfficerPhotos({ userId, embedded = false, onChanged, onSaved }: OfficerPhotosProps) {
+export function OfficerPhotos({ userId, embedded = false, optional = false, onChanged, onSaved }: OfficerPhotosProps) {
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
   const [savingPhotos, setSavingPhotos] = useState(false);
@@ -144,14 +145,15 @@ export function OfficerPhotos({ userId, embedded = false, onChanged, onSaved }: 
     setSavingPhotos(true);
     try {
       const savedPhotos = await loadPhotos();
-      if (!savedPhotos?.headshot || !savedPhotos["full-body"]) {
+      if (!optional && (!savedPhotos?.headshot || !savedPhotos["full-body"])) {
         setPhotosConfirmed(false);
         toast.error("Upload both a professional headshot and a full-body photo to complete this step");
         return;
       }
-      setPhotosConfirmed(true);
-      onSaved?.(true);
-      toast.success("Photos saved. Step 8 is complete.");
+      const complete = Boolean(savedPhotos?.headshot && savedPhotos?.["full-body"]);
+      setPhotosConfirmed(complete);
+      onSaved?.(complete);
+      toast.success("Photo progress saved");
     } finally {
       setSavingPhotos(false);
     }
@@ -164,19 +166,19 @@ export function OfficerPhotos({ userId, embedded = false, onChanged, onSaved }: 
         <CardDescription className="text-base">Complete the required photos first, then add optional action shots if you want.</CardDescription>
       </CardHeader>}
       <CardContent className={embedded ? "px-0" : "px-5 py-7 sm:px-8 sm:py-9"}>
-        {embedded && <p className="mb-5 text-sm text-muted-foreground">Your headshot and full-body photo are required. Action photos are optional.</p>}
+        {embedded && <p className="mb-5 text-sm text-muted-foreground">{optional ? "Photos are recommended but do not block application submission. You can add them now or later from your profile." : "Your headshot and full-body photo are required. Action photos are optional."}</p>}
         <div className={`mb-6 flex items-start gap-3 rounded-xl border p-4 ${requiredPhotosComplete ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
           <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${requiredPhotosComplete ? "text-green-600" : "text-amber-500"}`} />
           <div>
-            <p className="font-semibold">{requiredPhotosComplete ? "Minimum photo requirement complete" : "Two required photos needed"}</p>
-            <p className="text-sm">{requiredPhotosComplete ? "Your headshot and full-body photo are stored. Select Save photos to confirm this step." : "Upload one professional headshot and one full-body photo."}</p>
+            <p className="font-semibold">{requiredPhotosComplete ? "Recommended photos complete" : optional ? "Photos are optional" : "Two required photos needed"}</p>
+            <p className="text-sm">{requiredPhotosComplete ? "Your headshot and full-body photo are stored." : optional ? "Adding a professional headshot and full-body photo can help employers review your application." : "Upload one professional headshot and one full-body photo."}</p>
           </div>
         </div>
         <div className="grid gap-6 md:grid-cols-2">
           {PHOTO_TYPES.map((photoType) => (
             <div key={photoType.id} className={`space-y-3 rounded-2xl border p-5 transition-shadow hover:shadow-sm ${photos[photoType.id] ? "border-green-500/40 bg-green-500/5" : "bg-card"}`}>
               <div>
-                <Label className="text-base">{photoType.label}{photoType.id === "headshot" || photoType.id === "full-body" ? " *" : " (optional)"}</Label>
+                <Label className="text-base">{photoType.label}{optional ? " (optional)" : photoType.id === "headshot" || photoType.id === "full-body" ? " *" : " (optional)"}</Label>
                 <p className="text-sm text-muted-foreground">{photoType.description}</p>
               </div>
 
@@ -203,10 +205,10 @@ export function OfficerPhotos({ userId, embedded = false, onChanged, onSaved }: 
             {photosConfirmed && requiredPhotosComplete && <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600" />}
             <div>
               <p className="font-semibold">{photosConfirmed && requiredPhotosComplete ? "Step 8 photos saved" : "Save your photo progress"}</p>
-              <p className="text-sm text-muted-foreground">{requiredPhotosComplete ? "Both required photos are ready." : "You can save after uploading the two required photos."}</p>
+              <p className="text-sm text-muted-foreground">{requiredPhotosComplete ? "Both recommended photos are ready." : optional ? "Uploading photos is recommended, not required." : "You can save after uploading the two required photos."}</p>
             </div>
           </div>
-          <Button type="button" size="lg" onClick={savePhotos} disabled={savingPhotos || Boolean(uploading) || !requiredPhotosComplete} className="shrink-0">
+          <Button type="button" size="lg" onClick={savePhotos} disabled={savingPhotos || Boolean(uploading) || (!optional && !requiredPhotosComplete)} className="shrink-0">
             <Save className="mr-2 h-5 w-5" />{savingPhotos ? "Saving photos…" : photosConfirmed ? "Photos saved" : "Save photos"}
           </Button>
         </div>

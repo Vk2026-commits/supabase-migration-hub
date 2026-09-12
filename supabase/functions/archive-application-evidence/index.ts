@@ -109,7 +109,7 @@ serve(async (request) => {
     for (const file of photoFiles || []) {
       const role = file.name.split(".")[0];
       if (!photoLabels[role]) continue;
-      sources.push({ kind: "photo", role, label: photoLabels[role], bucket: "officer-photos", path: `${officer.user_id}/${file.name}`, sourceId: null, required: role === "headshot" || role === "full-body", metadata: { photoType: role } });
+      sources.push({ kind: "photo", role, label: photoLabels[role], bucket: "officer-photos", path: `${officer.user_id}/${file.name}`, sourceId: null, required: false, metadata: { photoType: role } });
     }
     for (const certification of certifications || []) {
       for (const side of ["front", "back"] as const) {
@@ -117,19 +117,18 @@ serve(async (request) => {
         const path = rawPath ? cleanCertificationPath(rawPath) : "";
         if (!path) continue;
         const name = certification.name || certification.license_level || "Certification";
-        sources.push({ kind: "certification", role: `${certification.id}-${side}`, label: `${name} — ${side === "front" ? "Front" : "Back"} document`, bucket: "certification-documents", path, sourceId: certification.id, required: side === "front", metadata: { name, side, licenseLevel: certification.license_level, certificationType: certification.certification_type, certificationNumber: certification.certification_number, issuingOrganization: certification.issuing_organization, issueDate: certification.issue_date, expiryDate: certification.expiry_date } });
+        sources.push({ kind: "certification", role: `${certification.id}-${side}`, label: `${name} — ${side === "front" ? "Front" : "Back"} document`, bucket: "certification-documents", path, sourceId: certification.id, required: false, metadata: { name, side, licenseLevel: certification.license_level, certificationType: certification.certification_type, certificationNumber: certification.certification_number, issuingOrganization: certification.issuing_organization, issueDate: certification.issue_date, expiryDate: certification.expiry_date } });
       }
     }
 
-    const rolesPresent = new Set(sources.filter((source) => source.kind === "photo").map((source) => source.role));
-    const hasCertificationFront = sources.some((source) => source.kind === "certification" && source.role.endsWith("-front"));
-    if (archiveKind === "submission" && (!rolesPresent.has("headshot") || !rolesPresent.has("full-body") || !hasCertificationFront)) {
-      await admin.from("guard_hiring_applications").update({ evidence_snapshot_status: "failed" }).eq("id", application.id);
-      return json({ error: "Upload a headshot, full-body photo, and certification front before submitting" }, 400);
-    }
     if (!sources.length) {
-      await admin.from("guard_hiring_applications").update({ evidence_snapshot_status: "legacy_unavailable", evidence_snapshot_kind: archiveKind }).eq("id", application.id);
-      return json({ attachments: [], snapshot_status: "legacy_unavailable", archive_kind: archiveKind });
+      const completedAt = new Date().toISOString();
+      const applicationData = { ...(application.application_data || {}), attachmentManifest: [] };
+      const update: Record<string, unknown> = { evidence_snapshot_status: "complete", evidence_snapshot_completed_at: completedAt, evidence_snapshot_kind: archiveKind, application_data: applicationData };
+      if (archiveKind === "submission") Object.assign(update, { status: "submitted", submitted_at: application.submitted_at || completedAt });
+      const { error: updateError } = await admin.from("guard_hiring_applications").update(update).eq("id", application.id);
+      if (updateError) throw updateError;
+      return json({ attachments: [], manifest: [], snapshot_status: "complete", archive_kind: archiveKind, completed_at: completedAt });
     }
 
     const archivedAt = new Date().toISOString();

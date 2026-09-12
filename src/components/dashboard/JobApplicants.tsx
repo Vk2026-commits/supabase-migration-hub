@@ -8,6 +8,7 @@ import { ChatDialog } from "./ChatDialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
 import HireButton from "./HireButton";
+import { InterviewScheduler } from "./InterviewScheduler";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -30,6 +31,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [reviewApplication, setReviewApplication] = useState<any>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     void loadApplications();
@@ -55,7 +57,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         job_posting:job_postings(title),
         officer:officer_profiles(id, user_id, phone),
         profile:officer_profiles(user_id),
-        hiring_application:guard_hiring_applications(id,application_data,status,submitted_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
+        hiring_application:guard_hiring_applications(id,application_data,status,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
       `)
       .eq("job_posting.company_id", companyId)
       .order("created_at", { ascending: false });
@@ -67,20 +69,24 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
 
     // Get display names and non-sensitive onboarding progress for accepted offers.
     const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
-    const [profilesResult, offersResult, progressResult] = await Promise.all([
+    const [profilesResult, offersResult, progressResult, unreadResult] = await Promise.all([
       officerUserIds.length ? supabase.from("profiles").select("id, full_name, email").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
       (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
       (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
+      supabase.from("messages").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("sender_type", "officer").eq("is_read", false),
     ]);
     if (offersResult.error) console.error("Failed to match accepted offers", offersResult.error);
     if (progressResult.error) console.error("Failed to load onboarding progress", progressResult.error);
+    if (!unreadResult.error) setUnreadCount(unreadResult.count || 0);
     const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
     const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
     setApplications((data || []).map((app: any) => {
+      const hiringApplications = [...(app.hiring_application || [])].sort((left: any, right: any) => new Date(right.submitted_at || right.created_at || 0).getTime() - new Date(left.submitted_at || left.created_at || 0).getTime());
       const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
-      const applicationSnapshot = app.hiring_application?.[0]?.application_data || {};
+      const applicationSnapshot = hiringApplications[0]?.application_data || {};
       return {
         ...app,
+        hiring_application: hiringApplications,
         officerName: profile?.full_name || applicationSnapshot.applicantName || "Unknown",
         officerEmail: applicationSnapshot.email || profile?.email || "",
         officerPhone: applicationSnapshot.phone || app.officer?.phone || "",
@@ -102,7 +108,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Job Applicants</CardTitle>
+        <div className="flex flex-wrap items-center gap-3"><CardTitle>Applicants</CardTitle>{applications.length > 0 && <Badge variant="secondary" className="rounded-full">{applications.length} total</Badge>}{unreadCount > 0 && <Badge className="rounded-full">{unreadCount} new message{unreadCount === 1 ? "" : "s"}</Badge>}</div>
         <CardDescription>
           Officers who have expressed interest in your positions
         </CardDescription>
@@ -177,7 +183,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       size="sm"
                       onClick={() => setReviewApplication(app)}
                     >
-                      Review Full Application
+                      Review Application
                     </Button>
                     <Button 
                       size="sm" 
@@ -195,6 +201,15 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       <MessageCircle className="h-3 w-3 mr-2" />
                       Chat
                     </Button>
+                    {app.status !== "accepted" && <InterviewScheduler
+                      companyId={companyId}
+                      companyName={companyProfile?.company_name || "The company"}
+                      officerId={app.officer.id}
+                      officerName={app.officerName}
+                      jobApplicationId={app.id}
+                      jobTitle={app.job_posting?.title || "Security Officer"}
+                      onChanged={loadApplications}
+                    />}
                     {app.hiring_application?.[0]?.application_data && (
                       <Button
                         size="sm"
@@ -216,7 +231,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         onChanged={loadApplications}
                       />
                     )}
-                    {app.status === "accepted" && <Badge className="bg-green-600">Offer accepted</Badge>}
+                    {app.status === "accepted" && <><Badge className="bg-green-600">Offer accepted</Badge><Badge variant="outline" className="border-green-300 bg-green-50 text-green-800">Onboarding packet sent</Badge></>}
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" disabled className="mt-3">

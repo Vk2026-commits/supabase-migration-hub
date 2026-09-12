@@ -1,6 +1,6 @@
 export type EmploymentType = "full_time" | "part_time" | "temporary" | "seasonal";
 export type FLSAClassification = "nonexempt" | "exempt";
-export type PayFrequency = "biweekly" | "semimonthly";
+export type PayFrequency = "weekly" | "biweekly" | "semimonthly";
 
 export type EmploymentOfferTerms = {
   positionTitle: string;
@@ -149,4 +149,4 @@ export const employmentTypeLabel = (value: EmploymentType) => ({
   seasonal: "Seasonal",
 }[value]);
 
-export const payFrequencyLabel = (value: PayFrequency) => value === "biweekly" ? "Every two weeks" : "Twice per month";
+export const payFrequencyLabel = (value: PayFrequency) => value === "weekly" ? "Weekly" : value === "biweekly" ? "Every two weeks" : "Twice per month";

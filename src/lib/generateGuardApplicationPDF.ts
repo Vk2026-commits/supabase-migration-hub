@@ -20,6 +20,7 @@ export type GuardApplicationData = {
   securityLicenseState: string;
   education: string;
   skills: string;
+  resumePath?: string;
   workHistory: Array<Record<string, string>>;
   references: Array<Record<string, string>>;
   availability?: {
@@ -226,8 +227,8 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   field(
     "Where are the applicant's photos and certification documents?",
     photosProvided && certificationProvided
-      ? "The required applicant photos and certification documents were uploaded to We Find Guards and are securely stored separately from this PDF. Authorized company users can view or download the preserved files from the applicant record."
-      : "Applicant photos and certification documents are managed separately from this PDF. Check the applicant record in We Find Guards for availability, preview, and download options.",
+      ? "The applicant provided optional photos and certification documents. They are stored separately from this PDF and are available to authorized company users from the applicant record."
+      : "Photos and certification documents are optional and are managed separately from this PDF. Check the applicant record in We Find Guards to see which files the applicant chose to provide.",
   );
 
   ensureSpace(86);

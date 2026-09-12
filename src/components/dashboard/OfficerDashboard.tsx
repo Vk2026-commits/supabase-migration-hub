@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole } from "lucide-react";
+import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { OfficerPhotos } from "./OfficerPhotos";
@@ -86,6 +86,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
   const [acceptedEmploymentOffer, setAcceptedEmploymentOffer] = useState<any>(null);
+  const [upcomingInterview, setUpcomingInterview] = useState<any>(null);
   const [showOfferPrompt, setShowOfferPrompt] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
@@ -218,7 +219,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult, acceptedOfferResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult, acceptedOfferResult, interviewResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
@@ -229,6 +230,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase as any).from("interview_schedules").select("*,company:company_profiles(company_name),job_application:job_applications(job_posting:job_postings(title))").eq("officer_id", data.id).eq("status", "scheduled").gte("scheduled_at", new Date().toISOString()).order("scheduled_at", { ascending: true }).limit(1).maybeSingle(),
         ]);
         
         setCertCount(certsResult.count || 0);
@@ -241,6 +243,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
+        if (interviewResult.error && interviewResult.error.code !== "42P01") console.error("Failed to load upcoming interview", interviewResult.error);
+        setUpcomingInterview(interviewResult.data || null);
         setOnboardingOfferAvailable(Boolean(pendingOfferResult.data?.id || (preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id)));
         setOnboardingOfferLoaded(true);
         const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
@@ -406,10 +410,23 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
     { label: acceptedEmploymentOffer ? "Offer accepted and signed" : pendingEmploymentOffer ? "Review and sign company offer" : "Await company offer", complete: Boolean(acceptedEmploymentOffer), tab: "employee-onboarding", locked: !onboardingOfferAvailable },
     { label: employeeOnboardingSubmitted ? "Employee onboarding submitted" : acceptedEmploymentOffer ? "Complete employee onboarding" : "Employee onboarding unlocks after acceptance", complete: employeeOnboardingSubmitted, tab: "employee-onboarding", locked: !acceptedEmploymentOffer },
     { label: "Set availability", complete: completionStatus.availability, tab: "availability" },
-    { label: "Add headshot and full-body photo", complete: requiredPhotosComplete, tab: "photos" },
-    { label: "Upload a certification front document", complete: certificationDocumentComplete, tab: "certifications" },
+    { label: "Add headshot and full-body photo (optional)", complete: requiredPhotosComplete, tab: "photos", optional: true },
+    { label: "Upload licenses or certificates (if applicable)", complete: certificationDocumentComplete, tab: "certifications", optional: true },
   ];
-  const onboardingComplete = onboardingItems.every((item) => item.complete);
+  const onboardingComplete = onboardingItems.filter((item) => !item.optional).every((item) => item.complete);
+
+  const addInterviewToCalendar = () => {
+    if (!upcomingInterview) return;
+    const start = new Date(upcomingInterview.scheduled_at);
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const companyName = upcomingInterview.company?.company_name || "Company";
+    const title = upcomingInterview.job_application?.job_posting?.title || "Security Officer";
+    const location = upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location;
+    const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//We Find Guards//Interview//EN", "BEGIN:VEVENT", `UID:${upcomingInterview.id}@wefindguards.com`, `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`, `SUMMARY:Interview with ${companyName} — ${title}`, `LOCATION:${String(location || "").replace(/,/g, "\\,")}`, `DESCRIPTION:${String(upcomingInterview.notes || "").replace(/\n/g, "\\n")}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    const url = URL.createObjectURL(new Blob([body], { type: "text/calendar;charset=utf-8" }));
+    const link = document.createElement("a"); link.href = url; link.download = "we-find-guards-interview.ics"; link.click(); URL.revokeObjectURL(url);
+  };
 
   const handleTabChange = (tab: string) => {
     if (tab === "employee-onboarding" && onboardingOfferLoaded && !onboardingOfferAvailable) {
@@ -463,6 +480,8 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             </h1>
 
             {guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
+
+            {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Upcoming interview</p><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company?.company_name || "Company"} — {upcomingInterview.job_application?.job_posting?.title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p></div><Button type="button" onClick={addInterviewToCalendar}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button></CardContent></Card>}
 
             {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">

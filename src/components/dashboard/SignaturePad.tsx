@@ -95,12 +95,12 @@ export function SignaturePad({ value, suggestedName, onChange }: SignaturePadPro
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <Label>Your signature *</Label>
+          <Label>Draw Signature *</Label>
           <p className="mt-1 text-sm text-muted-foreground">Sign inside the box with your finger, mouse, or stylus.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={createFromName} disabled={!suggestedName.trim()}>
-            Create signature from my name
+            Create Signature
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={clear} disabled={!value}>Clear</Button>
         </div>
