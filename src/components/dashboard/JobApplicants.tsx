@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Download, Lock, User, MessageCircle, ClipboardCheck, Mail, Phone } from "lucide-react";
+import { Download, Lock, User, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
 import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
 import HireButton from "./HireButton";
 import { InterviewScheduler } from "./InterviewScheduler";
+import { OnboardingDocumentsDialog } from "./OnboardingDocumentsDialog";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -32,6 +33,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [reviewApplication, setReviewApplication] = useState<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [onboardingApplication, setOnboardingApplication] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "compact">("cards");
 
   useEffect(() => {
     void loadApplications();
@@ -135,7 +138,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           </div>
         )}
 
-        <div className="space-y-3">
+        {applications.length > 0 && <div className="mb-4 flex justify-end"><div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Applicant layout"><Button type="button" size="sm" variant={viewMode === "cards" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("cards")}><LayoutGrid className="mr-2 h-4 w-4" />Cards</Button><Button type="button" size="sm" variant={viewMode === "compact" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("compact")}><List className="mr-2 h-4 w-4" />Compact</Button></div></div>}
+        <div className={viewMode === "cards" ? "grid gap-4 xl:grid-cols-2" : "space-y-2"}>
           {applications.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               No applications yet. Post jobs to attract security officers.
@@ -144,7 +148,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
             applications.map((app) => {
               const onboarding = getOnboardingStatus(app.onboardingProgress);
               return (
-              <div key={app.id} className="border rounded-lg p-4">
+              <div key={app.id} className={`rounded-xl border bg-card ${viewMode === "cards" ? "p-4 shadow-sm" : "p-3"}`}>
                 <div className="flex justify-between items-start mb-2">
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -172,13 +176,13 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                   <Badge variant="secondary">{app.status}</Badge>
                 </div>
 
-                {app.status === "accepted" && <div className={`mt-3 rounded-xl border p-3 ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
+                {app.status === "accepted" && <div className={`mt-3 rounded-lg border ${viewMode === "cards" ? "p-3" : "p-2.5"} ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
                   <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-2"><ClipboardCheck className={`mt-0.5 h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div><strong className="block text-sm">{onboarding.label}</strong><span className="text-xs text-muted-foreground">{onboarding.detail}</span></div></div><Badge variant="outline" className="shrink-0 bg-background">{onboarding.percent}%</Badge></div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
                 </div>}
 
                 {isPaidSubscriber ? (
-                  <div className="flex flex-wrap gap-2 mt-3">
+                  <div className={viewMode === "cards" ? "mt-3 grid grid-cols-2 gap-2" : "mt-3 flex flex-wrap gap-2"}>
                     <Button 
                       size="sm"
                       onClick={() => setReviewApplication(app)}
@@ -201,15 +205,28 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       <MessageCircle className="h-3 w-3 mr-2" />
                       Chat
                     </Button>
-                    {app.status !== "accepted" && <InterviewScheduler
+                    <InterviewScheduler
                       companyId={companyId}
                       companyName={companyProfile?.company_name || "The company"}
                       officerId={app.officer.id}
                       officerName={app.officerName}
                       jobApplicationId={app.id}
                       jobTitle={app.job_posting?.title || "Security Officer"}
+                      applicationStatus={app.status}
                       onChanged={loadApplications}
-                    />}
+                      initialType="video"
+                    />
+                    <InterviewScheduler
+                      companyId={companyId}
+                      companyName={companyProfile?.company_name || "The company"}
+                      officerId={app.officer.id}
+                      officerName={app.officerName}
+                      jobApplicationId={app.id}
+                      jobTitle={app.job_posting?.title || "Security Officer"}
+                      applicationStatus={app.status}
+                      onChanged={loadApplications}
+                      initialType="in_person"
+                    />
                     {app.hiring_application?.[0]?.application_data && (
                       <Button
                         size="sm"
@@ -217,7 +234,13 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         onClick={() => generateGuardApplicationPDF(app.hiring_application[0].application_data as GuardApplicationData)}
                       >
                         <Download className="h-3 w-3 mr-2" />
-                        Application PDF
+                        Download application
+                      </Button>
+                    )}
+                    {app.status === "accepted" && app.onboardingProgress?.packet_id && (
+                      <Button size="sm" variant="outline" onClick={() => setOnboardingApplication(app)}>
+                        <FileCheck2 className="mr-2 h-4 w-4" />
+                        View / download onboarding
                       </Button>
                     )}
                     {app.hiring_application?.[0]?.id && app.status !== "accepted" && (
@@ -231,7 +254,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         onChanged={loadApplications}
                       />
                     )}
-                    {app.status === "accepted" && <><Badge className="bg-green-600">Offer accepted</Badge><Badge variant="outline" className="border-green-300 bg-green-50 text-green-800">Onboarding packet sent</Badge></>}
+                    {app.status === "accepted" && <div className="col-span-full flex flex-wrap gap-2 pt-1"><Badge className="bg-green-600">Offer accepted</Badge><Badge variant="outline" className="border-green-300 bg-green-50 text-green-800">Onboarding packet sent</Badge></div>}
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" disabled className="mt-3">
@@ -258,6 +281,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         />
       )}
       <ApplicantReviewDialog open={Boolean(reviewApplication)} onOpenChange={(open) => !open && setReviewApplication(null)} application={reviewApplication} />
+      <OnboardingDocumentsDialog open={Boolean(onboardingApplication)} onOpenChange={(open) => !open && setOnboardingApplication(null)} application={onboardingApplication} />
     </Card>
   );
 };

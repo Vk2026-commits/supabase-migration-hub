@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CalendarPlus, Link as LinkIcon, MapPin } from "lucide-react";
+import { Link as LinkIcon, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
-type Props = { companyId: string; companyName: string; officerId: string; officerName: string; jobApplicationId: string; jobTitle: string; onChanged: () => void };
+type Props = { companyId: string; companyName: string; officerId: string; officerName: string; jobApplicationId: string; jobTitle: string; applicationStatus?: string; onChanged: () => void; initialType?: "video" | "in_person" };
 
-export function InterviewScheduler({ companyId, companyName, officerId, officerName, jobApplicationId, jobTitle, onChanged }: Props) {
+export function InterviewScheduler({ companyId, companyName, officerId, officerName, jobApplicationId, jobTitle, applicationStatus, onChanged, initialType = "video" }: Props) {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<"video" | "in_person">("video");
+  const [type, setType] = useState<"video" | "in_person">(initialType);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [destination, setDestination] = useState("");
@@ -40,13 +40,15 @@ export function InterviewScheduler({ companyId, companyName, officerId, officerN
       const message = `${companyName} scheduled a ${type === "video" ? "video" : "in-person"} interview for ${jobTitle} on ${scheduledAt.toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. ${detail}${notes.trim() ? ` Notes: ${notes.trim()}` : ""}`;
       const { error: messageError } = await supabase.from("messages").insert({ company_id: companyId, officer_id: officerId, job_application_id: jobApplicationId, sender_type: "company", message });
       if (messageError) throw messageError;
-      const { error: stageError } = await supabase.from("job_applications").update({ status: "interview_scheduled" }).eq("id", jobApplicationId);
-      if (stageError) throw stageError;
+      if (applicationStatus !== "accepted") {
+        const { error: stageError } = await supabase.from("job_applications").update({ status: "interview_scheduled" }).eq("id", jobApplicationId);
+        if (stageError) throw stageError;
+      }
       toast.success(`Interview scheduled with ${officerName}`);
       setOpen(false); onChanged();
     } catch (error: any) { toast.error(error.message || "Interview could not be scheduled"); }
     finally { setSaving(false); }
   };
 
-  return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button size="sm" variant="outline"><CalendarPlus className="mr-2 h-4 w-4" />Schedule Interview</Button></DialogTrigger><DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Schedule interview with {officerName}</DialogTitle><DialogDescription>Choose the interview format and send the officer all meeting details.</DialogDescription></DialogHeader><div className="space-y-5"><div className="space-y-2"><Label htmlFor="interview-type">Interview type</Label><select id="interview-type" className="h-11 w-full rounded-md border bg-background px-3" value={type} onChange={event => { setType(event.target.value as any); setDestination(""); }}><option value="video">Video interview</option><option value="in_person">In-person interview</option></select></div><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="interview-date">Date</Label><Input id="interview-date" type="date" value={date} onChange={event => setDate(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="interview-time">Time</Label><Input id="interview-time" type="time" value={time} onChange={event => setTime(event.target.value)} /></div></div><div className="space-y-2"><Label htmlFor="interview-destination" className="flex items-center gap-2">{type === "video" ? <LinkIcon className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}{type === "video" ? "Video meeting link" : "Interview location"}</Label><Input id="interview-destination" type={type === "video" ? "url" : "text"} value={destination} onChange={event => setDestination(event.target.value)} placeholder={type === "video" ? "https://meet.example.com/..." : "Street address or office location"} /></div><div className="space-y-2"><Label htmlFor="interview-notes">Instructions (optional)</Label><Textarea id="interview-notes" value={notes} onChange={event => setNotes(event.target.value)} placeholder="Parking, check-in, what to bring, or other instructions" /></div><Button className="w-full" onClick={schedule} disabled={saving}>{saving ? "Scheduling…" : type === "video" ? "Send Interview Link" : "Schedule In-Person Interview"}</Button></div></DialogContent></Dialog>;
+  return <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (nextOpen) { setType(initialType); setDestination(""); } }}><DialogTrigger asChild><Button size="sm" variant="outline">{initialType === "video" ? <LinkIcon className="mr-2 h-4 w-4" /> : <MapPin className="mr-2 h-4 w-4" />}{initialType === "video" ? "Schedule online" : "Schedule in person"}</Button></DialogTrigger><DialogContent className="max-w-xl"><DialogHeader><DialogTitle>Schedule interview with {officerName}</DialogTitle><DialogDescription>Choose the interview format and send the officer all meeting details.</DialogDescription></DialogHeader><div className="space-y-5"><div className="space-y-2"><Label htmlFor="interview-type">Interview type</Label><select id="interview-type" className="h-11 w-full rounded-md border bg-background px-3" value={type} onChange={event => { setType(event.target.value as any); setDestination(""); }}><option value="video">Online/video interview</option><option value="in_person">In-person interview</option></select></div><div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="interview-date">Date</Label><Input id="interview-date" type="date" value={date} onChange={event => setDate(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="interview-time">Time</Label><Input id="interview-time" type="time" value={time} onChange={event => setTime(event.target.value)} /></div></div><div className="space-y-2"><Label htmlFor="interview-destination" className="flex items-center gap-2">{type === "video" ? <LinkIcon className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}{type === "video" ? "Video meeting link" : "Interview location"}</Label><Input id="interview-destination" type={type === "video" ? "url" : "text"} value={destination} onChange={event => setDestination(event.target.value)} placeholder={type === "video" ? "https://meet.example.com/..." : "Street address or office location"} /></div><div className="space-y-2"><Label htmlFor="interview-notes">Instructions (optional)</Label><Textarea id="interview-notes" value={notes} onChange={event => setNotes(event.target.value)} placeholder="Parking, check-in, what to bring, or other instructions" /></div><Button className="w-full" onClick={schedule} disabled={saving}>{saving ? "Scheduling…" : type === "video" ? "Send Interview Link" : "Schedule In-Person Interview"}</Button></div></DialogContent></Dialog>;
 }
