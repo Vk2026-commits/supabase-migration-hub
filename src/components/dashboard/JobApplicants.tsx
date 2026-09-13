@@ -108,14 +108,14 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const isPaidSubscriber = subscriptionTier === "professional" || subscriptionTier === "premium";
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-4">
         <div className="flex flex-wrap items-center gap-3"><CardTitle>Applicants</CardTitle>{applications.length > 0 && <Badge variant="secondary" className="rounded-full">{applications.length} total</Badge>}{unreadCount > 0 && <Badge className="rounded-full">{unreadCount} new message{unreadCount === 1 ? "" : "s"}</Badge>}</div>
         <CardDescription>
           Officers who have expressed interest in your positions
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 pb-4 sm:px-5 sm:pb-5">
         {!isPaidSubscriber && (
           <div className="mb-4 p-4 bg-muted rounded-lg">
             <div className="flex items-start gap-3 mb-3">
@@ -138,7 +138,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         )}
 
         {applications.length > 0 && <div className="mb-4 flex justify-end"><div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Applicant layout"><Button type="button" size="sm" variant={viewMode === "cards" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("cards")}><LayoutGrid className="mr-2 h-4 w-4" />Cards</Button><Button type="button" size="sm" variant={viewMode === "compact" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("compact")}><List className="mr-2 h-4 w-4" />Compact</Button></div></div>}
-        <div className={viewMode === "cards" ? "grid gap-4 xl:grid-cols-2" : "space-y-2"}>
+        <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"}>
           {applications.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               No applications yet. Post jobs to attract security officers.
@@ -147,43 +147,44 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
             applications.map((app) => {
               const onboarding = getOnboardingStatus(app.onboardingProgress);
               return (
-              <div key={app.id} className={`rounded-xl border bg-card ${viewMode === "cards" ? "p-4 shadow-sm" : "p-3"}`}>
-                <div className="flex justify-between items-start mb-2">
+              <div key={app.id} className={`rounded-xl border bg-card transition-shadow hover:shadow-md ${onboarding.percent === 100 ? "border-l-4 border-l-green-500" : app.status === "accepted" ? "border-l-4 border-l-blue-500" : "border-l-4 border-l-slate-300"} ${viewMode === "cards" ? "p-3" : "p-3 xl:grid xl:grid-cols-[minmax(240px,1fr)_minmax(230px,.8fr)_minmax(360px,auto)] xl:items-center xl:gap-4"}`}>
+                <div className={`flex justify-between items-start ${viewMode === "cards" ? "mb-1" : "mb-2 xl:mb-0"}`}>
                   <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold">
-                        {isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}
-                      </span>
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{app.officerName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase() || <User className="h-4 w-4" />}</span>
+                      <span className="font-semibold leading-tight">{isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 pl-10">
                       {isPaidSubscriber && app.officerPhone && (
-                        <a href={`tel:${app.officerPhone}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
-                          <Phone className="h-3.5 w-3.5" />
+                        <a href={`tel:${app.officerPhone}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
+                          <Phone className="h-3 w-3" />
                           {app.officerPhone}
                         </a>
                       )}
                       {isPaidSubscriber && app.officerEmail && (
-                        <a href={`mailto:${app.officerEmail}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
-                          <Mail className="h-3.5 w-3.5" />
+                        <a href={`mailto:${app.officerEmail}`} className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
+                          <Mail className="h-3 w-3 shrink-0" />
                           {app.officerEmail}
                         </a>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="pl-10 text-xs text-muted-foreground">
                       Applied to: {app.job_posting?.title}
                     </p>
                   </div>
-                  <Badge variant="secondary">{app.status}</Badge>
+                  <Badge variant="secondary" className="ml-2 shrink-0 text-[10px] capitalize">{String(app.status || "new").replace(/_/g, " ")}</Badge>
                 </div>
 
-                {app.status === "accepted" && <div className={`mt-3 rounded-lg border ${viewMode === "cards" ? "p-3" : "p-2.5"} ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
-                  <div className="flex items-start justify-between gap-3"><div className="flex items-start gap-2"><ClipboardCheck className={`mt-0.5 h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div><strong className="block text-sm">{onboarding.label}</strong><span className="text-xs text-muted-foreground">{onboarding.detail}</span></div></div><Badge variant="outline" className="shrink-0 bg-background">{onboarding.percent}%</Badge></div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
+                {app.status === "accepted" && <div className={`rounded-lg border px-2.5 py-2 ${viewMode === "cards" ? "mt-2" : "mb-2 xl:mb-0"} ${onboarding.percent === 100 ? "border-green-200 bg-green-50/70" : "border-blue-200 bg-blue-50/60"}`}>
+                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><ClipboardCheck className={`h-3.5 w-3.5 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div className="min-w-0"><strong className="block truncate text-xs">{onboarding.label}</strong><span className="block truncate text-[11px] text-muted-foreground">{onboarding.detail}</span></div></div><span className="shrink-0 text-xs font-semibold">{onboarding.percent}%</span></div>
+                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
                 </div>}
 
                 {isPaidSubscriber ? (
-                  <div className={viewMode === "cards" ? "mt-3 grid grid-cols-2 gap-2" : "mt-3 flex flex-wrap gap-2"}>
+                  <div className={viewMode === "cards" ? "mt-2 grid grid-cols-2 gap-1.5" : "mt-2 flex flex-wrap gap-1.5 xl:mt-0 xl:justify-end"}>
                     <Button 
                       size="sm"
+                      className="h-8 px-2 text-xs"
                       onClick={() => setReviewApplication(app)}
                     >
                       Review Application
@@ -191,6 +192,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                     <Button 
                       size="sm" 
                       variant="outline"
+                      className="h-8 px-2 text-xs"
                       onClick={() => {
                         setSelectedOfficer({
                           id: app.officer.id,
@@ -201,7 +203,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         setChatOpen(true);
                       }}
                     >
-                      <MessageCircle className="h-3 w-3 mr-2" />
+                      <MessageCircle className="mr-1.5 h-3 w-3" />
                       Chat
                     </Button>
                     <InterviewScheduler
@@ -215,8 +217,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       onChanged={loadApplications}
                     />
                     {app.status === "accepted" && app.onboardingProgress?.packet_id && (
-                      <Button size="sm" variant="outline" onClick={() => setOnboardingApplication(app)}>
-                        <FileCheck2 className="mr-2 h-4 w-4" />
+                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setOnboardingApplication(app)}>
+                        <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
                         View onboarding
                       </Button>
                     )}
@@ -231,7 +233,6 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         onChanged={loadApplications}
                       />
                     )}
-                    {app.status === "accepted" && <div className="col-span-full flex flex-wrap gap-2 pt-1"><Badge className="bg-green-600">Offer accepted</Badge><Badge variant="outline" className="border-green-300 bg-green-50 text-green-800">Onboarding packet sent</Badge></div>}
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" disabled className="mt-3">
