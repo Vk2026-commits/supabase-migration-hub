@@ -83,6 +83,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
   const [employeeOnboardingSubmitted, setEmployeeOnboardingSubmitted] = useState(false);
   const [completedOnboardingRecord, setCompletedOnboardingRecord] = useState<any>(null);
+  const [employmentConfirmedAt, setEmploymentConfirmedAt] = useState<string | null>(null);
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
@@ -228,7 +229,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           (supabase as any).from("guard_hiring_applications").select("status").eq("officer_id", data.id).eq("application_type", "master").maybeSingle(),
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-          supabase.from("hires").select("id,hiring_application_id,offer_prepared_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("hires").select("id,hiring_application_id,offer_prepared_at,employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("interview_schedules").select("*,company:company_profiles(company_name),job_application:job_applications(job_posting:job_postings(title))").eq("officer_id", data.id).eq("status", "scheduled").gte("scheduled_at", new Date().toISOString()).order("scheduled_at", { ascending: true }).limit(1).maybeSingle(),
@@ -242,6 +243,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setApplicationSubmitted(applicationResult.data?.status === "submitted");
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
+        setEmploymentConfirmedAt((preparedOfferResult.data as any)?.employment_confirmed_at || null);
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
@@ -485,18 +487,18 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
             {onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
-              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background px-5 py-4 shadow-sm sm:flex-row sm:items-center">
+              <div className={`mb-6 flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-sm sm:flex-row sm:items-center ${employmentConfirmedAt ? "border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background" : "border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background"}`}>
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Onboarding submitted</p>
-                  <h2 className="mt-0.5 text-lg font-bold text-foreground">Your onboarding packet was submitted to {completedCompanyName}</h2>
+                  <p className={`text-xs font-bold uppercase tracking-[0.14em] ${employmentConfirmedAt ? "text-green-700" : "text-primary"}`}>{employmentConfirmedAt ? "Employment confirmed" : "Onboarding submitted"}</p>
+                  <h2 className="mt-0.5 text-lg font-bold text-foreground">{employmentConfirmedAt ? `Congratulations—${completedCompanyName} has confirmed your hire!` : `Your onboarding packet was submitted to ${completedCompanyName}`}</h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    Submitted{completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. Next, {completedCompanyName} will complete the required background check and drug screening before making a final hiring decision. You can continue updating your professional profile from the sidebar.
+                    {employmentConfirmedAt ? `Confirmed on ${new Date(employmentConfirmedAt).toLocaleDateString()}. You can continue updating your professional profile from the sidebar.` : `Submitted${completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. Next, ${completedCompanyName} will complete the required background check and drug screening before making a final hiring decision. You can continue updating your professional profile from the sidebar.`}
                   </p>
                 </div>
-                <span className="w-fit shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Screening pending</span>
+                <span className={`w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${employmentConfirmedAt ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{employmentConfirmedAt ? "Hired" : "Screening pending"}</span>
               </div>
             )}
 

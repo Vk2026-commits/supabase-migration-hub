@@ -718,6 +718,8 @@ export type Database = {
         Row: {
           company_id: string;
           created_at: string | null;
+          employment_confirmed_at: string | null;
+          employment_confirmed_by: string | null;
           hire_date: string;
           hired_by_user_id: string;
           id: string;
@@ -733,6 +735,8 @@ export type Database = {
         Insert: {
           company_id: string;
           created_at?: string | null;
+          employment_confirmed_at?: string | null;
+          employment_confirmed_by?: string | null;
           hire_date: string;
           hired_by_user_id: string;
           id?: string;
@@ -748,6 +752,8 @@ export type Database = {
         Update: {
           company_id?: string;
           created_at?: string | null;
+          employment_confirmed_at?: string | null;
+          employment_confirmed_by?: string | null;
           hire_date?: string;
           hired_by_user_id?: string;
           id?: string;

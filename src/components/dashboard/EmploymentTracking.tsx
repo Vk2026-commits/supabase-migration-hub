@@ -47,6 +47,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
           employment_updates(*)
         `)
         .eq("company_id", companyId)
+        .not("employment_confirmed_at", "is", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
