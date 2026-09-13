@@ -479,7 +479,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               Welcome, {profile?.full_name || profile?.email}
             </h1>
 
-            {guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
+            {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
             {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Upcoming interview</p><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company?.company_name || "Company"} — {upcomingInterview.job_application?.job_posting?.title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p></div><Button type="button" onClick={addInterviewToCalendar}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button></CardContent></Card>}
 
