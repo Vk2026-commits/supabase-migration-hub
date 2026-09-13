@@ -485,19 +485,18 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
             {onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
-              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background px-5 py-4 shadow-sm sm:flex-row sm:items-center">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-600 text-white shadow-sm">
+              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background px-5 py-4 shadow-sm sm:flex-row sm:items-center">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-green-700">Onboarding complete</p>
-                  <h2 className="mt-0.5 text-lg font-bold text-foreground">Congratulations—you’ve been hired by {completedCompanyName}!</h2>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Onboarding submitted</p>
+                  <h2 className="mt-0.5 text-lg font-bold text-foreground">Your onboarding packet was submitted to {completedCompanyName}</h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    Your completed onboarding packet was submitted to {completedCompanyName}
-                    {completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. You can continue updating your professional profile from the sidebar.
+                    Submitted{completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. Next, {completedCompanyName} will complete the required background check and drug screening before making a final hiring decision. You can continue updating your professional profile from the sidebar.
                   </p>
                 </div>
-                <span className="w-fit shrink-0 rounded-full border border-green-200 bg-white/80 px-3 py-1 text-xs font-semibold text-green-700">Submitted</span>
+                <span className="w-fit shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Screening pending</span>
               </div>
             )}
 
