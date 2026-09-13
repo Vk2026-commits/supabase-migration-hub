@@ -178,7 +178,18 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  IF OLD.employment_confirmed_at IS NOT NULL
+    AND NEW.employment_confirmed_at IS DISTINCT FROM OLD.employment_confirmed_at THEN
+    RAISE EXCEPTION 'A confirmed hire cannot be unconfirmed or redated';
+  END IF;
+
   IF OLD.employment_confirmed_at IS NULL AND NEW.employment_confirmed_at IS NOT NULL THEN
+    IF NOT public.company_team_has_access(
+      OLD.company_id,
+      ARRAY['owner', 'admin', 'hiring_manager']::public.company_member_role[]
+    ) AND NOT public.has_role(auth.uid(), 'admin'::public.app_role) THEN
+      RAISE EXCEPTION 'You are not authorized to confirm this hire';
+    END IF;
     IF NOT EXISTS (
       SELECT 1 FROM public.officer_onboarding_packets AS packet
       WHERE packet.hire_id = NEW.id AND packet.status = 'submitted'
