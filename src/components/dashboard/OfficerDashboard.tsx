@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -89,6 +90,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
   const [acceptedEmploymentOffer, setAcceptedEmploymentOffer] = useState<any>(null);
   const [upcomingInterview, setUpcomingInterview] = useState<any>(null);
+  const [interviewResponding, setInterviewResponding] = useState(false);
   const [showOfferPrompt, setShowOfferPrompt] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
@@ -433,6 +435,21 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     const link = document.createElement("a"); link.href = url; link.download = "we-find-guards-interview.ics"; link.click(); URL.revokeObjectURL(url);
   };
 
+  const respondToInterview = async (response: "accepted" | "declined") => {
+    if (!upcomingInterview?.id) return;
+    setInterviewResponding(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("respond_to_interview", { _interview_id: upcomingInterview.id, _response: response });
+      if (error) throw error;
+      setUpcomingInterview((current: any) => ({ ...current, response_status: data?.response_status || response, responded_at: data?.responded_at || new Date().toISOString() }));
+      toast.success(response === "accepted" ? "Interview accepted" : "Interview declined");
+    } catch (error: any) {
+      toast.error(error?.message || "Your response could not be saved");
+    } finally {
+      setInterviewResponding(false);
+    }
+  };
+
   const handleTabChange = (tab: string) => {
     if (tab === "employee-onboarding" && onboardingOfferLoaded && !onboardingOfferAvailable) {
       toast.info("Employee onboarding will unlock after a company sends you a completed offer");
@@ -502,7 +519,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               </div>
             )}
 
-            {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Upcoming interview</p><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company?.company_name || "Company"} — {upcomingInterview.job_application?.job_posting?.title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p></div><Button type="button" onClick={addInterviewToCalendar}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button></CardContent></Card>}
+            {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold uppercase tracking-wide text-primary">Interview request</p><Badge variant={upcomingInterview.response_status === "accepted" ? "default" : "secondary"}>{upcomingInterview.response_status === "accepted" ? "Accepted" : upcomingInterview.response_status === "declined" ? "Declined" : "Response needed"}</Badge></div><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company?.company_name || "Company"} — {upcomingInterview.job_application?.job_posting?.title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p></div><div className="flex flex-wrap gap-2">{(!upcomingInterview.response_status || upcomingInterview.response_status === "pending") && <><Button type="button" onClick={() => void respondToInterview("accepted")} disabled={interviewResponding}>Accept interview</Button><Button type="button" variant="outline" onClick={() => void respondToInterview("declined")} disabled={interviewResponding}>Decline</Button></>}{upcomingInterview.response_status === "accepted" && <Button type="button" onClick={addInterviewToCalendar}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button>}</div></CardContent></Card>}
 
             {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">

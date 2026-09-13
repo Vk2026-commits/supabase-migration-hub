@@ -64,7 +64,14 @@ const destinationFor = (workflow: Workflow) => {
     case "application_submitted_officer":
       return "/dashboard?tab=hiring-application";
     case "application_submitted_company":
+    case "interview_response_company":
+    case "offer_response_company":
       return "/dashboard?tab=applicants";
+    case "interview_scheduled_officer":
+    case "interview_updated_officer":
+    case "interview_cancelled_officer":
+    case "hire_confirmed_officer":
+      return "/dashboard";
     case "offer_action":
     case "onboarding_action":
     case "onboarding_submitted_officer":
@@ -82,6 +89,10 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
   const companyName = html(context.company_name || "your hiring company");
   const position = html(context.position || "Security Officer");
   const deadline = html(context.acceptance_deadline || "");
+  const scheduledAt = clean(context.scheduled_at)
+    ? html(new Date(String(context.scheduled_at)).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short", timeZone: "America/Chicago" }))
+    : "the scheduled time";
+  const response = clean(context.response);
 
   switch (workflow.kind) {
     case "application_reminder":
@@ -120,6 +131,34 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         cta: "Review applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
+    case "interview_scheduled_officer":
+    case "interview_updated_officer":
+      return {
+        subject: `${workflow.kind === "interview_updated_officer" ? "Updated: " : ""}Interview request from ${clean(context.company_name) || "a hiring company"}`,
+        eyebrow: workflow.kind === "interview_updated_officer" ? "Interview updated" : "Interview request",
+        title: workflow.kind === "interview_updated_officer" ? "Your interview details changed" : "You have an interview request",
+        paragraphs: [`Hi ${officerName}, ${companyName} would like to interview you for ${position} on ${scheduledAt}.`, "Open your dashboard to review the details and accept or decline the request."],
+        cta: "Review interview",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
+    case "interview_cancelled_officer":
+      return {
+        subject: `Interview canceled by ${clean(context.company_name) || "a hiring company"}`,
+        eyebrow: "Interview update",
+        title: "Your interview was canceled",
+        paragraphs: [`Hi ${officerName}, ${companyName} canceled the interview for ${position} that was scheduled for ${scheduledAt}.`, "Open your account or contact the company if you have questions."],
+        cta: "Open dashboard",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
+    case "interview_response_company":
+      return {
+        subject: `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} the interview request`,
+        eyebrow: "Interview response",
+        title: `Interview ${response === "accepted" ? "accepted" : "declined"}`,
+        paragraphs: [`${officerName} ${response === "accepted" ? "accepted" : "declined"} the interview request for ${position}.`, "Open Applicants to review the candidate and decide the next step."],
+        cta: "View applicant",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
     case "offer_action":
       return {
         subject: `You have a new employment offer from ${clean(context.company_name) || "a hiring company"}`,
@@ -133,6 +172,15 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         ],
         cta: "Review offer",
         note: "For your protection, this secure link works once. A daily reminder replaces any earlier offer link until you respond.",
+      };
+    case "offer_response_company":
+      return {
+        subject: `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} your offer`,
+        eyebrow: "Offer response",
+        title: `Employment offer ${response === "accepted" ? "accepted" : "declined"}`,
+        paragraphs: [`${officerName} ${response === "accepted" ? "accepted" : "declined"} the offer from ${companyName} for ${position}.`, response === "accepted" ? "The officer can now complete the onboarding packet." : "Open Applicants to review the record and determine any follow-up."],
+        cta: "View applicant",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
     case "onboarding_action":
       return {
@@ -168,6 +216,15 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
           "Open the Hired page to review the onboarding status and authorized records.",
         ],
         cta: "View onboarding status",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
+    case "hire_confirmed_officer":
+      return {
+        subject: `${clean(context.company_name) || "A hiring company"} confirmed your employment`,
+        eyebrow: "Employment confirmed",
+        title: "Congratulations—your hire is confirmed",
+        paragraphs: [`Hi ${officerName}, ${companyName} confirmed your employment for the ${position} position.`, "The company will contact you with any remaining first-day instructions."],
+        cta: "View status",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
     default:
