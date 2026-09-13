@@ -169,7 +169,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
               const nextStep = getNextStep(app, onboarding);
               return (
               <div key={app.id} className={`rounded-xl border bg-card transition-shadow hover:shadow-md ${onboarding.percent === 100 ? "border-l-4 border-l-green-500" : app.status === "accepted" ? "border-l-4 border-l-blue-500" : "border-l-4 border-l-slate-300"} ${viewMode === "cards" ? "p-3" : "p-3 xl:grid xl:grid-cols-[minmax(240px,1fr)_minmax(230px,.8fr)_minmax(360px,auto)] xl:items-center xl:gap-4"}`}>
-                <div className={`flex justify-between items-start ${viewMode === "cards" ? "mb-1" : "mb-2 xl:mb-0"}`}>
+                <div className={viewMode === "cards" ? "mb-1" : "mb-2 xl:mb-0"}>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{app.officerName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase() || <User className="h-4 w-4" />}</span>
@@ -192,8 +192,11 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                     <p className="pl-10 text-xs text-muted-foreground">
                       Applied to: {app.job_posting?.title}
                     </p>
+                    <div className={`ml-10 mt-2 inline-flex max-w-[calc(100%-2.5rem)] items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] leading-tight ${nextStep.tone}`}>
+                      <span className="shrink-0 font-semibold uppercase tracking-wide opacity-70">What happens next</span>
+                      <span className="font-semibold">{nextStep.label.replace(/^Next:\s*/, "")}</span>
+                    </div>
                   </div>
-                  <Badge variant="outline" className={`ml-2 max-w-40 shrink-0 whitespace-normal text-right text-[10px] leading-tight ${nextStep.tone}`}>{nextStep.label}</Badge>
                 </div>
 
                 {app.status === "accepted" && <div className={`rounded-lg border px-2.5 py-2 ${viewMode === "cards" ? "mt-2" : "mb-2 xl:mb-0"} ${onboarding.percent === 100 ? "border-green-200 bg-green-50/70" : "border-blue-200 bg-blue-50/60"}`}>
