@@ -25,6 +25,26 @@ const getOnboardingStatus = (progress: any) => {
   return { label: `Onboarding: step ${step + 1} of 8`, detail: onboardingSteps[step], percent: Math.round(((step + 1) / 8) * 100) };
 };
 
+const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus>) => {
+  if (app.status === "accepted") {
+    if (onboarding.percent === 100) return { label: "Next: Review onboarding", tone: "border-green-300 bg-green-50 text-green-800" };
+    if (onboarding.percent === 0) return { label: "Next: Officer starts onboarding", tone: "border-blue-300 bg-blue-50 text-blue-800" };
+    return { label: `Officer completing: ${onboarding.detail}`, tone: "border-blue-300 bg-blue-50 text-blue-800" };
+  }
+
+  const steps: Record<string, { label: string; tone: string }> = {
+    interested: { label: "Next: Review application", tone: "border-amber-300 bg-amber-50 text-amber-800" },
+    submitted: { label: "Next: Review application", tone: "border-amber-300 bg-amber-50 text-amber-800" },
+    reviewed: { label: "Next: Schedule interview", tone: "border-blue-300 bg-blue-50 text-blue-800" },
+    interview_scheduled: { label: "Next: Complete interview", tone: "border-violet-300 bg-violet-50 text-violet-800" },
+    interview_completed: { label: "Next: Send offer", tone: "border-blue-300 bg-blue-50 text-blue-800" },
+    offer_sent: { label: "Waiting for offer response", tone: "border-amber-300 bg-amber-50 text-amber-800" },
+    offer_expired: { label: "Next: Resend or revise offer", tone: "border-red-300 bg-red-50 text-red-800" },
+    declined: { label: "Offer declined", tone: "border-slate-300 bg-slate-50 text-slate-700" },
+  };
+  return steps[String(app.status || "")] || { label: "Next: Review application", tone: "border-amber-300 bg-amber-50 text-amber-800" };
+};
+
 const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions }: JobApplicantsProps) => {
   const [applications, setApplications] = useState<any[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
@@ -146,6 +166,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           ) : (
             applications.map((app) => {
               const onboarding = getOnboardingStatus(app.onboardingProgress);
+              const nextStep = getNextStep(app, onboarding);
               return (
               <div key={app.id} className={`rounded-xl border bg-card transition-shadow hover:shadow-md ${onboarding.percent === 100 ? "border-l-4 border-l-green-500" : app.status === "accepted" ? "border-l-4 border-l-blue-500" : "border-l-4 border-l-slate-300"} ${viewMode === "cards" ? "p-3" : "p-3 xl:grid xl:grid-cols-[minmax(240px,1fr)_minmax(230px,.8fr)_minmax(360px,auto)] xl:items-center xl:gap-4"}`}>
                 <div className={`flex justify-between items-start ${viewMode === "cards" ? "mb-1" : "mb-2 xl:mb-0"}`}>
@@ -172,7 +193,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       Applied to: {app.job_posting?.title}
                     </p>
                   </div>
-                  <Badge variant="secondary" className="ml-2 shrink-0 text-[10px] capitalize">{String(app.status || "new").replace(/_/g, " ")}</Badge>
+                  <Badge variant="outline" className={`ml-2 max-w-40 shrink-0 whitespace-normal text-right text-[10px] leading-tight ${nextStep.tone}`}>{nextStep.label}</Badge>
                 </div>
 
                 {app.status === "accepted" && <div className={`rounded-lg border px-2.5 py-2 ${viewMode === "cards" ? "mt-2" : "mb-2 xl:mb-0"} ${onboarding.percent === 100 ? "border-green-200 bg-green-50/70" : "border-blue-200 bg-blue-50/60"}`}>
