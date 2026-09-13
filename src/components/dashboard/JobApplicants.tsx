@@ -168,14 +168,17 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
               const onboarding = getOnboardingStatus(app.onboardingProgress);
               const nextStep = getNextStep(app, onboarding);
               return (
-              <div key={app.id} className={`rounded-xl border bg-card transition-shadow hover:shadow-md ${onboarding.percent === 100 ? "border-l-4 border-l-green-500" : app.status === "accepted" ? "border-l-4 border-l-blue-500" : "border-l-4 border-l-slate-300"} ${viewMode === "cards" ? "p-3" : "p-3 xl:grid xl:grid-cols-[minmax(240px,1fr)_minmax(230px,.8fr)_minmax(360px,auto)] xl:items-center xl:gap-4"}`}>
-                <div className={viewMode === "cards" ? "mb-1" : "mb-2 xl:mb-0"}>
+              <div key={app.id} className={`group rounded-xl border bg-card transition-all duration-200 hover:-translate-y-px hover:shadow-md ${viewMode === "cards" ? `p-4 ${onboarding.percent === 100 ? "border-t-2 border-t-green-500" : app.status === "accepted" ? "border-t-2 border-t-blue-500" : "border-t-2 border-t-slate-300"}` : "border-border/70 p-4 shadow-sm xl:grid xl:grid-cols-[minmax(250px,1.05fr)_minmax(270px,1fr)_minmax(350px,auto)] xl:items-center xl:gap-5"}`}>
+                <div className={viewMode === "cards" ? "mb-3" : "mb-3 min-w-0 xl:mb-0"}>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{app.officerName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase() || <User className="h-4 w-4" />}</span>
-                      <span className="font-semibold leading-tight">{isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}</span>
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 text-xs font-bold text-primary ring-1 ring-primary/10">{app.officerName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase() || <User className="h-4 w-4" />}</span>
+                      <div className="min-w-0">
+                        <span className="block truncate font-semibold leading-tight text-foreground">{isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}</span>
+                        <span className="mt-1 block truncate text-xs text-muted-foreground">{app.job_posting?.title || "Security Officer"}</span>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 pl-10">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 pl-12 pt-1">
                       {isPaidSubscriber && app.officerPhone && (
                         <a href={`tel:${app.officerPhone}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
                           <Phone className="h-3 w-3" />
@@ -189,26 +192,29 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         </a>
                       )}
                     </div>
-                    <p className="pl-10 text-xs text-muted-foreground">
-                      Applied to: {app.job_posting?.title}
-                    </p>
-                    <div className={`ml-10 mt-2 inline-flex max-w-[calc(100%-2.5rem)] items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] leading-tight ${nextStep.tone}`}>
-                      <span className="shrink-0 font-semibold uppercase tracking-wide opacity-70">What happens next</span>
-                      <span className="font-semibold">{nextStep.label.replace(/^Next:\s*/, "")}</span>
-                    </div>
                   </div>
                 </div>
 
-                {app.status === "accepted" && <div className={`rounded-lg border px-2.5 py-2 ${viewMode === "cards" ? "mt-2" : "mb-2 xl:mb-0"} ${onboarding.percent === 100 ? "border-green-200 bg-green-50/70" : "border-blue-200 bg-blue-50/60"}`}>
-                  <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><ClipboardCheck className={`h-3.5 w-3.5 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div className="min-w-0"><strong className="block truncate text-xs">{onboarding.label}</strong><span className="block truncate text-[11px] text-muted-foreground">{onboarding.detail}</span></div></div><span className="shrink-0 text-xs font-semibold">{onboarding.percent}%</span></div>
-                  <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
-                </div>}
+                <div className={viewMode === "cards" ? "space-y-2" : "mb-3 min-w-0 space-y-2 xl:mb-0"}>
+                  <div className={`rounded-lg border px-3 py-2.5 ${nextStep.tone}`}>
+                    <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                      What happens next
+                    </div>
+                    <p className="text-sm font-semibold leading-snug">{nextStep.label.replace(/^Next:\s*/, "")}</p>
+                  </div>
+
+                  {app.status === "accepted" && <div className={`rounded-lg border px-3 py-2.5 ${onboarding.percent === 100 ? "border-green-200 bg-green-50/60" : "border-blue-200 bg-blue-50/50"}`}>
+                    <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><ClipboardCheck className={`h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div className="min-w-0"><strong className="block truncate text-xs">{onboarding.label}</strong><span className="block truncate text-[11px] text-muted-foreground">{onboarding.detail}</span></div></div><span className="shrink-0 rounded-full bg-background/80 px-2 py-0.5 text-[11px] font-bold shadow-sm">{onboarding.percent}%</span></div>
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
+                  </div>}
+                </div>
 
                 {isPaidSubscriber ? (
-                  <div className={viewMode === "cards" ? "mt-2 grid grid-cols-2 gap-1.5" : "mt-2 flex flex-wrap gap-1.5 xl:mt-0 xl:justify-end"}>
+                  <div className={viewMode === "cards" ? "mt-3 grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2 xl:w-[350px]"}>
                     <Button 
                       size="sm"
-                      className="h-8 px-2 text-xs"
+                      className="h-9 px-3 text-xs shadow-sm"
                       onClick={() => setReviewApplication(app)}
                     >
                       Review Application
@@ -216,7 +222,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="h-8 px-2 text-xs"
+                      className="h-9 px-3 text-xs"
                       onClick={() => {
                         setSelectedOfficer({
                           id: app.officer.id,
@@ -241,7 +247,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       onChanged={loadApplications}
                     />
                     {app.status === "accepted" && app.onboardingProgress?.packet_id && (
-                      <Button size="sm" variant="outline" className="h-8 px-2 text-xs" onClick={() => setOnboardingApplication(app)}>
+                      <Button size="sm" variant="outline" className="h-9 px-3 text-xs" onClick={() => setOnboardingApplication(app)}>
                         <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
                         View onboarding
                       </Button>
