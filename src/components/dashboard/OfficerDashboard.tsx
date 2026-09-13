@@ -493,12 +493,12 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className={`text-xs font-bold uppercase tracking-[0.14em] ${employmentConfirmedAt ? "text-green-700" : "text-primary"}`}>{employmentConfirmedAt ? "Employment confirmed" : "Onboarding submitted"}</p>
-                  <h2 className="mt-0.5 text-lg font-bold text-foreground">{employmentConfirmedAt ? `Congratulations—${completedCompanyName} has confirmed your hire!` : `Your onboarding packet was submitted to ${completedCompanyName}`}</h2>
+                  <h2 className="mt-0.5 text-lg font-bold text-foreground">{employmentConfirmedAt ? `Congratulations—${completedCompanyName} has confirmed your hire!` : `Your part is complete—${completedCompanyName} will be in touch`}</h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    {employmentConfirmedAt ? `Confirmed on ${new Date(employmentConfirmedAt).toLocaleDateString()}. You can continue updating your professional profile from the sidebar.` : `Submitted${completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. Next, ${completedCompanyName} will complete the required background check and drug screening before making a final hiring decision. You can continue updating your professional profile from the sidebar.`}
+                    {employmentConfirmedAt ? `Confirmed on ${new Date(employmentConfirmedAt).toLocaleDateString()}. ${completedCompanyName} will contact you with any remaining pre-employment or first-day instructions.` : `Your onboarding packet was submitted${completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. No further action is needed from you right now. ${completedCompanyName} will review your packet, complete the required background check and drug screening, and contact you with an update.`}
                   </p>
                 </div>
-                <span className={`w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${employmentConfirmedAt ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{employmentConfirmedAt ? "Hired" : "Screening pending"}</span>
+                <span className={`w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${employmentConfirmedAt ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{employmentConfirmedAt ? "Hired" : "Awaiting company review"}</span>
               </div>
             )}
 
