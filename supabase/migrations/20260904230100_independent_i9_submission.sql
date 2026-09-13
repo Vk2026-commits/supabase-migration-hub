@@ -1,3 +1,4 @@
+-- Keep this migration version unique so remote migration history can record it.
 ALTER TABLE public.officer_onboarding_packets
   ADD COLUMN IF NOT EXISTS i9_submitted_at timestamptz;
 
