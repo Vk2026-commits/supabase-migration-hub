@@ -175,7 +175,7 @@ const Dashboard = () => {
         {profile?.role === "officer" ? (
           <OfficerDashboard
             userId={user.id}
-            initialTab={onboarding === "application" ? "hiring-application" : "profile"}
+            initialTab={onboarding === "application" ? "hiring-application" : "overview"}
           />
         ) : (
           <>

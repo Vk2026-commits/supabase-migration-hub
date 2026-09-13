@@ -33,7 +33,7 @@ interface OfficerDashboardProps {
   initialTab?: string;
 }
 
-const officerTabs = new Set(["hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "videos", "find-jobs", "messages"]);
+const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "videos", "find-jobs", "messages"]);
 
 const guidedSections: Record<string, { title: string; description: string; step: number }> = {
   profile: { title: "Your professional profile", description: "Keep your contact details and professional introduction current.", step: 2 },
@@ -64,7 +64,7 @@ const getPrivateFilePath = (value: string | null | undefined, bucket: string) =>
   return decodeURIComponent(path.split("?")[0]);
 };
 
-const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardProps) => {
+const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(requestedTab && officerTabs.has(requestedTab) ? requestedTab : initialTab);
@@ -82,6 +82,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
   const [videoInterviewCount, setVideoInterviewCount] = useState(0);
   const [applicationSubmitted, setApplicationSubmitted] = useState(false);
   const [employeeOnboardingSubmitted, setEmployeeOnboardingSubmitted] = useState(false);
+  const [completedOnboardingRecord, setCompletedOnboardingRecord] = useState<any>(null);
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
@@ -226,7 +227,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
           supabase.from("video_interviews").select("id", { count: 'exact', head: true }).eq("officer_id", data.id),
           (supabase as any).from("guard_hiring_applications").select("status").eq("officer_id", data.id).eq("application_type", "master").maybeSingle(),
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
-          (supabase as any).from("officer_onboarding_packets").select("status").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
@@ -240,6 +241,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
         setApplicationSubmitted(applicationResult.data?.status === "submitted");
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
+        setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
@@ -252,7 +254,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
         if (!choseInitialExperience.current) {
           choseInitialExperience.current = true;
-          if (!requestedTab && initialTab === "profile" && applicationResult.data?.status !== "submitted") selectTab("hiring-application");
+          if (!requestedTab && (initialTab === "overview" || initialTab === "profile") && applicationResult.data?.status !== "submitted") selectTab("hiring-application");
         }
       }
     }
@@ -414,6 +416,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
     { label: "Upload licenses or certificates (if applicable)", complete: certificationDocumentComplete, tab: "certifications", optional: true },
   ];
   const onboardingComplete = onboardingItems.filter((item) => !item.optional).every((item) => item.complete);
+  const completedCompanyName = completedOnboardingRecord?.company_name || "your hiring company";
 
   const addInterviewToCalendar = () => {
     if (!upcomingInterview) return;
@@ -481,6 +484,23 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
 
             {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
+            {onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
+              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background px-5 py-4 shadow-sm sm:flex-row sm:items-center">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-green-600 text-white shadow-sm">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-green-700">Onboarding complete</p>
+                  <h2 className="mt-0.5 text-lg font-bold text-foreground">Congratulations—you’ve been hired by {completedCompanyName}!</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Your completed onboarding packet was submitted to {completedCompanyName}
+                    {completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. You can continue updating your professional profile from the sidebar.
+                  </p>
+                </div>
+                <span className="w-fit shrink-0 rounded-full border border-green-200 bg-white/80 px-3 py-1 text-xs font-semibold text-green-700">Submitted</span>
+              </div>
+            )}
+
             {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-primary">Upcoming interview</p><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company?.company_name || "Company"} — {upcomingInterview.job_application?.job_posting?.title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p></div><Button type="button" onClick={addInterviewToCalendar}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button></CardContent></Card>}
 
             {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
@@ -490,7 +510,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
               </Card>
             )}
 
-            {activeTab === "profile" && (
+            {activeTab === "profile" && !onboardingComplete && (
               <Alert className="mb-6 border-primary/20 bg-primary/5">
                 <Info className="h-4 w-4 text-primary" />
                 <AlertDescription className="text-sm">
@@ -502,7 +522,7 @@ const OfficerDashboard = ({ userId, initialTab = "profile" }: OfficerDashboardPr
             )}
 
           <div className={`${activeTab === "employee-onboarding" ? "w-full max-w-none" : "mx-auto max-w-6xl"} space-y-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12`}>
-            {activeTab === "profile" && (
+            {activeTab === "overview" && (
               <div className="grid md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
