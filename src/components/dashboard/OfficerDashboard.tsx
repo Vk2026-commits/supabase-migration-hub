@@ -719,7 +719,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               </CardContent>
             </Card>}
 
-            {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
+            {!employmentConfirmedAt && !onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">
                 <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="h-5 w-5 text-primary" />Finish your onboarding</CardTitle><CardDescription>You can use the dashboard now. Complete these items so employers can review your profile.</CardDescription></CardHeader>
                 <CardContent className="grid gap-2 sm:grid-cols-2">{onboardingItems.map((item) => <button key={item.label} type="button" disabled={item.locked} onClick={() => handleTabChange(item.tab)} className="flex items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70">{item.locked ? <LockKeyhole className="h-5 w-5 shrink-0 text-amber-600" /> : item.complete ? <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" /> : <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />}<span className={item.complete ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{item.label}</span></button>)}</CardContent>
@@ -1264,7 +1264,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                   ) : (
                     <div className="grid gap-3">
                       {interviewHistory.map((interview) => {
-                        const responseLabel = interview.status === "cancelled" ? "Canceled" : interview.response_status === "declined" ? "Declined" : interview.attendance_status === "attended" ? "Attended" : interview.attendance_status === "no_show" ? "No-show" : interview.response_status === "accepted" ? "Awaiting company confirmation" : "No response recorded";
+                        const confirmedCompany = String(completedOnboardingRecord?.company_name || "").trim().toLocaleLowerCase();
+                        const interviewCompany = String(interview.company_name || "").trim().toLocaleLowerCase();
+                        const resultedInConfirmedHire = Boolean(
+                          employmentConfirmedAt &&
+                          confirmedCompany &&
+                          interviewCompany === confirmedCompany
+                        );
+                        const responseLabel = interview.status === "cancelled" ? "Canceled" : interview.response_status === "declined" ? "Declined" : interview.attendance_status === "no_show" ? "No-show" : resultedInConfirmedHire ? "Completed — hired" : interview.attendance_status === "attended" ? "Attended" : interview.response_status === "accepted" ? "Awaiting company confirmation" : "No response recorded";
                         return <div key={interview.id} className="rounded-xl border bg-card p-4 shadow-sm">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
@@ -1272,7 +1279,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                               <p className="mt-1 text-sm text-muted-foreground">{new Date(interview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p>
                               <p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4 shrink-0" />{interview.interview_type === "video" ? "Online interview" : interview.location || "In-person interview"}</p>
                             </div>
-                            <Badge variant={responseLabel === "Attended" ? "default" : responseLabel === "No-show" ? "destructive" : "secondary"}>{responseLabel}</Badge>
+                            <Badge variant={responseLabel === "Attended" || responseLabel === "Completed — hired" ? "default" : responseLabel === "No-show" ? "destructive" : "secondary"}>{responseLabel}</Badge>
                           </div>
                         </div>;
                       })}
