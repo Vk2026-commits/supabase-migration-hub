@@ -148,7 +148,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       ) || hiringApplications[0];
       const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
       const applicationSnapshot = hiringApplications[0]?.application_data || {};
-      const hireId = hireByApplication.get(app.id);
+      const hireId = (hireByApplication.get(app.id) as string) || "";
       const screeningChecks = screeningByHire.get(hireId) || [];
       return {
         ...app,

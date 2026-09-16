@@ -11,11 +11,14 @@ import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
 
 type AccountProfile = {
   role?: string | null;
+  full_name?: string | null;
 };
 
 type CompanyProfile = {
   trial_end_date?: string | null;
   subscription_tier?: string | null;
+  company_name?: string | null;
+  company_phone?: string | null;
   [key: string]: unknown;
 };
 

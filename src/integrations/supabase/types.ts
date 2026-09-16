@@ -1081,6 +1081,85 @@ export type Database = {
           },
         ];
       };
+      officer_onboarding_packets: {
+        Row: {
+          company_name: string;
+          created_at: string;
+          current_step: number;
+          form_data: Json;
+          i9_document_path: string | null;
+          i9_submitted_at: string | null;
+          hiring_application_id: string | null;
+          id: string;
+          officer_id: string;
+          signature_date: string | null;
+          signature_name: string | null;
+          status: string;
+          submitted_at: string | null;
+          updated_at: string;
+          user_id: string;
+          w4_document_path: string | null;
+        };
+        Insert: {
+          company_name?: string;
+          created_at?: string;
+          current_step?: number;
+          form_data?: Json;
+          i9_document_path?: string | null;
+          i9_submitted_at?: string | null;
+          hiring_application_id?: string | null;
+          id?: string;
+          officer_id: string;
+          signature_date?: string | null;
+          signature_name?: string | null;
+          status?: string;
+          submitted_at?: string | null;
+          updated_at?: string;
+          user_id: string;
+          w4_document_path?: string | null;
+        };
+        Update: {
+          company_name?: string;
+          created_at?: string;
+          current_step?: number;
+          form_data?: Json;
+          i9_document_path?: string | null;
+          i9_submitted_at?: string | null;
+          hiring_application_id?: string | null;
+          id?: string;
+          officer_id?: string;
+          signature_date?: string | null;
+          signature_name?: string | null;
+          status?: string;
+          submitted_at?: string | null;
+          updated_at?: string;
+          user_id?: string;
+          w4_document_path?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "officer_onboarding_packets_hiring_application_id_fkey";
+            columns: ["hiring_application_id"];
+            isOneToOne: false;
+            referencedRelation: "guard_hiring_applications";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "officer_onboarding_packets_officer_id_fkey";
+            columns: ["officer_id"];
+            isOneToOne: false;
+            referencedRelation: "officer_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "officer_onboarding_packets_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       officer_profiles: {
         Row: {
           account_status: string | null;

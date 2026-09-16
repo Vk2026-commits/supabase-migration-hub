@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 const messageFromError = async (error: unknown) => {
   const context =
     error && typeof error === "object" && "context" in error
-      ? (error as { context?: unknown }).context
+      ? ((error as { context?: unknown }).context as { clone?: () => Response } | null)
       : null;
   if (context && typeof context.clone === "function") {
     try {
