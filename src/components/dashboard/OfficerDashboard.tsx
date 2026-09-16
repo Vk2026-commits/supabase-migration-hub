@@ -93,6 +93,11 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [interviewHistory, setInterviewHistory] = useState<any[]>([]);
   const [interviewResponding, setInterviewResponding] = useState(false);
   const [showCalendarOptions, setShowCalendarOptions] = useState(false);
+  const [showInterviewChange, setShowInterviewChange] = useState(false);
+  const [interviewChangeType, setInterviewChangeType] = useState<"reschedule" | "cancel">("reschedule");
+  const [interviewChangeDate, setInterviewChangeDate] = useState("");
+  const [interviewChangeTime, setInterviewChangeTime] = useState("");
+  const [interviewChangeReason, setInterviewChangeReason] = useState("");
   const [showOfferPrompt, setShowOfferPrompt] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
@@ -487,6 +492,86 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     }
   };
 
+  const respondToInterviewChange = async (decision: "accepted" | "declined") => {
+    if (!upcomingInterview?.id) return;
+    setInterviewResponding(true);
+    try {
+      const { error } = await (supabase as any).rpc("respond_to_interview_change", {
+        _interview_id: upcomingInterview.id,
+        _decision: decision,
+      });
+      if (error) throw error;
+      toast.success(decision === "accepted" ? "The new interview time is confirmed" : "The current interview time was kept");
+      await loadProfile();
+    } catch (error: any) {
+      toast.error(error?.message || "Your response could not be saved");
+    } finally {
+      setInterviewResponding(false);
+    }
+  };
+
+  const openInterviewChange = (type: "reschedule" | "cancel") => {
+    setInterviewChangeType(type);
+    setInterviewChangeReason("");
+    if (upcomingInterview?.scheduled_at) {
+      const scheduled = new Date(upcomingInterview.scheduled_at);
+      setInterviewChangeDate(`${scheduled.getFullYear()}-${String(scheduled.getMonth() + 1).padStart(2, "0")}-${String(scheduled.getDate()).padStart(2, "0")}`);
+      setInterviewChangeTime(`${String(scheduled.getHours()).padStart(2, "0")}:${String(scheduled.getMinutes()).padStart(2, "0")}`);
+    }
+    setShowInterviewChange(true);
+  };
+
+  const requestInterviewChange = async () => {
+    if (!upcomingInterview?.id || !interviewChangeReason.trim()) {
+      toast.error("Add a reason for this change");
+      return;
+    }
+    let proposedAt: string | null = null;
+    if (interviewChangeType === "reschedule") {
+      const proposed = new Date(`${interviewChangeDate}T${interviewChangeTime}`);
+      if (Number.isNaN(proposed.getTime()) || proposed <= new Date()) {
+        toast.error("Choose a future date and time");
+        return;
+      }
+      proposedAt = proposed.toISOString();
+    }
+    setInterviewResponding(true);
+    try {
+      const { error } = await (supabase as any).rpc("request_interview_change", {
+        _interview_id: upcomingInterview.id,
+        _request_type: interviewChangeType,
+        _reason: interviewChangeReason.trim(),
+        _proposed_scheduled_at: proposedAt,
+        _proposed_interview_type: interviewChangeType === "reschedule" ? upcomingInterview.interview_type : null,
+        _proposed_location: interviewChangeType === "reschedule" ? upcomingInterview.location : null,
+        _proposed_meeting_url: interviewChangeType === "reschedule" ? upcomingInterview.meeting_url : null,
+      });
+      if (error) throw error;
+      toast.success(interviewChangeType === "cancel" ? "Interview canceled and the company was notified" : "Reschedule request sent to the company");
+      setShowInterviewChange(false);
+      await loadProfile();
+    } catch (error: any) {
+      toast.error(error?.message || "The interview change could not be sent");
+    } finally {
+      setInterviewResponding(false);
+    }
+  };
+
+  const dismissInterviewCancellation = async () => {
+    if (!upcomingInterview?.id) return;
+    setInterviewResponding(true);
+    try {
+      const { error } = await (supabase as any).rpc("dismiss_interview_notice", { _interview_id: upcomingInterview.id });
+      if (error) throw error;
+      setUpcomingInterview(null);
+      toast.success("Cancellation notice dismissed");
+    } catch (error: any) {
+      toast.error(error?.message || "The notice could not be dismissed");
+    } finally {
+      setInterviewResponding(false);
+    }
+  };
+
   const handleTabChange = (tab: string) => {
     if (tab === "employee-onboarding" && onboardingOfferLoaded && !onboardingOfferAvailable) {
       toast.info("Employee onboarding will unlock after a company sends you a completed offer");
@@ -534,6 +619,26 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             </div>
           </DialogContent>
         </Dialog>
+        <Dialog open={showInterviewChange} onOpenChange={setShowInterviewChange}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <DialogTitle>{interviewChangeType === "cancel" ? "Cancel interview" : "Request a different time"}</DialogTitle>
+              <DialogDescription>
+                {interviewChangeType === "cancel"
+                  ? `${upcomingInterview?.company_name || "The company"} will be notified immediately.`
+                  : `${upcomingInterview?.company_name || "The company"} must accept your proposed time before the confirmed appointment changes.`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {interviewChangeType === "reschedule" && <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2"><Label htmlFor="officer-reschedule-date">Proposed date</Label><Input id="officer-reschedule-date" type="date" value={interviewChangeDate} onChange={(event) => setInterviewChangeDate(event.target.value)} /></div>
+                <div className="space-y-2"><Label htmlFor="officer-reschedule-time">Proposed time</Label><select id="officer-reschedule-time" className="h-12 w-full rounded-md border bg-background px-3" value={interviewChangeTime} onChange={(event) => setInterviewChangeTime(event.target.value)}>{Array.from({ length: 96 }, (_, index) => { const hour = Math.floor(index / 4); const minute = (index % 4) * 15; const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`; const label = new Date(2000, 0, 1, hour, minute).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); return <option key={value} value={value}>{label}</option>; })}</select></div>
+              </div>}
+              <div className="space-y-2"><Label htmlFor="officer-change-reason">Reason *</Label><Textarea id="officer-change-reason" value={interviewChangeReason} onChange={(event) => setInterviewChangeReason(event.target.value)} placeholder={interviewChangeType === "cancel" ? "Why are you canceling?" : "Why do you need a different time?"} /></div>
+            </div>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setShowInterviewChange(false)}>Keep interview</Button><Button type="button" variant={interviewChangeType === "cancel" ? "destructive" : "default"} onClick={() => void requestInterviewChange()} disabled={interviewResponding}>{interviewResponding ? "Sending…" : interviewChangeType === "cancel" ? "Cancel interview" : "Send request"}</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
         <OfficerSidebar 
           activeTab={activeTab} 
           onTabChange={handleTabChange}
@@ -569,7 +674,27 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               </div>
             )}
 
-            {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold uppercase tracking-wide text-primary">Interview request</p><Badge variant={upcomingInterview.response_status === "accepted" ? "default" : "secondary"}>{upcomingInterview.response_status === "accepted" ? "Confirmed" : upcomingInterview.response_status === "declined" ? "Declined" : "Response needed"}</Badge></div><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company_name || "Company"} — {upcomingInterview.job_title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p>{upcomingInterview.notes && <div className="mt-3 whitespace-pre-line rounded-xl border border-blue-200 bg-white/80 p-3 text-sm text-foreground"><span className="font-semibold">Company instructions</span><br />{upcomingInterview.notes}</div>}</div><div className="flex flex-wrap gap-2">{(!upcomingInterview.response_status || upcomingInterview.response_status === "pending") && <><Button type="button" onClick={() => void respondToInterview("accepted")} disabled={interviewResponding}>Accept interview</Button><Button type="button" variant="outline" onClick={() => void respondToInterview("declined")} disabled={interviewResponding}>Decline</Button></>}{upcomingInterview.response_status === "accepted" && <Button type="button" onClick={() => setShowCalendarOptions(true)}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button>}</div></CardContent></Card>}
+            {upcomingInterview && <Card className={`mb-6 rounded-2xl ${upcomingInterview.status === "cancelled" ? "border-red-200 bg-red-50/70" : "border-blue-200 bg-blue-50/70"}`}>
+              <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold uppercase tracking-wide text-primary">{upcomingInterview.status === "cancelled" ? "Interview canceled" : upcomingInterview.change_requested_by === "company" && upcomingInterview.change_request_status === "pending" ? "Reschedule request" : "Interview with company"}</p><Badge variant={upcomingInterview.status === "cancelled" ? "destructive" : upcomingInterview.response_status === "accepted" ? "default" : "secondary"}>{upcomingInterview.status === "cancelled" ? "Canceled" : upcomingInterview.change_request_status === "pending" ? "Response needed" : upcomingInterview.response_status === "accepted" ? "Confirmed" : upcomingInterview.response_status === "declined" ? "Declined" : "Response needed"}</Badge></div>
+                  <h2 className="mt-1 text-lg font-bold">{upcomingInterview.company_name || "Company"} — {upcomingInterview.job_title || "Security Officer"}</h2>
+                  {upcomingInterview.status === "cancelled" ? <div className="mt-3 rounded-xl border border-red-200 bg-white/80 p-3 text-sm"><strong>{upcomingInterview.company_name || "The company"} canceled this interview.</strong><p className="mt-1 whitespace-pre-line text-muted-foreground">Reason: {upcomingInterview.cancellation_reason || "No reason provided"}</p></div> : <>
+                    <p className="mt-1 text-sm text-muted-foreground">Current appointment: {new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p>
+                    <p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p>
+                    {upcomingInterview.change_requested_by === "company" && upcomingInterview.change_request_status === "pending" && <div className="mt-3 rounded-xl border border-violet-200 bg-white/80 p-3 text-sm"><strong>{upcomingInterview.company_name || "The company"} requested a new time:</strong><p className="mt-1">{new Date(upcomingInterview.proposed_scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-1 whitespace-pre-line text-muted-foreground">Reason: {upcomingInterview.change_reason}</p></div>}
+                    {upcomingInterview.change_requested_by === "officer" && upcomingInterview.change_request_status === "pending" && <div className="mt-3 rounded-xl border border-amber-200 bg-white/80 p-3 text-sm"><strong>Waiting for {upcomingInterview.company_name || "the company"}</strong><p className="mt-1 text-muted-foreground">Your request for {new Date(upcomingInterview.proposed_scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })} is pending. The current appointment remains active.</p></div>}
+                    {upcomingInterview.notes && <div className="mt-3 whitespace-pre-line rounded-xl border border-blue-200 bg-white/80 p-3 text-sm text-foreground"><span className="font-semibold">Company instructions</span><br />{upcomingInterview.notes}</div>}
+                  </>}
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {upcomingInterview.status === "cancelled" && <Button type="button" variant="outline" onClick={() => void dismissInterviewCancellation()} disabled={interviewResponding}>Dismiss</Button>}
+                  {upcomingInterview.status !== "cancelled" && upcomingInterview.change_requested_by === "company" && upcomingInterview.change_request_status === "pending" && <><Button type="button" onClick={() => void respondToInterviewChange("accepted")} disabled={interviewResponding}>Accept new time</Button><Button type="button" variant="outline" onClick={() => void respondToInterviewChange("declined")} disabled={interviewResponding}>Keep current time</Button></>}
+                  {upcomingInterview.status !== "cancelled" && upcomingInterview.change_request_status !== "pending" && (!upcomingInterview.response_status || upcomingInterview.response_status === "pending") && <><Button type="button" onClick={() => void respondToInterview("accepted")} disabled={interviewResponding}>Accept interview</Button><Button type="button" variant="outline" onClick={() => void respondToInterview("declined")} disabled={interviewResponding}>Decline</Button></>}
+                  {upcomingInterview.status !== "cancelled" && upcomingInterview.response_status === "accepted" && upcomingInterview.change_request_status !== "pending" && <><Button type="button" onClick={() => setShowCalendarOptions(true)}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button><Button type="button" variant="outline" onClick={() => openInterviewChange("reschedule")}><CalendarClock className="mr-2 h-4 w-4" />Request new time</Button><Button type="button" variant="outline" className="text-red-700" onClick={() => openInterviewChange("cancel")}>Cancel</Button></>}
+                </div>
+              </CardContent>
+            </Card>}
 
             {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">

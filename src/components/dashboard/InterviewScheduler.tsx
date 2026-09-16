@@ -112,6 +112,7 @@ export function InterviewScheduler({
   const [companyPhone, setCompanyPhone] = useState("");
   const [instructionTemplate, setInstructionTemplate] = useState<InstructionTemplate>("");
   const [notes, setNotes] = useState("");
+  const [changeReason, setChangeReason] = useState("");
   const [saving, setSaving] = useState(false);
 
   const loadForm = async () => {
@@ -144,6 +145,7 @@ export function InterviewScheduler({
     const interview = interviewResult.data;
     setExisting(interview || null);
     setInstructionTemplate("");
+    setChangeReason("");
     if (interview) {
       const scheduled = new Date(interview.scheduled_at);
       setType(interview.interview_type);
@@ -236,17 +238,26 @@ export function InterviewScheduler({
         attendance_confirmed_at: null,
         attendance_confirmed_by: null,
       };
+      if (existing && !changeReason.trim()) throw new Error("Add a reason for the reschedule request");
       const result = existing
-        ? await (supabase as any).from("interview_schedules").update(values).eq("id", existing.id)
+        ? await (supabase as any).rpc("request_interview_change", {
+            _interview_id: existing.id,
+            _request_type: "reschedule",
+            _reason: changeReason.trim(),
+            _proposed_scheduled_at: scheduledAt.toISOString(),
+            _proposed_interview_type: type,
+            _proposed_location: type === "in_person" ? submittedDestination : null,
+            _proposed_meeting_url: type === "video" ? submittedDestination : null,
+          })
         : await (supabase as any).from("interview_schedules").insert(values);
       if (result.error) throw result.error;
 
-      const verb = existing ? "updated" : "scheduled";
+      const verb = existing ? "reschedule requested for" : "scheduled for";
       const detail =
         type === "video"
           ? `Join online: ${submittedDestination}`
           : `Location: ${submittedDestination}`;
-      const message = `${companyName} ${verb} your ${type === "video" ? "video" : "in-person"} interview for ${jobTitle}: ${scheduledAt.toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. ${detail}${submittedNotes ? ` Notes: ${submittedNotes}` : ""}`;
+      const message = `${companyName} ${verb} your ${type === "video" ? "video" : "in-person"} interview for ${jobTitle}: ${scheduledAt.toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. ${detail}${existing ? ` Reason: ${changeReason.trim()}` : ""}${submittedNotes ? ` Notes: ${submittedNotes}` : ""}`;
       const { error: messageError } = await supabase.from("messages").insert({
         company_id: companyId,
         officer_id: officerId,
@@ -269,7 +280,7 @@ export function InterviewScheduler({
           );
       }
 
-      toast.success(`Interview ${verb} for ${officerName}`);
+      toast.success(existing ? `Reschedule request sent to ${officerName}` : `Interview scheduled for ${officerName}`);
       setOpen(false);
       onChanged();
     } catch (error: any) {
@@ -281,14 +292,19 @@ export function InterviewScheduler({
 
   const cancelInterview = async () => {
     if (!existing?.id) return;
+    if (!changeReason.trim()) {
+      toast.error("Add a reason for the cancellation");
+      return;
+    }
     setSaving(true);
     try {
-      const { error } = await (supabase as any)
-        .from("interview_schedules")
-        .update({ status: "cancelled" })
-        .eq("id", existing.id);
+      const { error } = await (supabase as any).rpc("request_interview_change", {
+        _interview_id: existing.id,
+        _request_type: "cancel",
+        _reason: changeReason.trim(),
+      });
       if (error) throw error;
-      const message = `${companyName} canceled the interview for ${jobTitle}. Please contact the company if you have questions.`;
+      const message = `${companyName} canceled the interview for ${jobTitle}. Reason: ${changeReason.trim()}`;
       const { error: messageError } = await supabase.from("messages").insert({
         company_id: companyId,
         officer_id: officerId,
@@ -302,6 +318,41 @@ export function InterviewScheduler({
       onChanged();
     } catch (error: any) {
       toast.error(error.message || "Interview could not be updated");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const respondToOfficerChange = async (decision: "accepted" | "declined") => {
+    if (!existing?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any).rpc("respond_to_interview_change", {
+        _interview_id: existing.id,
+        _decision: decision,
+      });
+      if (error) throw error;
+      toast.success(decision === "accepted" ? "Officer’s reschedule request accepted" : "Officer’s reschedule request declined");
+      setOpen(false);
+      onChanged();
+    } catch (error: any) {
+      toast.error(error.message || "The reschedule response could not be saved");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dismissCancellation = async () => {
+    if (!existing?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any).rpc("dismiss_interview_notice", { _interview_id: existing.id });
+      if (error) throw error;
+      toast.success("Cancellation notice dismissed");
+      setOpen(false);
+      onChanged();
+    } catch (error: any) {
+      toast.error(error.message || "The notice could not be dismissed");
     } finally {
       setSaving(false);
     }
@@ -329,6 +380,9 @@ export function InterviewScheduler({
   const interviewHasStarted = Boolean(existing && new Date(existing.scheduled_at).getTime() <= Date.now());
   const needsAttendance = Boolean(existing && existing.response_status === "accepted" && existing.attendance_status === "pending" && interviewHasStarted);
   const attendanceLabel = existing?.attendance_status === "attended" ? "Attended" : existing?.attendance_status === "no_show" ? "No-show" : null;
+  const officerRequestedReschedule = existing?.change_request_type === "reschedule" && existing?.change_requested_by === "officer" && existing?.change_request_status === "pending";
+  const companyRequestedReschedule = existing?.change_request_type === "reschedule" && existing?.change_requested_by === "company" && existing?.change_request_status === "pending";
+  const officerCancelled = existing?.status === "cancelled" && existing?.cancelled_by === "officer";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -337,6 +391,10 @@ export function InterviewScheduler({
           <LinkIcon className="mr-1.5 h-3.5 w-3.5" />
           {existingInterview?.attendance_status === "attended" || existingInterview?.attendance_status === "no_show"
             ? "Interview record"
+            : existingInterview?.status === "cancelled" && existingInterview?.cancelled_by === "officer" && !existingInterview?.cancellation_company_dismissed_at
+              ? "Cancellation notice"
+            : existingInterview?.change_requested_by === "officer" && existingInterview?.change_request_status === "pending"
+              ? "Review change request"
             : existingInterview?.response_status === "accepted" && new Date(existingInterview.scheduled_at).getTime() <= Date.now()
               ? "Confirm attendance"
               : existingInterview?.status === "scheduled" ? "Manage interview" : "Schedule interview"}
@@ -374,6 +432,30 @@ export function InterviewScheduler({
               <Button type="button" onClick={() => void recordAttendance("attended")} disabled={saving}><UserCheck className="mr-2 h-4 w-4" />Mark attended</Button>
               <Button type="button" variant="destructive" onClick={() => void recordAttendance("no_show")} disabled={saving}><UserX className="mr-2 h-4 w-4" />Mark no-show</Button>
             </div>
+          </div>
+        )}
+        {officerRequestedReschedule && (
+          <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+            <p className="font-semibold text-violet-950">{officerName} requested a different interview time</p>
+            <p className="mt-1 text-sm text-violet-900/80">Proposed: {new Date(existing.proposed_scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p>
+            <p className="mt-2 whitespace-pre-line text-sm"><strong>Reason:</strong> {existing.change_reason}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void respondToOfficerChange("accepted")} disabled={saving}>Accept new time</Button>
+              <Button type="button" variant="outline" onClick={() => void respondToOfficerChange("declined")} disabled={saving}>Keep current time</Button>
+            </div>
+          </div>
+        )}
+        {companyRequestedReschedule && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+            <strong>Waiting for {officerName}</strong>
+            <p className="mt-1">Your proposed time is {new Date(existing.proposed_scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. The current appointment remains active until the officer accepts.</p>
+          </div>
+        )}
+        {officerCancelled && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+            <p className="font-semibold text-red-950">{officerName} canceled the interview</p>
+            <p className="mt-1 whitespace-pre-line text-sm text-red-900"><strong>Reason:</strong> {existing.cancellation_reason}</p>
+            {!existing.cancellation_company_dismissed_at && <Button type="button" variant="outline" className="mt-3" onClick={() => void dismissCancellation()} disabled={saving}>Dismiss notice</Button>}
           </div>
         )}
         <form onSubmit={schedule} className="space-y-5">
@@ -485,6 +567,18 @@ export function InterviewScheduler({
               className="min-h-40"
             />
           </div>
+          {existing?.status === "scheduled" && !attendanceLabel && (
+            <div className="space-y-2">
+              <Label htmlFor="interview-change-reason">Reason for rescheduling or cancellation *</Label>
+              <Textarea
+                id="interview-change-reason"
+                value={changeReason}
+                onChange={(event) => setChangeReason(event.target.value)}
+                placeholder="Explain why the interview time needs to change or why it is being canceled."
+              />
+              <p className="text-xs text-muted-foreground">This reason is shown to the officer.</p>
+            </div>
+          )}
           <DialogFooter className="gap-2 sm:justify-between">
             {existing?.status === "scheduled" && !interviewHasStarted ? (
               <div className="flex gap-2">
@@ -501,8 +595,8 @@ export function InterviewScheduler({
             ) : (
               <span />
             )}
-            <Button type="submit" disabled={saving || Boolean(attendanceLabel)}>
-              {saving ? "Saving…" : existing ? "Send updated request" : "Send interview request"}
+            <Button type="submit" disabled={saving || Boolean(attendanceLabel) || existing?.status === "cancelled" || officerRequestedReschedule || companyRequestedReschedule}>
+              {saving ? "Saving…" : existing ? "Request reschedule" : "Send interview request"}
             </Button>
           </DialogFooter>
         </form>

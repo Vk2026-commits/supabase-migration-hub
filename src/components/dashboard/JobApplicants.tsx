@@ -29,6 +29,9 @@ const getOnboardingStatus = (progress: any) => {
 };
 
 const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus>) => {
+  if (app.interview?.status === "cancelled" && app.interview?.cancelled_by === "officer" && !app.interview?.cancellation_company_dismissed_at) return { label: "Officer canceled interview — review reason", tone: "border-red-300 bg-red-50 text-red-800" };
+  if (app.interview?.change_requested_by === "officer" && app.interview?.change_request_status === "pending") return { label: "Action required: Review officer reschedule request", tone: "border-violet-300 bg-violet-50 text-violet-800" };
+  if (app.interview?.change_requested_by === "company" && app.interview?.change_request_status === "pending") return { label: "Waiting for officer to accept new interview time", tone: "border-blue-300 bg-blue-50 text-blue-800" };
   if (app.status === "accepted") {
     if (app.employmentConfirmedAt) return { label: "Employment confirmed — view in Hired", tone: "border-green-300 bg-green-50 text-green-800" };
     if (onboarding.percent === 100 && app.screeningReady) return { label: "Next: Accept as hired", tone: "border-green-300 bg-green-50 text-green-800" };
