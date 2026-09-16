@@ -383,6 +383,7 @@ export function InterviewScheduler({
   const officerRequestedReschedule = existing?.change_request_type === "reschedule" && existing?.change_requested_by === "officer" && existing?.change_request_status === "pending";
   const companyRequestedReschedule = existing?.change_request_type === "reschedule" && existing?.change_requested_by === "company" && existing?.change_request_status === "pending";
   const officerCancelled = existing?.status === "cancelled" && existing?.cancelled_by === "officer";
+  const showScheduleForm = !needsAttendance && !officerRequestedReschedule && !companyRequestedReschedule && !officerCancelled && !attendanceLabel;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -400,7 +401,7 @@ export function InterviewScheduler({
               : existingInterview?.status === "scheduled" ? "Manage interview" : "Schedule interview"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-h-[88vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {existing ? "Manage" : "Schedule"} interview with {officerName}
@@ -458,7 +459,7 @@ export function InterviewScheduler({
             {!existing.cancellation_company_dismissed_at && <Button type="button" variant="outline" className="mt-3" onClick={() => void dismissCancellation()} disabled={saving}>Dismiss notice</Button>}
           </div>
         )}
-        <form onSubmit={schedule} className="space-y-5">
+        {showScheduleForm && <form onSubmit={schedule} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="interview-type">Interview format</Label>
             <select
@@ -599,7 +600,7 @@ export function InterviewScheduler({
               {saving ? "Saving…" : existing ? "Request reschedule" : "Send interview request"}
             </Button>
           </DialogFooter>
-        </form>
+        </form>}
       </DialogContent>
     </Dialog>
   );
