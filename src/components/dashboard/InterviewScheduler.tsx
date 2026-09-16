@@ -388,7 +388,13 @@ export function InterviewScheduler({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="h-9 px-3 text-xs">
+        <Button
+          size="sm"
+          variant="outline"
+          className={needsAttendance
+            ? "h-9 border-amber-200 bg-amber-50 px-3 text-xs text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
+            : "h-9 border-violet-200 bg-violet-50 px-3 text-xs text-violet-800 hover:border-violet-300 hover:bg-violet-100 hover:text-violet-900"}
+        >
           <LinkIcon className="mr-1.5 h-3.5 w-3.5" />
           {existingInterview?.attendance_status === "attended" || existingInterview?.attendance_status === "no_show"
             ? "Interview record"

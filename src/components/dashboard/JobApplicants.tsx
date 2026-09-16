@@ -285,7 +285,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="h-9 px-3 text-xs"
+                      className="h-9 border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
                       onClick={() => {
                         setSelectedOfficer({
                           id: app.officer.id,
@@ -301,8 +301,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                     </Button>
                     <Button
                       size="sm"
-                      variant={app.companyNote?.note ? "secondary" : "outline"}
-                      className="h-9 px-3 text-xs"
+                      variant="outline"
+                      className="h-9 border-amber-200 bg-amber-50 px-3 text-xs text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
                       onClick={() => setNotesApplication(app)}
                     >
                       <StickyNote className="mr-1.5 h-3.5 w-3.5" />
@@ -320,13 +320,13 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       onChanged={loadApplications}
                     />
                     {app.status === "accepted" && app.onboardingProgress?.packet_id && (
-                      <Button size="sm" variant="outline" className="h-9 px-3 text-xs" onClick={() => setOnboardingApplication(app)}>
+                      <Button size="sm" variant="outline" className="h-9 border-teal-200 bg-teal-50 px-3 text-xs text-teal-800 hover:border-teal-300 hover:bg-teal-100 hover:text-teal-900" onClick={() => setOnboardingApplication(app)}>
                         <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
                         View onboarding
                       </Button>
                     )}
                     {app.status === "accepted" && onboarding.percent === 100 && app.hireId && (
-                      <Button size="sm" variant="outline" className="h-9 px-3 text-xs" onClick={() => setScreeningApplication(app)}>
+                      <Button size="sm" variant="outline" className="h-9 border-orange-200 bg-orange-50 px-3 text-xs text-orange-800 hover:border-orange-300 hover:bg-orange-100 hover:text-orange-900" onClick={() => setScreeningApplication(app)}>
                         <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
                         Review screening
                       </Button>
