@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -886,15 +886,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
 
   const completedStepCount = Array.from({ length: steps.length }, (_, index) => completeStep(index)).filter(Boolean).length;
   const progress = Math.round((completedStepCount / steps.length) * 100);
-  const completedPolicyCount = policyItems.filter(([key]) => {
+  const isPolicyComplete = (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
     return Boolean(data.policies[key] && policyDetailsComplete(key) && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
-  }).length;
+  };
+  const completedPolicyCount = policyItems.filter(([key]) => isPolicyComplete(key)).length;
   const openPolicy = (key: string) => {
-    const closing = activePolicyKey === key;
-    setActivePolicyKey(closing ? null : key);
+    setActivePolicyKey(key);
     setData((current) => {
-      if (closing) return current;
       const existing = current.policyAcknowledgements[key];
       const reusable = [...Object.values(current.policyAcknowledgements)].reverse().find((item) => Boolean(item.signatureImage));
       const identity = {
@@ -911,8 +910,15 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         },
       };
     });
-    if (!closing) requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(`policy-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" })));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.getElementById(`policy-tab-${key}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }));
   };
+  useEffect(() => {
+    if (!loaded || currentStep !== 5 || activePolicyKey) return;
+    const nextPolicy = policyItems.find(([key]) => !isPolicyComplete(key)) || policyItems[0];
+    openPolicy(nextPolicy[0]);
+  }, [loaded, currentStep, activePolicyKey]);
   const updatePolicyAcknowledgement = (key: string, changes: Partial<PolicyAcknowledgement>) => {
     setData((current) => ({
       ...current,
@@ -963,12 +969,13 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       toast.error("The section could not be saved. Please try again.");
       return;
     }
-    setActivePolicyKey(null);
     toast.success("Section signed, saved, and marked complete");
     const currentIndex = policyItems.findIndex(([k]) => k === key);
     const nextItem = policyItems[currentIndex + 1];
     if (nextItem) {
       const nextKey = nextItem[0];
+      setActivePolicyKey(nextKey);
+      openPolicy(nextKey);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           document.getElementById(`policy-${nextKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1085,6 +1092,34 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               <CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle>
               <CardDescription className="text-base">{steps[currentStep][1]}</CardDescription>
             </CardHeader>
+            {currentStep === 5 && (
+              <div className="border-b bg-white px-5 py-4 sm:px-10">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Policy sections</p>
+                  <p className="text-xs font-semibold text-primary">{completedPolicyCount} of {policyItems.length} complete</p>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy sections">
+                  {policyItems.map(([key, label], index) => {
+                    const complete = isPolicyComplete(key);
+                    const selected = activePolicyKey === key;
+                    return (
+                      <button
+                        key={key}
+                        id={`policy-tab-${key}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={selected}
+                        onClick={() => openPolicy(key)}
+                        className={`flex min-w-[150px] max-w-[190px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all ${selected ? "border-primary bg-primary text-primary-foreground shadow-md" : complete ? "border-green-300 bg-green-50 text-green-800 hover:border-green-500" : "bg-zinc-50 text-foreground hover:border-primary/50 hover:bg-primary/5"}`}
+                      >
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${selected ? "bg-white/20" : complete ? "bg-green-600 text-white" : "bg-white text-muted-foreground shadow-sm"}`}>{complete ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
+                        <span className="line-clamp-2 leading-tight">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <CardContent className="min-h-[650px] px-5 py-7 sm:px-10 sm:py-10">
               {currentStep === 0 && (
                 <div className="space-y-6">
@@ -1336,25 +1371,21 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Assignment</span><strong className="block">{data.scheduledPost || "Not provided"}</strong></div>
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift || "Not provided"}</strong></div>
                   </div>
-                  {policyItems.map(([key, label], index) => {
+                  {policyItems.filter(([key]) => key === activePolicyKey).map(([key, label]) => {
                     const acknowledgement = data.policyAcknowledgements[key];
-                    const expanded = activePolicyKey === key;
                     const viewed = Boolean(acknowledgement?.viewedAt);
                     const completed = Boolean(data.policies[key] && policyDetailsComplete(key) && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
-                      <div key={key} id={`policy-${key}`} className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 transition-colors ${completed ? "border-green-500 bg-green-50 shadow-sm" : expanded ? "border-primary/40 bg-background" : "border-border bg-background"}`}>
-                        <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : index + 1}</div>
+                      <div key={key} id={`policy-${key}`} role="tabpanel" className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 bg-background shadow-sm ${completed ? "border-green-400" : "border-primary/30"}`}>
+                        <div className={`flex flex-wrap items-center gap-3 border-b p-4 sm:p-5 ${completed ? "bg-green-50" : "bg-primary/5"}`}>
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : <FileCheck2 className="h-5 w-5" />}</div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2"><p className={`font-semibold ${completed ? "text-green-900" : ""}`}>{label}</p>{completed && <span className="rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">Completed</span>}</div>
-                            <p className="text-sm text-muted-foreground">{completed ? "Reviewed, signed, and saved." : expanded ? "Read the policy and complete it below." : "Read, acknowledge, sign, and save."}</p>
+                            <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold">{label}</h3>{completed && <span className="rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">Completed</span>}</div>
+                            <p className="text-sm text-muted-foreground">{completed ? "Reviewed, signed, and saved. You can still update this section." : "Read the digital terms, add the required information, and sign below."}</p>
                           </div>
-                          <Button type="button" variant={completed || expanded ? "outline" : "default"} size="sm" onClick={() => openPolicy(key)}>
-                            {expanded ? <><ChevronUp className="mr-2 h-4 w-4" />Close</> : completed ? <><ChevronDown className="mr-2 h-4 w-4" />Review or edit</> : <><ChevronDown className="mr-2 h-4 w-4" />Open section</>}
-                          </Button>
                         </div>
-                        {expanded && acknowledgement && (
-                          <div className="space-y-6 border-t bg-background p-4 sm:p-6">
+                        {acknowledgement && (
+                          <div className="space-y-6 p-4 sm:p-6">
                             <DigitalPolicyContent title={label} content={policyContent[key]} />
                               <div className="space-y-6">
                                 <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Complete and sign.</strong> Your name and role are filled from your profile when available. The final company record is created after you save.</div>
