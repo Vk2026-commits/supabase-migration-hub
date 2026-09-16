@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Copy, Download, FileCheck2, Plus, ShieldCheck, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Copy, Download, FileCheck2, PlayCircle, Plus, ShieldCheck, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/ge
 import { DatePicker } from "@/components/ui/date-picker";
 import { useSearchParams } from "@/lib/router-compat";
 import { SignaturePad } from "./SignaturePad";
+import { formatUsPhone } from "@/lib/phone";
 
 interface Props {
   userId: string;
@@ -77,7 +78,7 @@ const Field = ({ label, value, onChange, type = "text", required = false }: { la
   if (type === "date") {
     return <DatePicker id={id} label={label} value={value} onChange={onChange} required={required} />;
   }
-  return <div className="space-y-2"><Label htmlFor={id}>{label}{required ? " *" : ""}</Label><Input id={id} className="h-12 text-base" type={type} value={value} onChange={e => onChange(e.target.value)} /></div>;
+  return <div className="space-y-2"><Label htmlFor={id}>{label}{required ? " *" : ""}</Label><Input id={id} className="h-12 text-base" type={type} inputMode={type === "tel" ? "numeric" : undefined} placeholder={type === "tel" ? "123-456-7890" : undefined} value={value} onChange={e => onChange(type === "tel" ? formatUsPhone(e.target.value) : e.target.value)} /></div>;
 };
 const YesNo = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <div className="space-y-3"><Label>{label} *</Label><RadioGroup value={value} onValueChange={onChange} className="flex gap-8">{["Yes", "No"].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`${label}-${v}`} /><Label htmlFor={`${label}-${v}`}>{v}</Label></div>)}</RadioGroup></div>;
 
@@ -104,10 +105,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [editingSubmitted, setEditingSubmitted] = useState(false);
   const [resumePath, setResumePath] = useState("");
   const [uploadingResume, setUploadingResume] = useState(false);
+  const [applicationStarted, setApplicationStarted] = useState(false);
+  const [visitedSteps, setVisitedSteps] = useState<number[]>([]);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
   const pendingSaveCount = useRef(0);
   const masterIdRef = useRef<string | null>(null);
+  const visitedStepsRef = useRef<number[]>([]);
+  const completedStepsRef = useRef<number[]>([]);
   const activeOfficerId = officerId || resolvedOfficerId;
 
   useEffect(() => {
@@ -144,6 +150,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   }, [masterId]);
 
   useEffect(() => {
+    visitedStepsRef.current = visitedSteps;
+  }, [visitedSteps]);
+
+  useEffect(() => {
+    completedStepsRef.current = completedSteps;
+  }, [completedSteps]);
+
+  useEffect(() => {
     let mounted = true;
     (async () => {
       let loadingOfficerId = officerId;
@@ -161,8 +175,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         appTable.select("*").eq("user_id", userId).eq("application_type", "master").maybeSingle(),
         loadingOfficerId ? supabase.from("work_history").select("*").eq("officer_id", loadingOfficerId).order("start_date", { ascending: false }) : Promise.resolve({ data: [] }),
         (supabase as any).rpc("list_active_hiring_destinations"),
+        supabase.auth.getUser(),
       ];
-      const [profileResult, officerResult, masterResult, workResult, jobsResult] = await Promise.all(requests);
+      const [profileResult, officerResult, masterResult, workResult, jobsResult, authResult] = await Promise.all(requests);
       if (!mounted) return;
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
@@ -177,12 +192,18 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         window.localStorage.setItem(`guard-application-certification-complete:${userId}`, "true");
       }
       const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
+      const capturedLead = (() => {
+        const leadId = searchParams.get("lead");
+        if (!leadId) return null;
+        try { return JSON.parse(sessionStorage.getItem(`candidate-lead:${leadId}`) || "null"); }
+        catch { return null; }
+      })();
       setForm({
         ...initialForm,
         ...draft,
         applicantName: draft.applicantName || profile?.full_name || "",
         email: draft.email || profile?.email || "",
-        phone: draft.phone || officer?.phone || "",
+        phone: formatUsPhone(draft.phone || officer?.phone || authResult?.data?.user?.user_metadata?.phone || capturedLead?.phone || ""),
         address: draft.address || officer?.address_street || "",
         city: draft.city || officer?.address_city || "",
         state: draft.state || officer?.address_state || "",
@@ -196,6 +217,17 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
       const restoredStep = urlStep ?? savedStep;
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
+      const savedVisitedSteps = Array.isArray((draft as any).visitedSteps)
+        ? (draft as any).visitedSteps.filter((step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9)
+        : master ? Array.from({ length: savedStep + 1 }, (_, index) => index) : [];
+      visitedStepsRef.current = savedVisitedSteps;
+      setVisitedSteps(savedVisitedSteps);
+      const savedCompletedSteps = Array.isArray((draft as any).completedSteps)
+        ? (draft as any).completedSteps.filter((step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9)
+        : [];
+      completedStepsRef.current = savedCompletedSteps;
+      setCompletedSteps(savedCompletedSteps);
+      setApplicationStarted(Boolean(master));
       window.localStorage.setItem(`guard-application-step:${userId}`, String(restoredStep + 1));
       const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({
         id: item.id,
@@ -212,8 +244,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()
         && item.city.trim().toLowerCase() === (draft.companyCity || initialForm.companyCity).trim().toLowerCase()
       );
+      const activeDestination = matchingDestination || (destinations.length === 1 ? destinations[0] : undefined);
       setJobs(destinations);
-      setSelectedJobId(matchingDestination?.id || "");
+      setSelectedJobId(activeDestination?.id || "");
+      if (activeDestination) setForm((current) => ({ ...current, companyName: activeDestination.companyName, position: activeDestination.position, companyCity: activeDestination.city, companyState: activeDestination.state }));
       setLoaded(true);
     })();
     return () => { mounted = false; };
@@ -247,7 +281,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setSaving(true);
     const performSave = async () => {
       try {
-        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, resumePath, jobPostingId: selectedJobId, availability: shared, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved, canonicalCertificationIds: certifications.filter((certification) => certification.document_front_url).map((certification) => certification.id), certificationRequirementsComplete: certificationSaved } };
+        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, resumePath, jobPostingId: selectedJobId, availability: shared, visitedSteps: visitedStepsRef.current, completedSteps: completedStepsRef.current, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved, canonicalCertificationIds: certifications.filter((certification) => certification.document_front_url).map((certification) => certification.id), certificationRequirementsComplete: certificationSaved } };
         const savedMasterId = masterIdRef.current;
         const query = savedMasterId ? (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).select("id").single() : (supabase as any).from("guard_hiring_applications").insert(payload).select("id").single();
         const { data, error } = await query;
@@ -283,17 +317,41 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   useEffect(() => {
-    if (!loaded || !activeOfficerId) return;
+    if (!loaded || !activeOfficerId || !applicationStarted) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => { void saveDraft(); }, 250);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [form, shared, photos, photosSaved, certifications, certificationSaved, resumePath, currentStep, loaded, activeOfficerId, selectedJobId]);
+  }, [form, shared, photos, photosSaved, certifications, certificationSaved, resumePath, currentStep, loaded, activeOfficerId, selectedJobId, applicationStarted, visitedSteps, completedSteps]);
 
   const availabilityComplete = shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule).some(v => v.start && v.end);
   const photosComplete = photosSaved;
   const certificationComplete = certificationSaved;
-  const stepComplete = (step: number) => step === 0 ? Boolean(selectedJobId && form.position) : step === 1 ? Boolean(form.applicantName && form.email && form.phone && form.address && form.city && form.state && form.zip) : step === 2 ? Boolean(form.isAdult && form.eligibleToWork) : step === 6 ? availabilityComplete : step === 7 || step === 8 ? true : step === 9 ? Boolean(form.signature && form.signatureImage && form.signatureDate && acknowledged) : true;
-  const complete = useMemo(() => [0, 1, 2, 6, 9].every(stepComplete), [form, shared, acknowledged, selectedJobId]);
+  const stepRequirementsMet = (step: number) => step === 0
+    ? Boolean(selectedJobId && form.position)
+    : step === 1
+      ? Boolean(form.applicantName && form.email && form.phone.replace(/\D/g, "").length === 10 && form.address && form.city && form.state && form.zip)
+      : step === 2
+        ? Boolean(form.isAdult && form.eligibleToWork && form.driversLicense)
+        : step === 3
+          ? Boolean(form.education.trim() || form.skills.trim())
+          : step === 4
+            ? form.workHistory.some((item) => Boolean(item.employer?.trim() || item.title?.trim()))
+            : step === 5
+              ? form.references.some((item) => Boolean(item.name?.trim() || item.phone?.trim() || item.email?.trim()))
+              : step === 6
+                ? availabilityComplete
+                : step === 7
+                  ? photosComplete
+                  : step === 8
+                    ? certificationComplete
+                    : Boolean(form.signature && form.signatureImage && form.signatureDate && acknowledged);
+  const requiredSteps = [0, 1, 2, 3, 6, 9];
+  const stepStatus = (step: number): "not_started" | "in_progress" | "completed" => {
+    if (masterStatus === "submitted" || (completedSteps.includes(step) && stepRequirementsMet(step))) return "completed";
+    if (visitedSteps.includes(step)) return "in_progress";
+    return "not_started";
+  };
+  const complete = useMemo(() => requiredSteps.every(stepRequirementsMet), [form, shared, acknowledged, selectedJobId, photosComplete, certificationComplete]);
   const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
   const updatePhotoCompletion = (complete: boolean) => {
     setPhotosSaved(complete);
@@ -327,6 +385,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
   const go = async (step: number) => {
     const nextStep = Math.max(0, Math.min(9, step));
+    const nextVisited = Array.from(new Set([...visitedStepsRef.current, currentStep, nextStep])).sort((a, b) => a - b);
+    visitedStepsRef.current = nextVisited;
+    setVisitedSteps(nextVisited);
+    const nextCompleted = stepRequirementsMet(currentStep)
+      ? Array.from(new Set([...completedStepsRef.current, currentStep])).sort((a, b) => a - b)
+      : completedStepsRef.current.filter((completedStep) => completedStep !== currentStep);
+    completedStepsRef.current = nextCompleted;
+    setCompletedSteps(nextCompleted);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const saved = await saveDraft(nextStep, true);
     if (!saved) {
@@ -341,7 +407,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
   };
   const next = async () => {
-    if (!stepComplete(currentStep)) {
+    if (!stepRequirementsMet(currentStep)) {
       toast.error("Complete the required fields before continuing");
       return;
     }
@@ -358,7 +424,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       await syncShared(true);
       const selectedJob = jobs.find(j => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
-      const snapshot = { ...form, resumePath, jobPostingId: selectedJob.id, availability: shared, photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
+      const snapshot = { ...form, resumePath, jobPostingId: selectedJob.id, availability: shared, visitedSteps: Array.from({ length: 10 }, (_, index) => index), completedSteps: Array.from({ length: 10 }, (_, index) => index).filter(stepRequirementsMet), photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
       const submittedAt = new Date().toISOString();
       const base: any = { officer_id: activeOfficerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, current_step: 9, signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
       const result = masterId ? await (supabase as any).from("guard_hiring_applications").update({ ...base, application_type: "master", job_application_id: null }).eq("id", masterId).select("id").single() : await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "master", job_application_id: null, status: "draft" }).select("id").single();
@@ -426,7 +492,8 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     finally { setSubmitting(false); }
   };
 
-  const progress = Math.round(((currentStep + 1) / 10) * 100);
+  const completedRequiredSteps = requiredSteps.filter((step) => stepStatus(step) === "completed").length;
+  const progress = Math.round((completedRequiredSteps / requiredSteps.length) * 100);
   const pdfApplication: GuardApplicationData = { ...form, availability: shared, photosComplete, certificationComplete };
   const editForAnotherCompany = () => {
     setEditingSubmitted(true);
@@ -437,6 +504,22 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     nextParams.set("applicationStep", "1");
     setSearchParams(nextParams, { replace: true });
   };
+
+  const startApplication = () => {
+    visitedStepsRef.current = [0];
+    setVisitedSteps([0]);
+    completedStepsRef.current = [];
+    setCompletedSteps([]);
+    setCurrentStep(0);
+    setApplicationStarted(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("applicationStep", "1");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  if (!loaded) {
+    return <div className="mx-auto flex min-h-[360px] max-w-4xl items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">Preparing your application…</div>;
+  }
 
   if (loaded && masterStatus === "submitted" && !editingSubmitted) {
     return (
@@ -468,11 +551,32 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     );
   }
 
+  if (!applicationStarted) {
+    const destination = jobs.find((job) => job.id === selectedJobId);
+    return <section className="mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
+      <div className="px-6 py-10 sm:px-10 sm:py-14">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm"><ShieldCheck className="h-8 w-8" /></div>
+        <p className="mt-7 text-sm font-bold uppercase tracking-[.18em] text-primary">Welcome to We Find Guards</p>
+        <h1 className="mt-2 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">Let’s create your security officer application.</h1>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">You’ll add your contact information, qualifications, work availability, and signature. Your progress saves as you go, and nothing is marked complete until you finish the required information.</p>
+
+        <div className="mt-8 rounded-2xl border-2 border-primary/20 bg-background p-5 sm:p-6">
+          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Current hiring destination</p>
+          <h2 className="mt-2 text-xl font-bold">{destination ? destination.companyName : "Choose your hiring destination"}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{destination ? `${destination.position}${destination.city || destination.state ? ` · ${[destination.city, destination.state].filter(Boolean).join(", ")}` : ""}` : "You’ll select an active company and position in Step 1."}</p>
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Please make sure this is the company and position you intend to apply for before submitting.</p>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"><Button type="button" size="lg" onClick={startApplication}>Start Application<ArrowRight className="ml-2 h-5 w-5" /></Button><span className="text-sm text-muted-foreground">Step 1 of 10 · You can leave and return anytime</span></div>
+      </div>
+    </section>;
+  }
+
   return <form id="guard-application-top" onSubmit={submit} className="mx-auto w-full max-w-6xl scroll-mt-4 pb-24 lg:pb-8">
-    <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background"><div className="flex items-center gap-3 px-5 py-5 sm:px-8"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-7 w-7" /></div><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">We Find Guards</p><h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1><p className="mt-1 text-sm text-muted-foreground">Your application saves automatically. You can leave and continue later.</p>{saveError && <p className="mt-2 text-sm font-semibold text-destructive">Draft not saved. Please check your connection and try again.</p>}</div><span className={`hidden items-center gap-1 text-xs sm:flex ${saveError ? "text-destructive" : "text-muted-foreground"}`}><Cloud className="h-4 w-4" />{saveError ? "Save failed" : saving ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Autosave on"}</span></div><div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div></div>
-    <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]"><aside className="hidden lg:block"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => <button key={s[0]} type="button" onClick={() => go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : stepComplete(i) ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{stepComplete(i) ? <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} /> : i + 1}</span><span className="min-w-0"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block truncate text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{s[1]}</span></span></button>)}</nav></aside>
-      <main className="min-w-0"><div className="mb-4 flex justify-between lg:hidden"><span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{stepComplete(currentStep) && <Check className="h-4 w-4" />}Step {currentStep + 1} of 10</span><span className="text-sm text-muted-foreground">{progress}% complete</span></div><Card className="rounded-2xl shadow-sm"><CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader><CardContent className="px-5 py-7 sm:px-8 sm:py-9">
-        {currentStep === 0 && <div className="space-y-6"><div className="rounded-2xl border border-primary/20 bg-primary/5 p-5"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Current hiring destination</p><h3 className="mt-2 text-xl font-bold">{selectedJobId ? form.companyName : "Choose a hiring company"}</h3><p className="mt-1 text-sm text-muted-foreground">{selectedJobId ? [form.companyCity, form.companyState].filter(Boolean).join(", ") : "Select an active position below."}</p></div><div className="grid gap-5 md:grid-cols-2"><div className="space-y-2 md:col-span-2"><Label>Company and job location *</Label><select className="h-12 w-full rounded-lg border bg-background px-4" value={selectedJobId} onChange={e => { const job = jobs.find(item => item.id === e.target.value); setSelectedJobId(e.target.value); if (job) setForm(c => ({ ...c, companyName: job.companyName, position: job.position, companyCity: job.city, companyState: job.state })); }}><option value="">Select a company and position</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} — {j.position}</option>)}</select><p className="text-sm text-muted-foreground">Companies appear here after they create an active job posting.</p></div><Field label="Position applied for" value={form.position} onChange={v => update("position", v)} required /><Field label="Available start date" value={form.startDate} onChange={v => update("startDate", v)} type="date" /></div></div>}
+    <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background"><div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:px-8"><div className="flex min-w-0 flex-1 items-center gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-7 w-7" /></div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Step {currentStep + 1}: {steps[currentStep][0]}</p><h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1><p className="mt-1 text-sm text-muted-foreground">{completedRequiredSteps} of {requiredSteps.length} required sections completed</p>{saveError && <p className="mt-2 text-sm font-semibold text-destructive">Draft not saved. Please check your connection and try again.</p>}</div></div><span className={`flex items-center gap-1 text-xs ${saveError ? "text-destructive" : "text-muted-foreground"}`}><Cloud className="h-4 w-4" />{saveError ? "Save failed" : saving ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Autosave on"}</span></div><div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div></div>
+    <div className="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]"><aside className="hidden lg:block"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => { const status = stepStatus(i); return <button key={s[0]} type="button" onClick={() => void go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : status === "completed" ? "bg-green-100 text-green-700" : status === "in_progress" ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{status === "completed" ? <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} /> : status === "in_progress" ? <PlayCircle className="h-4 w-4" aria-label={`Step ${i + 1} in progress`} /> : i + 1}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{status === "completed" ? "Completed" : status === "in_progress" ? "In progress" : "Not started"}</span></span></button>; })}</nav></aside>
+      <main className="min-w-0"><div className="mb-4 space-y-3 lg:hidden"><div className="flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{stepStatus(currentStep) === "completed" && <Check className="h-4 w-4" />}Step {currentStep + 1} of 10</span><span className="text-sm text-muted-foreground">{progress}% required complete</span></div><select aria-label="Application section" className="h-12 w-full rounded-xl border bg-background px-3 font-medium" value={currentStep} onChange={(event) => void go(Number(event.target.value))}>{steps.map((step, index) => <option key={step[0]} value={index}>{index + 1}. {step[0]} — {stepStatus(index) === "completed" ? "Completed" : stepStatus(index) === "in_progress" ? "In progress" : "Not started"}</option>)}</select></div><Card className="min-w-0 rounded-2xl shadow-sm"><CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="break-words text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader><CardContent className="min-w-0 px-5 py-7 sm:px-8 sm:py-9">
+        {currentStep === 0 && <div className="space-y-6"><div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Current hiring destination</p><h3 className="mt-2 text-xl font-bold">{selectedJobId ? form.companyName : "Choose a hiring company"}</h3><p className="mt-1 text-sm text-muted-foreground">{selectedJobId ? `${form.position} · ${[form.companyCity, form.companyState].filter(Boolean).join(", ")}` : "Select an active position below."}</p><p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Please make sure this is the company and position you intend to apply for before continuing.</p></div><div className="grid gap-5 md:grid-cols-2"><div className="min-w-0 space-y-2 md:col-span-2"><Label>Company and job location *</Label><select className="h-12 w-full min-w-0 rounded-lg border bg-background px-4" value={selectedJobId} onChange={e => { const job = jobs.find(item => item.id === e.target.value); setSelectedJobId(e.target.value); if (job) setForm(c => ({ ...c, companyName: job.companyName, position: job.position, companyCity: job.city, companyState: job.state })); }}><option value="">Select a company and position</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} — {j.position}</option>)}</select><p className="text-sm text-muted-foreground">Companies appear here after they create an active job posting.</p></div><Field label="Position applied for" value={form.position} onChange={v => update("position", v)} required /><Field label="Available start date" value={form.startDate} onChange={v => update("startDate", v)} type="date" /></div></div>}
         {currentStep === 1 && <div className="space-y-5"><p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">Information entered here is the same information shown in your Profile tab.</p><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name" value={form.applicantName} onChange={v => update("applicantName", v)} required /><Field label="Email" value={form.email} onChange={v => update("email", v)} type="email" required /><Field label="Phone" value={form.phone} onChange={v => update("phone", v)} type="tel" required /></div><AddressAutocomplete value={{ street: form.address, unit: "", city: form.city, state: form.state, zip: form.zip }} onChange={a => setForm(c => ({ ...c, address: a.street, city: a.city, state: a.state, zip: a.zip }))} /><div className="rounded-xl border p-4"><Label htmlFor="application-resume" className="text-base">Upload Resume <span className="font-normal text-muted-foreground">(optional)</span></Label><p className="mt-1 text-sm text-muted-foreground">PDF, DOC, or DOCX, up to 10 MB. Employers can download the resume with your submitted application.</p><div className="mt-4 flex flex-wrap items-center gap-3"><Input id="application-resume" type="file" accept=".pdf,.doc,.docx" onChange={uploadResume} disabled={uploadingResume} className="max-w-md" /><span className="text-sm font-medium">{uploadingResume ? "Uploading…" : resumePath ? "✓ Resume uploaded" : "No resume uploaded"}</span></div></div></div>}
         {currentStep === 2 && <div className="grid gap-7 md:grid-cols-2"><YesNo label="Are you 18 years of age or older?" value={form.isAdult} onChange={v => update("isAdult", v)} /><YesNo label="Can you provide proof that you may work in the U.S.?" value={form.eligibleToWork} onChange={v => update("eligibleToWork", v)} /><YesNo label="Do you have a valid driver's license?" value={form.driversLicense} onChange={v => update("driversLicense", v)} /><Field label="Security license number (optional)" value={form.securityLicenseNumber} onChange={v => update("securityLicenseNumber", v)} /><div className="space-y-2"><Label htmlFor="security-license-state">Security license state (optional)</Label><select id="security-license-state" className="h-12 w-full rounded-lg border bg-background px-4" value={form.securityLicenseState} onChange={e => update("securityLicenseState", e.target.value)}><option value="">Select state</option>{states.map(state => <option key={state} value={state}>{state}</option>)}</select></div></div>}
         {currentStep === 3 && <div className="space-y-6"><div className="space-y-2"><Label>Highest education, school, diploma, or degree</Label><Textarea value={form.education} onChange={e => update("education", e.target.value)} /></div><div className="space-y-3"><Label>Security training, skills, and equipment</Label><div className="grid gap-3 sm:grid-cols-2">{skillOptions.map(skill => { const selected = form.skills.split(",").map(item => item.trim()).filter(Boolean).includes(skill); return <label key={skill} className="flex items-center gap-2 rounded-lg border p-3"><Checkbox checked={selected} onCheckedChange={checked => { const current = form.skills.split(",").map(item => item.trim()).filter(Boolean); update("skills", (checked ? Array.from(new Set([...current, skill])) : current.filter(item => item !== skill)).join(", ")); }} />{skill}</label>; })}</div><p className="text-sm text-muted-foreground">Select every qualification that applies.</p></div></div>}

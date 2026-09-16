@@ -5,11 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Mail, Shield } from "lucide-react";
+import { Eye, EyeOff, Mail, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Link } from "@/lib/router-compat";
 import { z } from "zod";
+import { formatUsPhone } from "@/lib/phone";
 
 // Password validation schema
 const passwordSchema = z
@@ -40,6 +41,8 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<"officer" | "company">(
     urlRole === "officer" || urlRole === "company" ? urlRole : "officer",
   );
@@ -53,6 +56,7 @@ const Auth = () => {
       const captured = JSON.parse(sessionStorage.getItem(`candidate-lead:${candidateLeadId}`) || "null");
       if (captured?.fullName) setFullName(captured.fullName);
       if (captured?.email) setEmailOrUsername(captured.email);
+      if (captured?.phone) setPhone(formatUsPhone(captured.phone));
       setMode("signup");
       setRole("officer");
     } catch { /* continue with an empty signup form */ }
@@ -115,6 +119,12 @@ const Auth = () => {
           return;
         }
 
+        if (role === "officer" && phone.replace(/\D/g, "").length !== 10) {
+          toast.error("Please enter a valid 10-digit mobile phone number");
+          setLoading(false);
+          return;
+        }
+
         const postConfirmationPath =
           nextPath || (role === "officer" ? "/dashboard?onboarding=application" : "/dashboard");
 
@@ -127,6 +137,7 @@ const Auth = () => {
               full_name: fullName,
               username: username,
               role: role,
+              phone: role === "officer" ? phone : undefined,
               candidate_lead_id: candidateLeadId || undefined,
             },
           },
@@ -244,7 +255,7 @@ const Auth = () => {
             </p>
             <div className="rounded-lg border bg-muted/40 p-4 text-sm">
               {role === "officer"
-                ? "After you confirm, you will be signed in automatically and taken directly to the We Find Guards hiring application."
+                ? "After you confirm, you will be welcomed to We Find Guards and can start your hiring application when you are ready."
                 : "After you confirm, you will be signed in automatically so you can complete your company profile and begin hiring security officers."}
             </div>
           </CardContent>
@@ -289,6 +300,22 @@ const Auth = () => {
                     required
                   />
                 </div>
+
+                {role === "officer" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Mobile Phone</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      placeholder="123-456-7890"
+                      value={phone}
+                      onChange={(e) => setPhone(formatUsPhone(e.target.value))}
+                      required
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
@@ -344,20 +371,26 @@ const Auth = () => {
 
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (mode === "signup") {
-                    validatePassword(e.target.value);
-                  }
-                }}
-                required
-                minLength={8}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (mode === "signup") {
+                      validatePassword(e.target.value);
+                    }
+                  }}
+                  className="pr-11"
+                  required
+                  minLength={8}
+                />
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"}>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {mode === "signup" && (
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">Password must contain:</p>

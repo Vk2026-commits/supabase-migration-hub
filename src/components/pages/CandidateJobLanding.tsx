@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { formatUsPhone } from "@/lib/phone";
 
 export default function CandidateJobLanding() {
   const { jobId } = useParams({ from: "/jobs/$jobId" });
@@ -55,7 +56,7 @@ export default function CandidateJobLanding() {
         {job.requirements && <div className="mt-8"><h2 className="text-xl font-bold">What you’ll need</h2><p className="mt-3 whitespace-pre-wrap leading-7 text-slate-700">{job.requirements}</p></div>}
       </section>
       <Card className="h-fit border-primary/20 shadow-xl lg:sticky lg:top-8"><CardContent className="p-6 sm:p-8"><Briefcase className="h-9 w-9 rounded-lg bg-primary p-2 text-white" /><h2 className="mt-5 text-2xl font-bold">Start your application</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Tell the hiring team how to reach you. Next, you’ll create a secure officer login and continue the job application.</p>
-        <form onSubmit={continueToAccount} className="mt-6 space-y-4"><div><Label htmlFor="lead-name">Full name</Label><Input id="lead-name" className="mt-2 h-12" autoComplete="name" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} required /></div><div><Label htmlFor="lead-email">Email</Label><Input id="lead-email" className="mt-2 h-12" type="email" autoComplete="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required /></div><div><Label htmlFor="lead-phone">Mobile phone</Label><Input id="lead-phone" className="mt-2 h-12" type="tel" autoComplete="tel" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} required /></div><Button className="h-12 w-full text-base" disabled={saving}>{saving ? "Saving…" : "Continue to create login"}</Button></form>
+        <form onSubmit={continueToAccount} className="mt-6 space-y-4"><div><Label htmlFor="lead-name">Full name</Label><Input id="lead-name" className="mt-2 h-12" autoComplete="name" value={form.fullName} onChange={e => setForm({ ...form, fullName: e.target.value })} required /></div><div><Label htmlFor="lead-email">Email</Label><Input id="lead-email" className="mt-2 h-12" type="email" autoComplete="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required /></div><div><Label htmlFor="lead-phone">Mobile phone</Label><Input id="lead-phone" className="mt-2 h-12" type="tel" inputMode="numeric" autoComplete="tel" placeholder="123-456-7890" value={form.phone} onChange={e => setForm({ ...form, phone: formatUsPhone(e.target.value) })} required /></div><Button className="h-12 w-full text-base" disabled={saving}>{saving ? "Saving…" : "Continue to create login"}</Button></form>
         <p className="mt-4 text-xs leading-5 text-muted-foreground">By continuing, you agree that We Find Guards and this hiring company may contact you about this position. Creating an account is required to complete and submit the application.</p>
         <div className="mt-5 flex gap-2 text-xs text-muted-foreground"><CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" /><span>Your information is connected only to this job and its hiring company.</span></div>
       </CardContent></Card>

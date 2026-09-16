@@ -28,6 +28,7 @@ import { OfficerEmployeeOnboarding } from "./OfficerEmployeeOnboarding";
 import { OfficerOfferReview } from "./OfficerOfferReview";
 import { useSearchParams } from "@/lib/router-compat";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { formatUsPhone } from "@/lib/phone";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -234,7 +235,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         title: data.title || "",
         bio: data.bio || "",
         years_experience: data.years_experience?.toString() || "",
-        phone: data.phone || "",
+        phone: formatUsPhone(data.phone || ""),
         address_street: data.address_street || "",
         address_unit: data.address_unit || "",
         address_city: data.address_city || "",
@@ -879,9 +880,11 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                     <Input
                       id="phone"
                       type="tel"
-                      placeholder="+1 (555) 000-0000"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      placeholder="123-456-7890"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, phone: formatUsPhone(e.target.value) })}
                     />
                   </div>
 

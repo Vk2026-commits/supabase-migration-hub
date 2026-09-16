@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { formatUsPhone } from "@/lib/phone";
 
 export default function OfficerIntake() {
   const [form, setForm] = useState({ fullName: "", email: "", phone: "" });
@@ -47,7 +48,7 @@ export default function OfficerIntake() {
         <form onSubmit={continueToAccount} className="mt-6 space-y-4">
           <div><Label htmlFor="officer-name">Full name</Label><Input id="officer-name" className="mt-2 h-12" autoComplete="name" value={form.fullName} onChange={event => setForm({ ...form, fullName: event.target.value })} required /></div>
           <div><Label htmlFor="officer-email">Email</Label><Input id="officer-email" className="mt-2 h-12" type="email" autoComplete="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} required /></div>
-          <div><Label htmlFor="officer-phone">Mobile phone</Label><Input id="officer-phone" className="mt-2 h-12" type="tel" autoComplete="tel" value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} required /></div>
+          <div><Label htmlFor="officer-phone">Mobile phone</Label><Input id="officer-phone" className="mt-2 h-12" type="tel" inputMode="numeric" autoComplete="tel" placeholder="123-456-7890" value={form.phone} onChange={event => setForm({ ...form, phone: formatUsPhone(event.target.value) })} required /></div>
           <Button className="h-12 w-full text-base" disabled={saving}>{saving ? "Saving…" : "Save and create login"}</Button>
         </form>
         <p className="mt-4 text-xs leading-5 text-muted-foreground">By continuing, you agree that We Find Guards may contact you about your profile and hiring opportunities. A secure account is required to complete and submit an application.</p>
