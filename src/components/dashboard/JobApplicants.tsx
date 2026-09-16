@@ -145,7 +145,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         application.status === "submitted"
         || Boolean(application.submitted_at)
         || application.evidence_snapshot_status === "complete"
-      );
+      ) || hiringApplications[0];
       const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
       const applicationSnapshot = hiringApplications[0]?.application_data || {};
       const hireId = hireByApplication.get(app.id);
