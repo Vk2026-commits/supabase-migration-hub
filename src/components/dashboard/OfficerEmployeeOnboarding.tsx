@@ -676,7 +676,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   }, [data, currentStep, loaded, accessState, activeOfficerId, hireId, hiringApplicationId, status]);
 
   const policyDetailsComplete = (key: string) => {
-    if (key === "trackTik") return Boolean(data.trackTikUsername && data.employeeIdNumber && data.trackTikPasswordSet);
+    if (key === "trackTik") return Boolean(data.trackTikUsername && data.trackTikPasswordSet);
     if (key === "uniform") {
       const fields = data.policyAcknowledgements[key]?.documentFields || {};
       return fields.uniformNone === "true" || uniformChecklistRows.some((_, index) => fields[`uniformReceived:${index}`] === "true" || fields[`uniformReturned:${index}`] === "true");
@@ -947,7 +947,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       return;
     }
     if (!policyDetailsComplete(key)) {
-      toast.error(key === "trackTik" ? "Add the TrackTik username and employee number, then confirm the password was set" : key === "uniform" ? "Check the uniform items received or returned, or confirm that no items were issued" : "The company must provide the complete worksite, start date, and expected schedule in the offer");
+      toast.error(key === "trackTik" ? "Add the TrackTik username, then confirm the password was set" : key === "uniform" ? "Check the uniform items received or returned, or confirm that no items were issued" : "The company must provide the complete worksite, start date, and expected schedule in the offer");
       return;
     }
     const policyItem = policyItems.find(([itemKey]) => itemKey === key);
@@ -1584,7 +1584,7 @@ function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onCh
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <Field label="TrackTik username" value={data.trackTikUsername} onChange={(value) => onChange("trackTikUsername", value)} required placeholder="Example: lrose" />
-        <Field label="Employee number" value={data.employeeIdNumber} onChange={(value) => onChange("employeeIdNumber", value)} required placeholder="Enter the assigned employee number" />
+        <Field label="Employee number (optional)" value={data.employeeIdNumber} onChange={(value) => onChange("employeeIdNumber", value)} placeholder="The company can assign this later" />
       </div>
       <label className="flex items-start gap-3 rounded-xl border bg-background p-4">
         <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(value) => onChange("trackTikPasswordSet", Boolean(value))} />
