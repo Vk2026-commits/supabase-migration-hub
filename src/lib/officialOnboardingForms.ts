@@ -247,15 +247,15 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
   const page = document.getPages()[0];
   if (values.w4SignatureImage) {
     const signature = await document.embedPng(await trimSignature(values.w4SignatureImage));
-    const scale = Math.min(325 / signature.width, 28 / signature.height);
+    const scale = Math.min(325 / signature.width, 24 / signature.height);
     const width = signature.width * scale;
     const height = signature.height * scale;
-    page.drawImage(signature, { x: 105 + (325 - width) / 2, y: 92 + (28 - height) / 2, width, height });
+    page.drawImage(signature, { x: 105 + (325 - width) / 2, y: 90, width, height });
   } else if (values.w4SignatureName) {
     const font = await document.embedFont(StandardFonts.TimesRomanItalic);
-    page.drawText(values.w4SignatureName, { x: 110, y: 98, size: 14, font, color: rgb(0, 0, 0) });
+    page.drawText(values.w4SignatureName, { x: 110, y: 91, size: 14, font, color: rgb(0, 0, 0) });
   }
-  if (values.w4SignatureDate) page.drawText(date(values.w4SignatureDate), { x: 470, y: 98, size: 10, color: rgb(0, 0, 0) });
+  if (values.w4SignatureDate) page.drawText(date(values.w4SignatureDate), { x: 470, y: 91, size: 10, color: rgb(0, 0, 0) });
   try { form.updateFieldAppearances(await document.embedFont(StandardFonts.Helvetica)); } catch { /* viewer regenerates */ }
   return document.save();
 }
@@ -354,8 +354,10 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const form = document.getForm();
   const employeeName = acknowledgement.printedName || [values.legalFirstName, values.middleInitial, values.legalLastName].filter(Boolean).join(" ");
   const formattedDate = date(acknowledgement.signatureDate);
-  const isKairosConfidentialityAgreement = /kairos security/i.test(values.employerName || "") && path.includes("09-confidentialityagreement");
+  const isKairosEmployer = /kairos security/i.test(values.employerName || "");
+  const isKairosConfidentialityAgreement = isKairosEmployer && path.includes("09-confidentialityagreement");
   const isConfidentialityAgreement = path.includes("09-confidentialityagreement");
+  const isCompanyPropertyReceipt = path.includes("07-receipt-company-property");
   const isTrackTikDocument = path.includes("11-track-tik-login-info-sheet");
   const isTemporaryAcknowledgement = path.includes("12-temporary-employeement-acknowldgement");
   const isAppearancePolicy = path.includes("13-personal-appearance");
@@ -371,8 +373,8 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const confidentialityDate = isConfidentialityAgreement && formattedDate ? formattedDate.slice(0, 5) : formattedDate;
   const confidentialityYear = isConfidentialityAgreement && formattedDate ? formattedDate.slice(-2) : "";
   const isOfferLetter = path.includes("10-offer-letter-per-hour");
-  const employerRepresentativeName = values.employerSignatureName || values.employerRepresentativeName || (isKairosConfidentialityAgreement ? "Erika Garces" : "");
-  const employerRepresentativeTitle = values.employerRepresentativeTitle || (isKairosConfidentialityAgreement ? "Authorized Hiring Representative" : "");
+  const employerRepresentativeName = values.employerSignatureName || values.employerRepresentativeName || (isKairosEmployer ? "Erika Garces" : "");
+  const employerRepresentativeTitle = values.employerRepresentativeTitle || (isKairosEmployer ? "Authorized Hiring Representative" : "");
   const employerSignedDate = date(values.offerPreparedAt?.slice(0, 10) || acknowledgement.signatureDate);
   const schedule = values.availabilitySchedule || {};
   const fieldValues: Record<string, string> = {
@@ -381,6 +383,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     "Printed Name": employeeName,
     "Print Name": employeeName,
     "Print Name_2": employerRepresentativeName,
+    "Printed Name_2": employerRepresentativeName,
     "Employees Name Printed": employeeName,
     "Company Representative": employerRepresentativeName,
     "Employer Representative": employerRepresentativeName,
@@ -446,6 +449,10 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   if (isHandbookAcknowledgement) {
     try { form.getTextField("Employer Representative").setText(""); } catch { /* field differs */ }
   }
+  if (isConfidentialityAgreement) {
+    try { form.getTextField("This Confidentiality Agreement the Agreement dated as of").setFontSize(9); } catch { /* field differs */ }
+    try { form.getTextField("Text1").setFontSize(8); } catch { /* field differs */ }
+  }
 
   const signatureImage = acknowledgement.signatureImage ? await document.embedPng(await trimSignature(acknowledgement.signatureImage)) : null;
   const drawSignature = (page: any, x: number, y: number, width: number, height: number, signerName = employeeName, image = signatureImage) => {
@@ -486,7 +493,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
           const scale = Math.min((rect.width - 6) / signatureImage.width, (rect.height - 3) / signatureImage.height);
           const width = signatureImage.width * scale;
           const height = signatureImage.height * scale;
-          page.drawImage(signatureImage, { x: rect.x + (rect.width - width) / 2, y: rect.y + (rect.height - height) / 2, width, height });
+          page.drawImage(signatureImage, { x: rect.x + (rect.width - width) / 2, y: rect.y + 1, width, height });
         } else if (employeeName) {
           let size = Math.min(13, rect.height - 3);
           while (size > 6 && signatureFont.widthOfTextAtSize(employeeName, size) > rect.width - 6) size -= 0.5;
@@ -496,17 +503,22 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     } catch { /* signature widget differs between documents */ }
   }
   if (employerRepresentativeName) {
-    try {
-      const employerSignatureField = form.getField("Signature_2") as any;
-      for (const widget of employerSignatureField.acroField.getWidgets()) {
-        const rect = widget.getRectangle();
-        const pageRef = widget.P();
-        const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
-        let size = Math.min(13, rect.height - 3);
-        while (size > 6 && signatureFont.widthOfTextAtSize(employerRepresentativeName, size) > rect.width - 6) size -= 0.5;
-        page.drawText(employerRepresentativeName, { x: rect.x + 3, y: rect.y + Math.max(2, (rect.height - size) / 2), size, font: signatureFont, color: rgb(0, 0, 0) });
-      }
-    } catch { /* employer signature field differs between documents */ }
+    const employerSignatureFields = isCompanyPropertyReceipt
+      ? ["Company Representative signature"]
+      : ["Signature_2"];
+    employerSignatureFields.forEach((fieldName) => {
+      try {
+        const employerSignatureField = form.getField(fieldName) as any;
+        for (const widget of employerSignatureField.acroField.getWidgets()) {
+          const rect = widget.getRectangle();
+          const pageRef = widget.P();
+          const page = document.getPages().find(candidate => candidate.ref === pageRef) || document.getPages()[0];
+          let size = Math.min(13, rect.height - 3);
+          while (size > 6 && signatureFont.widthOfTextAtSize(employerRepresentativeName, size) > rect.width - 6) size -= 0.5;
+          page.drawText(employerRepresentativeName, { x: rect.x + 3, y: rect.y + 2, size, font: signatureFont, color: rgb(0, 0, 0) });
+        }
+      } catch { /* employer signature field differs between documents */ }
+    });
   }
   if (isTrackTikDocument) {
     ["User Name  for Track Tik", "Password  for  Track Tik", "Employee"].forEach((name) => {
