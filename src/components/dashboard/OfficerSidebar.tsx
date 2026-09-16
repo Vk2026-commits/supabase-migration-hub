@@ -1,5 +1,5 @@
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole } from "lucide-react";
+import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole, CalendarClock } from "lucide-react";
 
 interface OfficerSidebarProps {
   activeTab: string;
@@ -35,6 +35,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
     { title: "Photos", value: "photos", icon: Images },
     { title: "Certifications and Certificates", value: "certifications", icon: Award },
     { title: "Work History", value: "work-history", icon: Briefcase },
+    { title: "Interview History", value: "interview-history", icon: CalendarClock },
     { title: "Video Interviews", value: "videos", icon: Video },
     { title: "Find a Job", value: "find-jobs", icon: Search },
     { title: "Messages", value: "messages", icon: MessageCircle },
@@ -45,7 +46,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
     if (value === 'hiring-application') {
       return activeTab === value ? "font-semibold bg-primary text-primary-foreground hover:bg-primary/90" : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
     }
-    if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'employee-onboarding') {
+    if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'employee-onboarding') {
       return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
     }
     
@@ -57,7 +58,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
   };
 
   const isTabComplete = (value: string) => {
-    if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'hiring-application') return false;
+    if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'hiring-application') return false;
     const completionKey = completionKeyFor(value);
     return completionStatus?.[completionKey as keyof typeof completionStatus];
   };

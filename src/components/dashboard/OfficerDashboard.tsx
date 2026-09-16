@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin } from "lucide-react";
+import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { OfficerPhotos } from "./OfficerPhotos";
@@ -34,7 +34,7 @@ interface OfficerDashboardProps {
   initialTab?: string;
 }
 
-const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "videos", "find-jobs", "messages"]);
+const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "interview-history", "videos", "find-jobs", "messages"]);
 
 const guidedSections: Record<string, { title: string; description: string; step: number }> = {
   profile: { title: "Your professional profile", description: "Keep your contact details and professional introduction current.", step: 2 },
@@ -90,6 +90,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
   const [acceptedEmploymentOffer, setAcceptedEmploymentOffer] = useState<any>(null);
   const [upcomingInterview, setUpcomingInterview] = useState<any>(null);
+  const [interviewHistory, setInterviewHistory] = useState<any[]>([]);
   const [interviewResponding, setInterviewResponding] = useState(false);
   const [showCalendarOptions, setShowCalendarOptions] = useState(false);
   const [showOfferPrompt, setShowOfferPrompt] = useState(false);
@@ -224,7 +225,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult, acceptedOfferResult, interviewResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult, acceptedOfferResult, interviewResult, interviewHistoryResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
@@ -236,6 +237,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).rpc("get_my_upcoming_interview"),
+          (supabase as any).rpc("get_my_interview_history"),
         ]);
         
         setCertCount(certsResult.count || 0);
@@ -252,6 +254,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
         if (interviewResult.error && interviewResult.error.code !== "42P01") console.error("Failed to load upcoming interview", interviewResult.error);
         setUpcomingInterview(interviewResult.data || null);
+        if (interviewHistoryResult.error && interviewHistoryResult.error.code !== "42883") console.error("Failed to load interview history", interviewHistoryResult.error);
+        setInterviewHistory(Array.isArray(interviewHistoryResult.data) ? interviewHistoryResult.data : []);
         setOnboardingOfferAvailable(Boolean(pendingOfferResult.data?.id || (preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id)));
         setOnboardingOfferLoaded(true);
         const photoNames = (photosResult.data || []).map((file: any) => file.name.split(".")[0]);
@@ -1098,6 +1102,36 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                 userId={userId}
                 onChanged={loadProfile}
               />
+            )}
+
+            {activeTab === "interview-history" && (
+              <Card className="rounded-2xl shadow-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5 text-primary" />Interview History</CardTitle>
+                  <CardDescription>Your past interviews remain here whether or not the position resulted in a hire.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {interviewHistory.length === 0 ? (
+                    <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Your completed interviews will appear here after the scheduled day ends.</div>
+                  ) : (
+                    <div className="grid gap-3">
+                      {interviewHistory.map((interview) => {
+                        const responseLabel = interview.status === "cancelled" ? "Canceled" : interview.response_status === "declined" ? "Declined" : interview.response_status === "accepted" ? "Completed" : "No response recorded";
+                        return <div key={interview.id} className="rounded-xl border bg-card p-4 shadow-sm">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="font-semibold">{interview.company_name || "Company"} — {interview.job_title || "Security Officer"}</p>
+                              <p className="mt-1 text-sm text-muted-foreground">{new Date(interview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p>
+                              <p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4 shrink-0" />{interview.interview_type === "video" ? "Online interview" : interview.location || "In-person interview"}</p>
+                            </div>
+                            <Badge variant={responseLabel === "Completed" ? "default" : "secondary"}>{responseLabel}</Badge>
+                          </div>
+                        </div>;
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {activeTab === "hiring-application" && (
