@@ -255,7 +255,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
           supabase.from("video_interviews").select("id", { count: 'exact', head: true }).eq("officer_id", data.id),
-          (supabase as any).from("guard_hiring_applications").select("status").eq("officer_id", data.id).eq("application_type", "master").maybeSingle(),
+          (supabase as any).from("guard_hiring_applications").select("status,application_type,submitted_at,evidence_snapshot_status").eq("officer_id", data.id).order("created_at", { ascending: false }).limit(20),
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at,employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
@@ -271,7 +271,12 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setWorkHistoryCount(workResult.count || 0);
         setVideoInterviewCount(videosResult.count || 0);
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
-        setApplicationSubmitted(applicationResult.data?.status === "submitted");
+        const storedApplications = Array.isArray(applicationResult.data) ? applicationResult.data : [];
+        setApplicationSubmitted(storedApplications.some((application: any) =>
+          application.status === "submitted"
+          || Boolean(application.submitted_at)
+          || (application.application_type === "employer_copy" && application.evidence_snapshot_status === "complete")
+        ));
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
         if (confirmedHireResult.error) console.error("Failed to load confirmed employment status", confirmedHireResult.error);
@@ -544,8 +549,9 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     setShowInterviewChange(true);
   };
 
-  const requestInterviewChange = async () => {
-    if (!upcomingInterview?.id || !interviewChangeReason.trim()) {
+  const requestInterviewChange = async (reasonOverride?: string) => {
+    const submittedReason = (reasonOverride ?? interviewChangeReason).trim();
+    if (!upcomingInterview?.id || !submittedReason) {
       toast.error("Add a reason for this change");
       return;
     }
@@ -563,7 +569,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
       const { error } = await (supabase as any).rpc("request_interview_change", {
         _interview_id: upcomingInterview.id,
         _request_type: interviewChangeType,
-        _reason: interviewChangeReason.trim(),
+        _reason: submittedReason,
         _proposed_scheduled_at: proposedAt,
         _proposed_interview_type: interviewChangeType === "reschedule" ? upcomingInterview.interview_type : null,
         _proposed_location: interviewChangeType === "reschedule" ? upcomingInterview.location : null,
@@ -606,6 +612,16 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
       dashboardTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
     });
   };
+
+  const onboardingChecklist = (compact = false) => (
+    <Card className={`rounded-2xl border-primary/20 bg-primary/5 ${compact ? "shadow-sm" : "mb-6 xl:hidden"}`}>
+      <CardHeader className={compact ? "p-4 pb-2" : "pb-3"}>
+        <CardTitle className={`flex items-center gap-2 ${compact ? "text-base" : "text-lg"}`}><ClipboardCheck className="h-5 w-5 text-primary" />{compact ? "Application progress" : "Finish your onboarding"}</CardTitle>
+        <CardDescription>{compact ? "Your next steps stay visible while you work." : "Complete these items so employers can review your profile."}</CardDescription>
+      </CardHeader>
+      <CardContent className={compact ? "grid gap-2 p-4 pt-2" : "grid gap-2 sm:grid-cols-2"}>{onboardingItems.map((item) => <button key={item.label} type="button" disabled={item.locked} onClick={() => handleTabChange(item.tab)} className="flex min-w-0 items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors enabled:hover:border-primary/30 enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70">{item.locked ? <LockKeyhole className="h-4 w-4 shrink-0 text-amber-600" /> : item.complete ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" /> : <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />}<span className={`min-w-0 text-sm leading-tight ${item.complete ? "text-muted-foreground line-through" : "font-medium"}`}>{item.label}</span></button>)}</CardContent>
+    </Card>
+  );
 
   return (
     <SidebarProvider>
@@ -652,14 +668,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                   : `${upcomingInterview?.company_name || "The company"} must accept your proposed time before the confirmed appointment changes.`}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-2">
+            <form id="officer-interview-change-form" className="space-y-4 py-2" onSubmit={(event) => { event.preventDefault(); const reason = String(new FormData(event.currentTarget).get("reason") || ""); setInterviewChangeReason(reason); void requestInterviewChange(reason); }}>
               {interviewChangeType === "reschedule" && <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><Label htmlFor="officer-reschedule-date">Proposed date</Label><Input id="officer-reschedule-date" type="date" value={interviewChangeDate} onChange={(event) => setInterviewChangeDate(event.target.value)} /></div>
                 <div className="space-y-2"><Label htmlFor="officer-reschedule-time">Proposed time</Label><select id="officer-reschedule-time" className="h-12 w-full rounded-md border bg-background px-3" value={interviewChangeTime} onChange={(event) => setInterviewChangeTime(event.target.value)}>{Array.from({ length: 96 }, (_, index) => { const hour = Math.floor(index / 4); const minute = (index % 4) * 15; const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`; const label = new Date(2000, 0, 1, hour, minute).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); return <option key={value} value={value}>{label}</option>; })}</select></div>
               </div>}
-              <div className="space-y-2"><Label htmlFor="officer-change-reason">Reason *</Label><Textarea id="officer-change-reason" value={interviewChangeReason} onChange={(event) => setInterviewChangeReason(event.target.value)} placeholder={interviewChangeType === "cancel" ? "Why are you canceling?" : "Why do you need a different time?"} /></div>
-            </div>
-            <DialogFooter><Button type="button" variant="outline" onClick={() => setShowInterviewChange(false)}>Keep interview</Button><Button type="button" variant={interviewChangeType === "cancel" ? "destructive" : "default"} onClick={() => void requestInterviewChange()} disabled={interviewResponding}>{interviewResponding ? "Sending…" : interviewChangeType === "cancel" ? "Cancel interview" : "Send request"}</Button></DialogFooter>
+              <div className="space-y-2"><Label htmlFor="officer-change-reason">Reason *</Label><Textarea id="officer-change-reason" name="reason" value={interviewChangeReason} onChange={(event) => setInterviewChangeReason(event.target.value)} placeholder={interviewChangeType === "cancel" ? "Why are you canceling?" : "Why do you need a different time?"} required /></div>
+            </form>
+            <DialogFooter><Button type="button" variant="outline" onClick={() => setShowInterviewChange(false)}>Keep interview</Button><Button type="submit" form="officer-interview-change-form" variant={interviewChangeType === "cancel" ? "destructive" : "default"} disabled={interviewResponding}>{interviewResponding ? "Sending…" : interviewChangeType === "cancel" ? "Cancel interview" : "Send request"}</Button></DialogFooter>
           </DialogContent>
         </Dialog>
         <OfficerSidebar 
@@ -720,12 +736,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               </CardContent>
             </Card>}
 
-            {!employmentConfirmedAt && !onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
-              <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">
-                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><ClipboardCheck className="h-5 w-5 text-primary" />Finish your onboarding</CardTitle><CardDescription>You can use the dashboard now. Complete these items so employers can review your profile.</CardDescription></CardHeader>
-                <CardContent className="grid gap-2 sm:grid-cols-2">{onboardingItems.map((item) => <button key={item.label} type="button" disabled={item.locked} onClick={() => handleTabChange(item.tab)} className="flex items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70">{item.locked ? <LockKeyhole className="h-5 w-5 shrink-0 text-amber-600" /> : item.complete ? <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" /> : <Circle className="h-5 w-5 shrink-0 text-muted-foreground" />}<span className={item.complete ? "text-sm text-muted-foreground line-through" : "text-sm font-medium"}>{item.label}</span></button>)}</CardContent>
-              </Card>
-            )}
+            {!employmentConfirmedAt && !onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && onboardingChecklist()}
 
             {activeTab === "profile" && !onboardingComplete && (
               <Alert className="mb-6 border-primary/20 bg-primary/5">
@@ -1310,6 +1321,22 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                     <Badge className="shrink-0 border border-green-200 bg-green-100 text-green-800 hover:bg-green-100">Complete</Badge>
                   </CardContent>
                 </Card>
+              ) : applicationSubmitted ? (
+                <Card className="mx-auto max-w-3xl rounded-2xl border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background shadow-sm">
+                  <CardContent className="flex flex-col items-center gap-4 p-8 text-center sm:flex-row sm:text-left">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-600 text-white shadow-sm">
+                      <CheckCircle2 className="h-8 w-8" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-green-700">Application submitted</p>
+                      <h2 className="mt-1 text-2xl font-bold text-foreground">Thank you—your hiring application was received</h2>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Your application has been sent to the hiring company and is saved. You do not need to submit it again. The company will contact you about the next step.
+                      </p>
+                    </div>
+                    <Badge className="shrink-0 border border-green-200 bg-green-100 text-green-800 hover:bg-green-100">Submitted</Badge>
+                  </CardContent>
+                </Card>
               ) : (
                 <GuardHiringApplication
                   userId={userId}
@@ -1359,6 +1386,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           {/* Right Side Chat Panel and Interested Jobs */}
           {officerProfile?.id && activeTab !== "employee-onboarding" && (
             <div className="hidden w-96 shrink-0 border-l bg-muted/20 p-4 overflow-y-auto space-y-4 xl:block">
+              {!employmentConfirmedAt && !onboardingComplete && activeTab !== "hiring-application" && onboardingChecklist(true)}
               <div className="h-[250px]">
                 <OfficerChatPanel 
                   officerId={officerProfile.id} 

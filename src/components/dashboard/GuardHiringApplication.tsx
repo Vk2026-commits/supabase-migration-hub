@@ -17,6 +17,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { useSearchParams } from "@/lib/router-compat";
 import { SignaturePad } from "./SignaturePad";
 import { formatUsPhone } from "@/lib/phone";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Props {
   userId: string;
@@ -108,6 +109,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [applicationStarted, setApplicationStarted] = useState(false);
   const [visitedSteps, setVisitedSteps] = useState<number[]>([]);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [showSubmissionConfirmation, setShowSubmissionConfirmation] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
   const pendingSaveCount = useRef(0);
@@ -479,15 +481,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       if (archiveResult.error) throw new Error(archiveResult.data?.error || archiveResult.error.message || "Could not preserve the submitted photos and certificates");
       if (archiveResult.data?.snapshot_status !== "complete") throw new Error(archiveResult.data?.error || "The required application attachments could not be preserved");
       const attachmentManifest = archiveResult.data.manifest || [];
-      const completedSnapshot = { ...employerSnapshot, attachmentManifest };
       setForm(current => ({ ...current, attachmentManifest }));
       const masterCompletion = await (supabase as any).from("guard_hiring_applications").update({ status: "submitted", submitted_at: submittedAt, application_data: { ...snapshot, attachmentManifest } }).eq("id", result.data.id);
       if (masterCompletion.error) throw masterCompletion.error;
       setMasterStatus("submitted");
       setEditingSubmitted(false);
+      setShowSubmissionConfirmation(true);
       toast.success(editingSubmitted ? "Application resubmitted" : "Hiring application submitted");
       onChanged?.();
-      await generateGuardApplicationPDF(completedSnapshot);
     } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
     finally { setSubmitting(false); }
   };
@@ -523,7 +524,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
 
   if (loaded && masterStatus === "submitted" && !editingSubmitted) {
     return (
-      <section className="mx-auto w-full max-w-4xl rounded-2xl border border-green-200 bg-green-50/70 p-5 shadow-sm sm:p-8">
+      <><Dialog open={showSubmissionConfirmation} onOpenChange={setShowSubmissionConfirmation}><DialogContent className="max-w-md rounded-2xl"><DialogHeader><div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700"><CheckCircle2 className="h-7 w-7" /></div><DialogTitle className="text-2xl">Thank you for submitting your application</DialogTitle><DialogDescription className="text-base">Your application was successfully sent to {form.companyName || "the hiring company"}. You can leave this page—your submitted application is saved.</DialogDescription></DialogHeader><Button type="button" onClick={() => setShowSubmissionConfirmation(false)}>Done</Button></DialogContent></Dialog><section className="mx-auto w-full max-w-4xl rounded-2xl border border-green-200 bg-green-50/70 p-5 shadow-sm sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
@@ -531,7 +532,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
             </span>
             <div>
               <p className="text-xs font-bold uppercase tracking-[.16em] text-green-700">Application complete</p>
-              <h2 className="mt-1 text-xl font-bold text-foreground sm:text-2xl">Your hiring application is submitted</h2>
+              <h2 className="mt-1 text-xl font-bold text-foreground sm:text-2xl">Thank you—your hiring application was submitted</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 Your application for {form.position || "Security Officer"} with {form.companyName || "the selected company"} is saved. The submitted company copy remains unchanged.
               </p>
@@ -547,7 +548,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
           </Button>
           <Button type="button" onClick={editForAnotherCompany}>Edit Application</Button>
         </div>
-      </section>
+      </section></>
     );
   }
 
