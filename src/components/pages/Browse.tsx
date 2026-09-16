@@ -136,7 +136,7 @@ const Browse = () => {
       }
     }
 
-    if (!companyProfileIsComplete(companyData)) {
+    if (!companyData || !companyProfileIsComplete(companyData)) {
       toast.error(
         "Complete the company profile, including the hiring contact mobile number, before browsing security professionals",
       );

@@ -601,7 +601,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         city: snapshot.city || officerResult.data?.address_city || "",
         state: snapshot.state || officerResult.data?.address_state || "",
         zip: snapshot.zip || officerResult.data?.address_zip || "",
-        availabilitySchedule: snapshot.availability?.schedule || (officerResult.data as any)?.availability_schedule || {},
         ...saved,
         employerName: hire.company_profiles?.company_name || hiring.company_name || snapshot.companyName || "Your hiring company",
         startDate: offer.startDate || hire.hire_date || snapshot.startDate || "",
@@ -1090,15 +1089,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
       </div>
-      {status === "submitted" && (
-        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-green-200 bg-green-50 p-4 text-green-800">
-          <CheckCircle2 className="h-5 w-5" />
-          <div>
-            <p className="font-semibold">Onboarding submitted</p>
-            <p className="text-sm">Your completed packet is available to {data.employerName}.</p>
-          </div>
-        </div>
-      )}
       <div className="grid items-start gap-8 lg:grid-cols-[270px_minmax(0,900px)] lg:justify-center">
         <aside className="hidden lg:block">
           <nav className="sticky top-4 space-y-2 rounded-2xl border bg-zinc-100 p-3 shadow-inner">
@@ -1527,9 +1517,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button type="submit" disabled={submitting || !allComplete || status === "submitted"}>
+              <Button type="submit" disabled={submitting || !allComplete}>
                 <FileCheck2 className="mr-2 h-4 w-4" />
-                {status === "submitted" ? "Submitted" : submitting ? "Submitting…" : "Submit onboarding"}
+                {submitting ? "Submitting…" : "Submit onboarding"}
               </Button>
             )}
           </div>
@@ -1545,9 +1535,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         ) : (
-          <Button type="submit" size="lg" className="flex-1" disabled={submitting || !allComplete || status === "submitted"}>
+          <Button type="submit" size="lg" className="flex-1" disabled={submitting || !allComplete}>
             <FileCheck2 className="mr-2 h-5 w-5" />
-            {status === "submitted" ? "Submitted" : "Submit onboarding"}
+            {submitting ? "Submitting…" : "Submit onboarding"}
           </Button>
         )}
       </div>
