@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, Briefcase, FileCheck2, RefreshCw } from "lucide-react";
+import { AlertCircle, Briefcase, FileCheck2, MapPinned, RefreshCw } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SignaturePad } from "./SignaturePad";
 import { emptyEmploymentOffer, employmentOfferFieldLabels, validateEmploymentOffer, type EmploymentOfferTerms } from "@/lib/employmentOffer";
@@ -23,6 +23,8 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
   const [companySignature, setCompanySignature] = useState("");
   const [authorized, setAuthorized] = useState(false);
   const [previousOffer, setPreviousOffer] = useState<any>(null);
+  const [clientSites, setClientSites] = useState<any[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState("manual");
   const [invalidFields, setInvalidFields] = useState<Array<keyof EmploymentOfferTerms>>([]);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const offerIsAccepted = ["accepted", "legacy_accepted"].includes(previousOffer?.status);
@@ -72,15 +74,45 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     if (!nextOpen) return;
     setInitializing(true);
     try {
-      const [{ data: company }, { data: previous }] = await Promise.all([
+      const [{ data: company }, { data: previous }, { data: sites, error: sitesError }] = await Promise.all([
         supabase.from("company_profiles").select("company_name,contact_person_name,contact_person_title,company_address,company_city,company_state,company_zip").eq("id", companyId).maybeSingle(),
         (supabase as any).from("employment_offers").select("id,version,status,terms").eq("company_id", companyId).eq("officer_id", officerId).order("version", { ascending: false }).limit(1).maybeSingle(),
+        (supabase as any).from("company_client_sites").select("*").eq("company_id", companyId).eq("is_active", true).order("site_name"),
       ]);
       const base = previous?.terms ? { ...emptyEmploymentOffer(jobTitle), ...previous.terms } : emptyEmploymentOffer(jobTitle);
       setPreviousOffer(previous || null);
+      setClientSites(sites || []);
+      setSelectedSiteId("manual");
+      if (sitesError && sitesError.code !== "42P01") console.error("Failed to load client sites", sitesError);
       setTerms({ ...base, positionTitle: base.positionTitle || jobTitle || "Security Officer", worksiteName: base.worksiteName || company?.company_name || "", worksiteAddress: base.worksiteAddress || company?.company_address || "", worksiteCity: base.worksiteCity || company?.company_city || "", worksiteState: base.worksiteState || company?.company_state || "Texas", worksiteZip: base.worksiteZip || company?.company_zip || "", representativeName: base.representativeName || company?.contact_person_name || "", representativeTitle: base.representativeTitle || company?.contact_person_title || "Authorized Hiring Representative" });
       setAuthorized(false); setCompanySignature(""); setInvalidFields([]); setIdempotencyKey(crypto.randomUUID());
     } finally { setInitializing(false); }
+  };
+
+  const selectClientSite = (siteId: string) => {
+    setSelectedSiteId(siteId);
+    if (siteId === "manual") return;
+    const site = clientSites.find((item) => item.id === siteId);
+    if (!site) return;
+    const days = (site.shift_days || []).map((day: string) => day.charAt(0).toUpperCase() + day.slice(1, 3)).join(", ");
+    const formatTime = (value: string) => {
+      const [hour, minute] = String(value || "").slice(0, 5).split(":").map(Number);
+      return new Date(2000, 0, 1, hour || 0, minute || 0).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    };
+    const expectedSchedule = `${days}: ${formatTime(site.shift_start_time)}–${formatTime(site.shift_end_time)}${site.schedule_notes ? `; ${site.schedule_notes}` : ""}`;
+    setTerms((current) => ({
+      ...current,
+      worksiteName: site.site_name || site.client_name,
+      worksiteAddress: [site.address_street, site.address_unit].filter(Boolean).join(", "),
+      worksiteCity: site.address_city || "",
+      worksiteState: site.address_state || "",
+      worksiteZip: site.address_zip || "",
+      supervisorName: site.supervisor_name || site.site_contact_name || "",
+      expectedSchedule,
+      expectedWeeklyHours: String(site.expected_weekly_hours || ""),
+    }));
+    setInvalidFields((current) => current.filter((field) => !["worksiteName", "worksiteAddress", "worksiteCity", "worksiteState", "worksiteZip", "supervisorName", "expectedSchedule", "expectedWeeklyHours"].includes(field)));
+    toast.success(`${site.site_name} added to this offer`);
   };
 
   const sendOffer = async () => {
@@ -163,7 +195,7 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
         {previousOffer && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/30 p-4"><div><strong className="block">Latest offer: version {previousOffer.version}</strong><span className="text-sm capitalize text-muted-foreground">Status: {String(previousOffer.status).replace(/_/g, " ")}</span></div><div className="flex gap-2"><Button type="button" size="sm" variant="outline" onClick={() => offerAction("preview")}>View PDF</Button>{["sent","viewed"].includes(previousOffer.status) && <Button type="button" size="sm" variant="destructive" onClick={() => offerAction("withdraw")}>Withdraw</Button>}</div></div>}
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Role and classification</h3><div className="grid gap-4 sm:grid-cols-2">{field("Position", "positionTitle", "Security Officer")}<Choice label="Employment type" value={terms.employmentType} onChange={(v) => update("employmentType", v as any)} options={[["full_time","Full-time"],["part_time","Part-time"],["temporary","Temporary"],["seasonal","Seasonal"]]} /><Choice label="Overtime classification" value={terms.classification} onChange={(v) => update("classification", v as any)} options={[["nonexempt","Nonexempt — overtime eligible"],["exempt","Exempt"]]} /></div>{area("Duties and responsibilities", "duties", "Describe the role's primary duties")}</section>
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Pay and compensation</h3><div className="grid gap-4 sm:grid-cols-2">{field("Hourly rate ($)", "hourlyRate", "18.00", "number")}<Choice label="Pay frequency" value={terms.payFrequency} onChange={(v) => update("payFrequency", v as any)} options={[["weekly","Weekly"],["biweekly","Biweekly"],["semimonthly","Twice per month"]]} />{field("Regular payday", "regularPayday", "Every other Friday")}{field("Shift differential", "shiftDifferential", "None")}{field("Bonus", "bonusCompensation", "None")}{field("Additional compensation", "additionalCompensation", "None")}</div>{area("Overtime terms", "overtimeTerms")}</section>
-        <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Worksite and schedule</h3><div className="grid gap-4 sm:grid-cols-2">{field("Worksite name", "worksiteName")}{field("Street address", "worksiteAddress")}{field("City", "worksiteCity")}{field("State", "worksiteState")}{field("ZIP code", "worksiteZip")}{field("Supervisor", "supervisorName")}{field("Expected weekly hours", "expectedWeeklyHours", "40", "number")}<Choice label="Hours" value={terms.hoursType} onChange={(v) => update("hoursType", v as any)} options={[["guaranteed","Guaranteed"],["variable","Variable / not guaranteed"]]} /></div>{area("Expected schedule", "expectedSchedule", "Days, start/end times, and shift expectations")}</section>
+        <section className="space-y-4 rounded-2xl border p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-semibold">Worksite and schedule</h3><p className="text-sm text-muted-foreground">Select a saved client site to fill the assignment details automatically.</p></div><Button type="button" size="sm" variant="outline" asChild><a href="/dashboard?tab=sites"><MapPinned className="mr-2 h-4 w-4" />Manage sites</a></Button></div><div className="space-y-2"><Label>Saved client site</Label><Select value={selectedSiteId} onValueChange={selectClientSite}><SelectTrigger className="min-h-12"><SelectValue placeholder="Choose a client site" /></SelectTrigger><SelectContent><SelectItem value="manual">Enter a different site manually</SelectItem>{clientSites.map((site) => <SelectItem key={site.id} value={site.id}>{site.site_name} — {site.client_name}</SelectItem>)}</SelectContent></Select>{clientSites.length === 0 && <p className="text-xs text-muted-foreground">No saved client sites yet. Use Manage sites to add one, or enter the details below.</p>}</div><div className="grid gap-4 sm:grid-cols-2">{field("Worksite name", "worksiteName")}{field("Street address", "worksiteAddress")}{field("City", "worksiteCity")}{field("State", "worksiteState")}{field("ZIP code", "worksiteZip")}{field("Supervisor", "supervisorName")}{field("Expected weekly hours", "expectedWeeklyHours", "40", "number")}<Choice label="Hours" value={terms.hoursType} onChange={(v) => update("hoursType", v as any)} options={[["guaranteed","Guaranteed"],["variable","Variable / not guaranteed"]]} /></div>{area("Expected schedule", "expectedSchedule", "Days, start/end times, and shift expectations")}</section>
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Benefits and policies</h3><div className="grid gap-4 sm:grid-cols-2"><Choice label="Benefits eligibility" value={terms.benefitsEligibility} onChange={(v) => update("benefitsEligibility", v as any)} options={[["eligible","Eligible"],["not_eligible","Not eligible"]]} />{terms.benefitsEligibility === "eligible" && <DatePicker className={invalidFields.includes("benefitsEffectiveDate") ? "text-destructive [&_button]:border-destructive" : ""} id="benefits-effective" label="Benefits effective date *" value={terms.benefitsEffectiveDate} onChange={(v) => update("benefitsEffectiveDate", v)} />}{field("Benefits", "benefitsSummary", "Not eligible")}{field("PTO", "ptoSummary", "None")}{field("Paid holidays", "holidaySummary", "None")}{field("Applicable policies", "policyReferences")}</div></section>
         <section className="space-y-4 rounded-2xl border p-4"><h3 className="font-semibold">Dates and contingencies</h3><div className="grid gap-4 sm:grid-cols-2"><DatePicker className={invalidFields.includes("startDate") ? "text-destructive [&_button]:border-destructive" : ""} id="offer-start" label="Start date *" value={terms.startDate} onChange={(v) => update("startDate", v)} /><DatePicker className={invalidFields.includes("acceptanceDeadline") ? "text-destructive [&_button]:border-destructive" : ""} id="offer-deadline" label="Acceptance deadline *" value={terms.acceptanceDeadline} onChange={(v) => update("acceptanceDeadline", v)} /></div><div className="grid gap-2 sm:grid-cols-2">{[["backgroundCheckRequired","Background check"],["drugTestRequired","Drug test"],["licenseVerificationRequired","License verification"],["workAuthorizationRequired","Work authorization verification"]].map(([key,label]) => <label key={key} className="flex items-center gap-2 rounded-xl border p-3 text-sm"><Checkbox checked={Boolean(terms[key as keyof EmploymentOfferTerms])} onCheckedChange={(v) => update(key as any, Boolean(v))} />{label}</label>)}</div>{area("Other contingencies", "otherContingencies", "None")}{area("Special terms", "specialTerms", "None")}<label id="offer-at-will" className={`flex items-start gap-3 rounded-xl border bg-muted/30 p-4 ${invalidFields.includes("atWillAcknowledged") ? "border-destructive bg-destructive/5" : ""}`}><Checkbox checked={terms.atWillAcknowledged} onCheckedChange={(v) => update("atWillAcknowledged", Boolean(v))} /><span className="text-sm"><strong className="block">At-will employment notice *</strong>Employment may be ended by either party at any time, with or without cause or advance notice, subject to applicable law.</span></label></section>
         {invalidFields.length > 0 && <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"><div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div><strong className="block">Finish these fields before sending:</strong><div className="mt-2 flex flex-wrap gap-2">{invalidFields.map((key) => <button className="rounded-full border border-destructive/30 bg-background px-3 py-1 hover:bg-destructive/10" key={key} onClick={() => document.getElementById(elementId(key))?.scrollIntoView({ behavior: "smooth", block: "center" })} type="button">{employmentOfferFieldLabels[key] || key}</button>)}</div></div></div></div>}

@@ -27,6 +27,7 @@ import { useSearchParams } from "@/lib/router-compat";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileWizard";
 import CompanyTeam from "./CompanyTeam";
+import ClientSites from "./ClientSites";
 import type { Database } from "@/integrations/supabase/types";
 
 interface CompanyDashboardProps {
@@ -37,6 +38,7 @@ interface CompanyDashboardProps {
 const companyTabs = new Set([
   "profile",
   "jobs",
+  "sites",
   "applicants",
   "interested",
   "employment",
@@ -889,6 +891,13 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
             {activeTab === "jobs" && companyProfile && (
               <JobPostings companyId={companyProfile.id} />
+            )}
+
+            {activeTab === "sites" && companyProfile && (
+              <ClientSites
+                companyId={companyProfile.id}
+                canManage={["owner", "admin", "hiring_manager"].includes(companyTeamRole || "")}
+              />
             )}
 
             {activeTab === "applicants" && companyProfile && (
