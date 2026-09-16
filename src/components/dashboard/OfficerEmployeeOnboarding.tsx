@@ -911,7 +911,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       };
     });
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      document.getElementById(`policy-tab-${key}`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      const tab = document.getElementById(`policy-tab-${key}`);
+      const scroller = document.getElementById("policy-tabs-scroll");
+      if (tab && scroller) {
+        scroller.scrollTo({ left: tab.offsetLeft - scroller.clientWidth / 2 + tab.clientWidth / 2, behavior: "smooth" });
+      }
     }));
   };
   useEffect(() => {
@@ -1098,7 +1102,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   <p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Policy sections</p>
                   <p className="text-xs font-semibold text-primary">{completedPolicyCount} of {policyItems.length} complete</p>
                 </div>
-                <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy sections">
+                <div id="policy-tabs-scroll" className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy sections">
                   {policyItems.map(([key, label], index) => {
                     const complete = isPolicyComplete(key);
                     const selected = activePolicyKey === key;
@@ -1372,14 +1376,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift || "Not provided"}</strong></div>
                   </div>
                   {policyItems.filter(([key]) => key === activePolicyKey).map(([key, label]) => {
+                    const policyIndex = policyItems.findIndex(([itemKey]) => itemKey === key);
                     const acknowledgement = data.policyAcknowledgements[key];
                     const viewed = Boolean(acknowledgement?.viewedAt);
                     const completed = Boolean(data.policies[key] && policyDetailsComplete(key) && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
-                      <div key={key} id={`policy-${key}`} role="tabpanel" className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 bg-background shadow-sm ${completed ? "border-green-400" : "border-primary/30"}`}>
+                      <div key={key} id={`policy-${key}`} role="tabpanel" aria-live="polite" className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 bg-background shadow-lg ring-4 ring-primary/5 animate-in fade-in-0 slide-in-from-right-2 duration-300 ${completed ? "border-green-400" : "border-primary/40"}`}>
                         <div className={`flex flex-wrap items-center gap-3 border-b p-4 sm:p-5 ${completed ? "bg-green-50" : "bg-primary/5"}`}>
                           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : <FileCheck2 className="h-5 w-5" />}</div>
                           <div className="min-w-0 flex-1">
+                            <p className={`mb-1 text-[11px] font-bold uppercase tracking-[.16em] ${completed ? "text-green-700" : "text-primary"}`}>Now viewing · Section {policyIndex + 1} of {policyItems.length}</p>
                             <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold">{label}</h3>{completed && <span className="rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">Completed</span>}</div>
                             <p className="text-sm text-muted-foreground">{completed ? "Reviewed, signed, and saved. You can still update this section." : "Read the digital terms, add the required information, and sign below."}</p>
                           </div>
