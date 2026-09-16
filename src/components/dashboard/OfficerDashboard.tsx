@@ -91,6 +91,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [acceptedEmploymentOffer, setAcceptedEmploymentOffer] = useState<any>(null);
   const [upcomingInterview, setUpcomingInterview] = useState<any>(null);
   const [interviewResponding, setInterviewResponding] = useState(false);
+  const [showCalendarOptions, setShowCalendarOptions] = useState(false);
   const [showOfferPrompt, setShowOfferPrompt] = useState(false);
   const [requiredPhotosComplete, setRequiredPhotosComplete] = useState(false);
   const [certificationDocumentComplete, setCertificationDocumentComplete] = useState(false);
@@ -422,17 +423,60 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const onboardingComplete = onboardingItems.filter((item) => !item.optional).every((item) => item.complete);
   const completedCompanyName = completedOnboardingRecord?.company_name || "your hiring company";
 
-  const addInterviewToCalendar = () => {
+  const interviewCalendarDetails = () => {
     if (!upcomingInterview) return;
     const start = new Date(upcomingInterview.scheduled_at);
     const end = new Date(start.getTime() + 60 * 60 * 1000);
-    const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
     const companyName = upcomingInterview.company_name || "Company";
     const title = upcomingInterview.job_title || "Security Officer";
     const location = upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location;
-    const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//We Find Guards//Interview//EN", "BEGIN:VEVENT", `UID:${upcomingInterview.id}@wefindguards.com`, `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`, `SUMMARY:Interview with ${companyName} — ${title}`, `LOCATION:${String(location || "").replace(/,/g, "\\,")}`, `DESCRIPTION:${String(upcomingInterview.notes || "").replace(/\n/g, "\\n")}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    const description = [
+      `Interview for ${title} with ${companyName}`,
+      upcomingInterview.notes,
+      upcomingInterview.meeting_url && upcomingInterview.interview_type !== "video" ? `Meeting link: ${upcomingInterview.meeting_url}` : null,
+    ].filter(Boolean).join("\n\n");
+    return { start, end, companyName, title, location: String(location || ""), description };
+  };
+
+  const downloadInterviewCalendarFile = () => {
+    const details = interviewCalendarDetails();
+    if (!details || !upcomingInterview) return;
+    const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const escapeCalendarText = (value: string) => value.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+    const { start, end, companyName, title, location, description } = details;
+    const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//We Find Guards//Interview//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT", `UID:${upcomingInterview.id}@wefindguards.com`, `DTSTAMP:${stamp(new Date())}`, `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`, `SUMMARY:${escapeCalendarText(`Interview with ${companyName} — ${title}`)}`, `LOCATION:${escapeCalendarText(location)}`, `DESCRIPTION:${escapeCalendarText(description)}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
     const url = URL.createObjectURL(new Blob([body], { type: "text/calendar;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = "we-find-guards-interview.ics"; link.click(); URL.revokeObjectURL(url);
+    setShowCalendarOptions(false);
+  };
+
+  const openInterviewCalendar = (provider: "google" | "outlook") => {
+    const details = interviewCalendarDetails();
+    if (!details) return;
+    const { start, end, companyName, title, location, description } = details;
+    const summary = `Interview with ${companyName} — ${title}`;
+    const params = new URLSearchParams();
+    let url = "";
+    if (provider === "google") {
+      const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+      params.set("action", "TEMPLATE");
+      params.set("text", summary);
+      params.set("dates", `${stamp(start)}/${stamp(end)}`);
+      params.set("details", description);
+      params.set("location", location);
+      url = `https://calendar.google.com/calendar/render?${params.toString()}`;
+    } else {
+      params.set("path", "/calendar/action/compose");
+      params.set("rru", "addevent");
+      params.set("subject", summary);
+      params.set("startdt", start.toISOString());
+      params.set("enddt", end.toISOString());
+      params.set("body", description);
+      params.set("location", location);
+      url = `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+    setShowCalendarOptions(false);
   };
 
   const respondToInterview = async (response: "accepted" | "declined") => {
@@ -484,6 +528,20 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <Dialog open={showCalendarOptions} onOpenChange={setShowCalendarOptions}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-primary"><CalendarPlus className="h-6 w-6" /></div>
+              <DialogTitle className="text-2xl">Add interview to your calendar</DialogTitle>
+              <DialogDescription className="text-base">Choose the calendar you use. Your confirmed date, location or meeting link, and company instructions will be included.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-3 py-2">
+              <Button type="button" className="h-12 justify-start" onClick={() => openInterviewCalendar("google")}>Google Calendar</Button>
+              <Button type="button" variant="outline" className="h-12 justify-start" onClick={() => openInterviewCalendar("outlook")}>Outlook Calendar</Button>
+              <Button type="button" variant="outline" className="h-12 justify-start" onClick={downloadInterviewCalendarFile}>Apple Calendar or another app (.ics)</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
         <OfficerSidebar 
           activeTab={activeTab} 
           onTabChange={handleTabChange}
@@ -519,7 +577,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               </div>
             )}
 
-            {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold uppercase tracking-wide text-primary">Interview request</p><Badge variant={upcomingInterview.response_status === "accepted" ? "default" : "secondary"}>{upcomingInterview.response_status === "accepted" ? "Accepted" : upcomingInterview.response_status === "declined" ? "Declined" : "Response needed"}</Badge></div><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company_name || "Company"} — {upcomingInterview.job_title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p></div><div className="flex flex-wrap gap-2">{(!upcomingInterview.response_status || upcomingInterview.response_status === "pending") && <><Button type="button" onClick={() => void respondToInterview("accepted")} disabled={interviewResponding}>Accept interview</Button><Button type="button" variant="outline" onClick={() => void respondToInterview("declined")} disabled={interviewResponding}>Decline</Button></>}{upcomingInterview.response_status === "accepted" && <Button type="button" onClick={addInterviewToCalendar}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button>}</div></CardContent></Card>}
+            {upcomingInterview && <Card className="mb-6 rounded-2xl border-blue-200 bg-blue-50/70"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><p className="text-xs font-bold uppercase tracking-wide text-primary">Interview request</p><Badge variant={upcomingInterview.response_status === "accepted" ? "default" : "secondary"}>{upcomingInterview.response_status === "accepted" ? "Confirmed" : upcomingInterview.response_status === "declined" ? "Declined" : "Response needed"}</Badge></div><h2 className="mt-1 text-lg font-bold">{upcomingInterview.company_name || "Company"} — {upcomingInterview.job_title || "Security Officer"}</h2><p className="mt-1 text-sm text-muted-foreground">{new Date(upcomingInterview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p><p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4" />{upcomingInterview.interview_type === "video" ? upcomingInterview.meeting_url : upcomingInterview.location}</p>{upcomingInterview.notes && <div className="mt-3 whitespace-pre-line rounded-xl border border-blue-200 bg-white/80 p-3 text-sm text-foreground"><span className="font-semibold">Company instructions</span><br />{upcomingInterview.notes}</div>}</div><div className="flex flex-wrap gap-2">{(!upcomingInterview.response_status || upcomingInterview.response_status === "pending") && <><Button type="button" onClick={() => void respondToInterview("accepted")} disabled={interviewResponding}>Accept interview</Button><Button type="button" variant="outline" onClick={() => void respondToInterview("declined")} disabled={interviewResponding}>Decline</Button></>}{upcomingInterview.response_status === "accepted" && <Button type="button" onClick={() => setShowCalendarOptions(true)}><CalendarPlus className="mr-2 h-4 w-4" />Add to Calendar</Button>}</div></CardContent></Card>}
 
             {!onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
               <Card className="mb-6 rounded-2xl border-primary/20 bg-primary/5">

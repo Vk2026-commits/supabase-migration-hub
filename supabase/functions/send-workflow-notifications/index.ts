@@ -70,6 +70,7 @@ const destinationFor = (workflow: Workflow) => {
     case "interview_scheduled_officer":
     case "interview_updated_officer":
     case "interview_cancelled_officer":
+    case "interview_confirmed_officer":
     case "hire_confirmed_officer":
       return "/dashboard";
     case "offer_action":
@@ -93,6 +94,17 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
     ? html(new Date(String(context.scheduled_at)).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short", timeZone: "America/Chicago" }))
     : "the scheduled time";
   const response = clean(context.response);
+  const interviewType = clean(context.interview_type) === "video" ? "Online interview" : "In-person interview";
+  const interviewLocation = clean(context.interview_type) === "video"
+    ? clean(context.meeting_url)
+    : clean(context.location);
+  const interviewNotes = clean(context.notes);
+  const confirmedInterviewDetails = [
+    `<strong>Date and time:</strong> ${scheduledAt}`,
+    `<strong>Format:</strong> ${html(interviewType)}`,
+    interviewLocation ? `<strong>${clean(context.interview_type) === "video" ? "Meeting link" : "Location"}:</strong> ${html(interviewLocation)}` : "",
+    interviewNotes ? `<strong>Company instructions:</strong><br />${html(interviewNotes).replace(/\r?\n/g, "<br />")}` : "",
+  ].filter(Boolean);
 
   switch (workflow.kind) {
     case "application_reminder":
@@ -150,12 +162,31 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         cta: "Open dashboard",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
+    case "interview_confirmed_officer":
+      return {
+        subject: `Interview confirmed with ${clean(context.company_name) || "your hiring company"}`,
+        eyebrow: "Interview confirmed",
+        title: "Your interview is confirmed",
+        paragraphs: [
+          `Hi ${officerName}, your interview with ${companyName} for ${position} is confirmed.`,
+          ...confirmedInterviewDetails,
+          "A calendar invitation is attached. You can also open your dashboard to add it directly to Google, Outlook, Apple, or another calendar.",
+        ],
+        cta: "View confirmed interview",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
     case "interview_response_company":
       return {
         subject: `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} the interview request`,
         eyebrow: "Interview response",
         title: `Interview ${response === "accepted" ? "accepted" : "declined"}`,
-        paragraphs: [`${officerName} ${response === "accepted" ? "accepted" : "declined"} the interview request for ${position}.`, "Open Applicants to review the candidate and decide the next step."],
+        paragraphs: response === "accepted"
+          ? [
+              `${officerName} accepted the interview request for ${position}. The interview is now confirmed.`,
+              ...confirmedInterviewDetails,
+              "A calendar invitation is attached for the company calendar. Open Applicants if you need to update the interview or contact the candidate.",
+            ]
+          : [`${officerName} declined the interview request for ${position}.`, "Open Applicants to review the candidate and decide the next step."],
         cta: "View applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -287,6 +318,49 @@ const brandedEmail = ({
   </body>
 </html>`;
 
+const calendarAttachmentFor = (workflow: Workflow) => {
+  if (workflow.kind !== "interview_confirmed_officer" && !(workflow.kind === "interview_response_company" && clean(workflow.context?.response) === "accepted")) return null;
+  const context = workflow.context || {};
+  const scheduledAt = clean(context.scheduled_at);
+  if (!scheduledAt) return null;
+  const start = new Date(scheduledAt);
+  if (Number.isNaN(start.getTime())) return null;
+  const end = new Date(start.getTime() + 60 * 60 * 1000);
+  const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const escapeText = (value: unknown) => clean(value).replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  const companyName = clean(context.company_name) || "Hiring company";
+  const position = clean(context.position) || "Security Officer";
+  const location = clean(context.interview_type) === "video" ? clean(context.meeting_url) : clean(context.location);
+  const description = [
+    `Confirmed interview for ${position} with ${companyName}.`,
+    clean(context.notes),
+    clean(context.meeting_url) && clean(context.interview_type) !== "video" ? `Meeting link: ${clean(context.meeting_url)}` : "",
+  ].filter(Boolean).join("\n\n");
+  const calendar = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//We Find Guards//Interview//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:REQUEST",
+    "BEGIN:VEVENT",
+    `UID:${escapeText(context.interview_id || workflow.id)}@wefindguards.com`,
+    `DTSTAMP:${stamp(new Date())}`,
+    `DTSTART:${stamp(start)}`,
+    `DTEND:${stamp(end)}`,
+    `SUMMARY:${escapeText(`Interview with ${companyName} — ${position}`)}`,
+    `LOCATION:${escapeText(location)}`,
+    `DESCRIPTION:${escapeText(description)}`,
+    "STATUS:CONFIRMED",
+    `ATTENDEE;RSVP=TRUE:mailto:${escapeText(workflow.recipient_email)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const bytes = new TextEncoder().encode(calendar);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return { filename: "we-find-guards-interview.ics", content: btoa(binary), contentType: "text/calendar; charset=utf-8; method=REQUEST" };
+};
+
 const actionIsComplete = async (admin: ReturnType<typeof createClient>, workflow: Workflow) => {
   if (workflow.kind === "application_reminder") {
     const { data } = await admin
@@ -394,11 +468,13 @@ const dispatch = async (admin: ReturnType<typeof createClient>) => {
 
       const actionUrl = await issueActionLink(admin, activeWorkflow);
       const content = emailContentFor(activeWorkflow, actionUrl);
+      const calendarAttachment = calendarAttachmentFor(activeWorkflow);
       const delivery = await resend.emails.send({
         from: "We Find Guards <noreply@wefindguards.com>",
         to: [activeWorkflow.recipient_email],
         subject: content.subject,
         html: brandedEmail({ ...content, actionUrl }),
+        ...(calendarAttachment ? { attachments: [calendarAttachment] } : {}),
       });
       if (delivery.error) throw new Error(delivery.error.message);
 
