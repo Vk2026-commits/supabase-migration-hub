@@ -1116,7 +1116,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                   ) : (
                     <div className="grid gap-3">
                       {interviewHistory.map((interview) => {
-                        const responseLabel = interview.status === "cancelled" ? "Canceled" : interview.response_status === "declined" ? "Declined" : interview.response_status === "accepted" ? "Completed" : "No response recorded";
+                        const responseLabel = interview.status === "cancelled" ? "Canceled" : interview.response_status === "declined" ? "Declined" : interview.attendance_status === "attended" ? "Attended" : interview.attendance_status === "no_show" ? "No-show" : interview.response_status === "accepted" ? "Awaiting company confirmation" : "No response recorded";
                         return <div key={interview.id} className="rounded-xl border bg-card p-4 shadow-sm">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
@@ -1124,7 +1124,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                               <p className="mt-1 text-sm text-muted-foreground">{new Date(interview.scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p>
                               <p className="mt-2 flex items-center gap-2 text-sm"><MapPin className="h-4 w-4 shrink-0" />{interview.interview_type === "video" ? "Online interview" : interview.location || "In-person interview"}</p>
                             </div>
-                            <Badge variant={responseLabel === "Completed" ? "default" : "secondary"}>{responseLabel}</Badge>
+                            <Badge variant={responseLabel === "Attended" ? "default" : responseLabel === "No-show" ? "destructive" : "secondary"}>{responseLabel}</Badge>
                           </div>
                         </div>;
                       })}

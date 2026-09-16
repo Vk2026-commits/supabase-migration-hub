@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { CalendarCheck2, Link as LinkIcon, MapPin, Trash2 } from "lucide-react";
+import { Link as LinkIcon, MapPin, Trash2, UserCheck, UserX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,7 +120,6 @@ export function InterviewScheduler({
         .from("interview_schedules")
         .select("*")
         .eq("job_application_id", jobApplicationId)
-        .eq("status", "scheduled")
         .order("scheduled_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -233,6 +232,9 @@ export function InterviewScheduler({
         status: "scheduled",
         response_status: "pending",
         responded_at: null,
+        attendance_status: "pending",
+        attendance_confirmed_at: null,
+        attendance_confirmed_by: null,
       };
       const result = existing
         ? await (supabase as any).from("interview_schedules").update(values).eq("id", existing.id)
@@ -277,19 +279,16 @@ export function InterviewScheduler({
     }
   };
 
-  const setLifecycleStatus = async (status: "cancelled" | "completed") => {
+  const cancelInterview = async () => {
     if (!existing?.id) return;
     setSaving(true);
     try {
       const { error } = await (supabase as any)
         .from("interview_schedules")
-        .update({ status })
+        .update({ status: "cancelled" })
         .eq("id", existing.id);
       if (error) throw error;
-      const message =
-        status === "cancelled"
-          ? `${companyName} canceled the interview for ${jobTitle}. Please contact the company if you have questions.`
-          : `${companyName} marked your interview for ${jobTitle} complete.`;
+      const message = `${companyName} canceled the interview for ${jobTitle}. Please contact the company if you have questions.`;
       const { error: messageError } = await supabase.from("messages").insert({
         company_id: companyId,
         officer_id: officerId,
@@ -298,13 +297,7 @@ export function InterviewScheduler({
         message,
       });
       if (messageError) throw messageError;
-      if (status === "completed" && applicationStatus !== "accepted") {
-        await supabase
-          .from("job_applications")
-          .update({ status: "interview_completed" })
-          .eq("id", jobApplicationId);
-      }
-      toast.success(status === "cancelled" ? "Interview canceled" : "Interview marked complete");
+      toast.success("Interview canceled");
       setOpen(false);
       onChanged();
     } catch (error: any) {
@@ -314,12 +307,39 @@ export function InterviewScheduler({
     }
   };
 
+  const recordAttendance = async (attendanceStatus: "attended" | "no_show") => {
+    if (!existing?.id) return;
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any).rpc("record_interview_attendance", {
+        _interview_id: existing.id,
+        _attendance_status: attendanceStatus,
+      });
+      if (error) throw error;
+      toast.success(attendanceStatus === "attended" ? "Attendance confirmed" : "No-show recorded");
+      setOpen(false);
+      onChanged();
+    } catch (error: any) {
+      toast.error(error.message || "Attendance could not be recorded");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const interviewHasStarted = Boolean(existing && new Date(existing.scheduled_at).getTime() <= Date.now());
+  const needsAttendance = Boolean(existing && existing.response_status === "accepted" && existing.attendance_status === "pending" && interviewHasStarted);
+  const attendanceLabel = existing?.attendance_status === "attended" ? "Attended" : existing?.attendance_status === "no_show" ? "No-show" : null;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="h-9 px-3 text-xs">
           <LinkIcon className="mr-1.5 h-3.5 w-3.5" />
-          {existingInterview?.status === "scheduled" ? "Manage interview" : "Schedule interview"}
+          {existingInterview?.attendance_status === "attended" || existingInterview?.attendance_status === "no_show"
+            ? "Interview record"
+            : existingInterview?.response_status === "accepted" && new Date(existingInterview.scheduled_at).getTime() <= Date.now()
+              ? "Confirm attendance"
+              : existingInterview?.status === "scheduled" ? "Manage interview" : "Schedule interview"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-xl">
@@ -329,12 +349,12 @@ export function InterviewScheduler({
           </DialogTitle>
           <DialogDescription>
             {existing
-              ? "Review the officer’s response, revise the details, cancel, or mark the interview complete."
+              ? "Review the officer’s response and confirm whether they attended after the scheduled interview begins."
               : "Select whether this interview will be online or in person, then send the details to the officer."}
           </DialogDescription>
         </DialogHeader>
         {existing && (
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
             <span>Officer response:</span>
             <Badge variant={existing.response_status === "accepted" ? "default" : "secondary"}>
               {existing.response_status === "accepted"
@@ -343,6 +363,17 @@ export function InterviewScheduler({
                   ? "Declined"
                   : "Awaiting response"}
             </Badge>
+            {attendanceLabel && <><span className="ml-2">Attendance:</span><Badge variant={attendanceLabel === "Attended" ? "default" : "destructive"}>{attendanceLabel}</Badge></>}
+          </div>
+        )}
+        {needsAttendance && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="font-semibold text-amber-950">Did {officerName} attend this interview?</p>
+            <p className="mt-1 text-sm text-amber-900/80">Record the result so the company and officer histories stay accurate.</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void recordAttendance("attended")} disabled={saving}><UserCheck className="mr-2 h-4 w-4" />Mark attended</Button>
+              <Button type="button" variant="destructive" onClick={() => void recordAttendance("no_show")} disabled={saving}><UserX className="mr-2 h-4 w-4" />Mark no-show</Button>
+            </div>
           </div>
         )}
         <form onSubmit={schedule} className="space-y-5">
@@ -455,31 +486,22 @@ export function InterviewScheduler({
             />
           </div>
           <DialogFooter className="gap-2 sm:justify-between">
-            {existing ? (
+            {existing?.status === "scheduled" && !interviewHasStarted ? (
               <div className="flex gap-2">
                 <Button
                   type="button"
                   variant="destructive"
-                  onClick={() => void setLifecycleStatus("cancelled")}
+                  onClick={() => void cancelInterview()}
                   disabled={saving}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void setLifecycleStatus("completed")}
-                  disabled={saving}
-                >
-                  <CalendarCheck2 className="mr-2 h-4 w-4" />
-                  Mark complete
-                </Button>
               </div>
             ) : (
               <span />
             )}
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || Boolean(attendanceLabel)}>
               {saving ? "Saving…" : existing ? "Send updated request" : "Send interview request"}
             </Button>
           </DialogFooter>

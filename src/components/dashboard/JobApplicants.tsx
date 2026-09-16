@@ -37,7 +37,11 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
     return { label: `Officer completing: ${onboarding.detail}`, tone: "border-blue-300 bg-blue-50 text-blue-800" };
   }
 
+  if (app.interview?.attendance_status === "attended") return { label: "Interview attended — next: Send offer", tone: "border-green-300 bg-green-50 text-green-800" };
+  if (app.interview?.attendance_status === "no_show") return { label: "Interview no-show — follow up or close application", tone: "border-red-300 bg-red-50 text-red-800" };
+
   if (app.interview?.status === "scheduled") {
+    if (app.interview.response_status === "accepted" && new Date(app.interview.scheduled_at).getTime() <= Date.now()) return { label: "Action required: Confirm interview attendance", tone: "border-amber-300 bg-amber-50 text-amber-800" };
     if (app.interview.response_status === "accepted") return { label: "Next: Complete interview", tone: "border-violet-300 bg-violet-50 text-violet-800" };
     if (app.interview.response_status === "declined") return { label: "Next: Follow up or reschedule interview", tone: "border-amber-300 bg-amber-50 text-amber-800" };
     return { label: "Waiting for interview response", tone: "border-blue-300 bg-blue-50 text-blue-800" };
