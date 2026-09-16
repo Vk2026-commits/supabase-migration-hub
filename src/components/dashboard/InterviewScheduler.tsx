@@ -32,9 +32,27 @@ type Props = {
 type InterviewType = "video" | "in_person";
 type InstructionTemplate = "" | "items_to_bring" | "scheduling_follow_up";
 
+const formatTimeLabel = (value: string) => {
+  const [hourValue, minute = "00"] = value.split(":");
+  const hour = Number(hourValue);
+  const period = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${period}`;
+};
+
+const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
+  const hour = Math.floor(index / 4);
+  const minute = (index % 4) * 15;
+  const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return { value, label: formatTimeLabel(value) };
+});
+
 const formatCompanyAddress = (company: any) => {
   if (!company) return "";
-  const street = [company.company_address, company.company_address_unit].filter(Boolean).join(" ").trim();
+  const street = [company.company_address, company.company_address_unit]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   const cityStateZip = [
     [company.company_city, company.company_state].filter(Boolean).join(", "),
     company.company_zip,
@@ -108,7 +126,9 @@ export function InterviewScheduler({
         .maybeSingle(),
       supabase
         .from("company_profiles")
-        .select("company_address,company_address_unit,company_city,company_state,company_zip,company_phone")
+        .select(
+          "company_address,company_address_unit,company_city,company_state,company_zip,company_phone",
+        )
         .eq("id", companyId)
         .maybeSingle(),
     ]);
@@ -131,8 +151,14 @@ export function InterviewScheduler({
       setDate(
         `${scheduled.getFullYear()}-${String(scheduled.getMonth() + 1).padStart(2, "0")}-${String(scheduled.getDate()).padStart(2, "0")}`,
       );
-      setTime(`${String(scheduled.getHours()).padStart(2, "0")}:${String(scheduled.getMinutes()).padStart(2, "0")}`);
-      setDestination(interview.interview_type === "video" ? interview.meeting_url || "" : interview.location || profileAddress);
+      setTime(
+        `${String(scheduled.getHours()).padStart(2, "0")}:${String(scheduled.getMinutes()).padStart(2, "0")}`,
+      );
+      setDestination(
+        interview.interview_type === "video"
+          ? interview.meeting_url || ""
+          : interview.location || profileAddress,
+      );
       setNotes(interview.notes || "");
       return;
     }
@@ -190,7 +216,8 @@ export function InterviewScheduler({
     setSaving(true);
     try {
       const scheduledAt = new Date(`${submittedDate}T${submittedTime}`);
-      if (Number.isNaN(scheduledAt.getTime())) throw new Error("Choose a valid interview date and time");
+      if (Number.isNaN(scheduledAt.getTime()))
+        throw new Error("Choose a valid interview date and time");
       if (scheduledAt <= new Date()) throw new Error("Choose a future interview time");
 
       const values = {
@@ -213,7 +240,10 @@ export function InterviewScheduler({
       if (result.error) throw result.error;
 
       const verb = existing ? "updated" : "scheduled";
-      const detail = type === "video" ? `Join online: ${submittedDestination}` : `Location: ${submittedDestination}`;
+      const detail =
+        type === "video"
+          ? `Join online: ${submittedDestination}`
+          : `Location: ${submittedDestination}`;
       const message = `${companyName} ${verb} your ${type === "video" ? "video" : "in-person"} interview for ${jobTitle}: ${scheduledAt.toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. ${detail}${submittedNotes ? ` Notes: ${submittedNotes}` : ""}`;
       const { error: messageError } = await supabase.from("messages").insert({
         company_id: companyId,
@@ -222,14 +252,19 @@ export function InterviewScheduler({
         sender_type: "company",
         message,
       });
-      if (messageError) console.error("Interview saved, but the in-app message could not be created", messageError);
+      if (messageError)
+        console.error("Interview saved, but the in-app message could not be created", messageError);
 
       if (applicationStatus !== "accepted") {
         const { error: stageError } = await supabase
           .from("job_applications")
           .update({ status: "interview_scheduled" })
           .eq("id", jobApplicationId);
-        if (stageError) console.error("Interview saved, but the application stage could not be updated", stageError);
+        if (stageError)
+          console.error(
+            "Interview saved, but the application stage could not be updated",
+            stageError,
+          );
       }
 
       toast.success(`Interview ${verb} for ${officerName}`);
@@ -246,7 +281,10 @@ export function InterviewScheduler({
     if (!existing?.id) return;
     setSaving(true);
     try {
-      const { error } = await (supabase as any).from("interview_schedules").update({ status }).eq("id", existing.id);
+      const { error } = await (supabase as any)
+        .from("interview_schedules")
+        .update({ status })
+        .eq("id", existing.id);
       if (error) throw error;
       const message =
         status === "cancelled"
@@ -261,7 +299,10 @@ export function InterviewScheduler({
       });
       if (messageError) throw messageError;
       if (status === "completed" && applicationStatus !== "accepted") {
-        await supabase.from("job_applications").update({ status: "interview_completed" }).eq("id", jobApplicationId);
+        await supabase
+          .from("job_applications")
+          .update({ status: "interview_completed" })
+          .eq("id", jobApplicationId);
       }
       toast.success(status === "cancelled" ? "Interview canceled" : "Interview marked complete");
       setOpen(false);
@@ -283,7 +324,9 @@ export function InterviewScheduler({
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{existing ? "Manage" : "Schedule"} interview with {officerName}</DialogTitle>
+          <DialogTitle>
+            {existing ? "Manage" : "Schedule"} interview with {officerName}
+          </DialogTitle>
           <DialogDescription>
             {existing
               ? "Review the officer’s response, revise the details, cancel, or mark the interview complete."
@@ -318,11 +361,37 @@ export function InterviewScheduler({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="interview-date">Date</Label>
-              <Input id="interview-date" name="interview_date" type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
+              <Input
+                id="interview-date"
+                name="interview_date"
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                required
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="interview-time">Time</Label>
-              <Input id="interview-time" name="interview_time" type="time" value={time} onChange={(event) => setTime(event.target.value)} required />
+              <select
+                id="interview-time"
+                name="interview_time"
+                className="h-11 w-full rounded-md border bg-background px-3"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                required
+              >
+                <option value="" disabled>
+                  Select a time
+                </option>
+                {time && !TIME_OPTIONS.some((option) => option.value === time) && (
+                  <option value={time}>{formatTimeLabel(time)}</option>
+                )}
+                {TIME_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="space-y-2">
@@ -336,11 +405,19 @@ export function InterviewScheduler({
               type={type === "video" ? "url" : "text"}
               value={destination}
               onChange={(event) => setDestination(event.target.value)}
-              placeholder={type === "video" ? "https://meet.example.com/..." : "Street address or office location"}
+              placeholder={
+                type === "video"
+                  ? "https://meet.example.com/..."
+                  : "Street address or office location"
+              }
               required
             />
             {type === "in_person" && companyAddress && destination !== companyAddress && (
-              <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setDestination(companyAddress)}>
+              <button
+                type="button"
+                className="text-xs font-medium text-primary hover:underline"
+                onClick={() => setDestination(companyAddress)}
+              >
                 Use company address
               </button>
             )}
@@ -351,13 +428,17 @@ export function InterviewScheduler({
               id="interview-template"
               className="h-11 w-full rounded-md border bg-background px-3"
               value={instructionTemplate}
-              onChange={(event) => applyInstructionTemplate(event.target.value as InstructionTemplate)}
+              onChange={(event) =>
+                applyInstructionTemplate(event.target.value as InstructionTemplate)
+              }
             >
               <option value="">Custom instructions</option>
               <option value="items_to_bring">Items to bring</option>
               <option value="scheduling_follow_up">Interview confirmation</option>
             </select>
-            <p className="text-xs text-muted-foreground">Select a template, then edit the message below if needed.</p>
+            <p className="text-xs text-muted-foreground">
+              Select a template, then edit the message below if needed.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="interview-notes">Instructions (optional)</Label>
@@ -376,11 +457,23 @@ export function InterviewScheduler({
           <DialogFooter className="gap-2 sm:justify-between">
             {existing ? (
               <div className="flex gap-2">
-                <Button type="button" variant="destructive" onClick={() => void setLifecycleStatus("cancelled")} disabled={saving}>
-                  <Trash2 className="mr-2 h-4 w-4" />Cancel
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => void setLifecycleStatus("cancelled")}
+                  disabled={saving}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Cancel
                 </Button>
-                <Button type="button" variant="outline" onClick={() => void setLifecycleStatus("completed")} disabled={saving}>
-                  <CalendarCheck2 className="mr-2 h-4 w-4" />Mark complete
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void setLifecycleStatus("completed")}
+                  disabled={saving}
+                >
+                  <CalendarCheck2 className="mr-2 h-4 w-4" />
+                  Mark complete
                 </Button>
               </div>
             ) : (
