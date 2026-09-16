@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Maximize2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,9 +9,8 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { buildDirectDeposit, buildI9, buildPolicyAcknowledgement, buildW4, pdfUrl } from "@/lib/officialOnboardingForms";
+import { buildI9, buildPolicyAcknowledgement, buildW4 } from "@/lib/officialOnboardingForms";
 
 type Props = {
   userId: string;
@@ -153,6 +152,109 @@ const policyItems = [
   ["schedule", "Initial work schedule", "/forms/24-kairos-schedule.pdf"],
   ["handbook", "Employee handbook acknowledgment", "/forms/06-acknowledgement-of-handbook.pdf"],
 ] as const;
+
+const policyContent: Record<string, { intro: string; paragraphs?: string[]; bullets?: string[] }> = {
+  property: { intro: "Record only company property and equipment actually issued to you. Item identifiers, quantities, and later return information become part of the company record." },
+  confidentiality: {
+    intro: "Your position may give you access to confidential business, financial, employee, or personal information.",
+    bullets: [
+      "Do not disclose confidential information to anyone who is not authorized to receive it.",
+      "Use reasonable safeguards to prevent oral or written disclosure.",
+      "Use confidential information only for company business and share it internally only with people who have a legitimate need to know.",
+      "The agreement applies during employment and for the stated exchange period. A violation may lead to removal from the position or other employment action.",
+    ],
+  },
+  trackTik: { intro: "Follow the digital setup instructions below. Your private password is never stored in this onboarding packet." },
+  temporary: {
+    intro: "Temporary or part-time assignments may cover workload, short-term projects, employee absences, or vacant positions.",
+    bullets: [
+      "Temporary work does not guarantee permanent status or continued employment.",
+      "Normal payroll deductions apply. Eligibility for leave, vacation, holiday pay, hospitalization insurance, or other benefits may be limited.",
+      "The assignment length is determined by company needs and may end sooner or, when permitted, continue longer.",
+      "Permanent positions require a separate application through the company hiring process.",
+    ],
+  },
+  appearance: {
+    intro: "Maintain a safe, sanitary, neat, and professional appearance while working or representing the company.",
+    bullets: [
+      "Wear clothing and required uniform items appropriate to the position and maintain high standards of personal hygiene and grooming.",
+      "Clothing must be clean, neat, and not stained, wrinkled, frayed, revealing, or otherwise unsuitable for work.",
+      "Management may require an employee to change inappropriate attire.",
+      "Reasonable accommodations may be available for religion, disability, or another legally protected characteristic. Direct questions to a supervisor or administrator.",
+    ],
+  },
+  attendance: {
+    intro: "Regular attendance and punctuality are essential. Be ready at the scheduled start time, complete the full shift, and return from breaks on time.",
+    bullets: [
+      "Request planned time off in writing and in advance under the company time-off policy.",
+      "For an unexpected absence, directly notify your supervisor as early as possible, preferably before the shift. Voicemail, text, or email alone is generally not sufficient except in an emergency.",
+      "Notify your supervisor promptly if illness or an emergency occurs during work hours. Multi-day absences require daily contact unless instructed otherwise.",
+      "Three consecutive days without notice may be treated as voluntary resignation. Repeated absence or tardiness may lead to discipline, including termination.",
+    ],
+  },
+  discipline: {
+    intro: "Corrective action is intended to address conduct or performance problems fairly and prevent recurrence.",
+    bullets: [
+      "Possible action includes verbal or written warnings, suspension with or without pay, and termination, depending on the circumstances.",
+      "Serious conduct may result in immediate termination, including workplace violence, harassment, theft, vandalism, unauthorized use of company equipment or vehicles, or disclosure of confidential business information.",
+    ],
+  },
+  drug: {
+    intro: "The company maintains a workplace free of substance abuse. Employees may not consume, possess, sell, purchase, or be impaired by alcohol or illegal drugs on company property or in company vehicles.",
+    bullets: [
+      "Use legal medication only as directed and tell a supervisor if it may affect safe job performance or require an accommodation.",
+      "Report for duty unimpaired and promptly report evidence of workplace alcohol or drug abuse or an immediate safety threat.",
+      "Employees may be required to complete medical, clinical, random, or incident-related testing as allowed by law.",
+      "Violations may result in discipline up to and including termination. When directed, testing must be completed within the stated deadline.",
+    ],
+  },
+  drugTest: {
+    intro: "You consent to requested drug or alcohol testing under company policy and to providing an appropriate specimen for analysis.",
+    bullets: [
+      "Refusal or failure to cooperate may result in employment action under company policy.",
+      "Testing providers may analyze the specimen and release relevant results to authorized company personnel or government entities involved in a related legal matter.",
+      "Authorized personnel must protect testing information and use it only as needed for employment decisions, inquiries, or legal notices.",
+      "Testing may be required after an on-the-job accident or injury when circumstances suggest possible drug or alcohol involvement.",
+    ],
+  },
+  availability: { intro: "Confirm the days and times you are available to work. Submit later availability changes to a manager or supervisor at least 10 days in advance for approval." },
+  jobDescription: {
+    intro: "Security officers guard, patrol, and monitor premises to help prevent theft, violence, and rule violations.",
+    bullets: [
+      "Control entrances and departures, patrol buildings and grounds, answer alarms, investigate disturbances, and document daily activity or unusual events.",
+      "Contact police or fire services in emergencies and help preserve order and protect people and property.",
+      "Warn or remove rule violators when authorized, operate screening equipment, and perform escort or transport duties when assigned.",
+      "Typical qualifications include a high school diploma or equivalent, related experience, a state security license, communication skills, active listening, and critical thinking. Duties may change as business needs require.",
+    ],
+  },
+  social: {
+    intro: "Online communications are permanent and can affect coworkers, clients, and the company. Use good judgment and follow company policies in every digital channel.",
+    bullets: [
+      "Do not post confidential, legal, financial, personnel, or private information, and do not speak for the company unless officially authorized.",
+      "Be truthful about your identity, protect privacy, obtain permission before posting another person's photo, and respect copyright and fair-use rules.",
+      "Do not use company email or social accounts for personal use or post harassment, threats, discrimination, obscenity, abuse, or other unlawful conduct.",
+      "When expressing a personal opinion about the company, clearly state that you are not an official spokesperson.",
+      "Report policy violations to appropriate leadership. Violations may lead to discipline or termination.",
+    ],
+  },
+  workersComp: {
+    intro: "Texas workers' compensation notice for new employees.",
+    paragraphs: [
+      "If the employer has workers' compensation coverage, you may elect to retain your common-law right of action by notifying the employer in writing no later than five days after beginning employment or receiving written notice that coverage was obtained.",
+      "If you retain that common-law right, you cannot receive workers' compensation income or medical benefits if you are injured.",
+    ],
+  },
+  uniform: { intro: "Record each uniform item received or returned. If no uniform was issued, select that option below." },
+  schedule: { intro: "Review the worksite, start date, and expected schedule supplied by the accepted company offer." },
+  handbook: {
+    intro: "You acknowledge receiving and reviewing the employee handbook and agree to become familiar with and follow its policies.",
+    bullets: [
+      "The company may add, replace, change, or cancel handbook policies and will communicate authorized changes.",
+      "Employment is voluntary and at will, with no guaranteed duration. Either you or the company may end employment at any time, subject to applicable law.",
+      "Ask your supervisor about any handbook policy you do not understand.",
+    ],
+  },
+};
 
 const propertyEquipmentRows = [
   ["Building KeyCard", "Building key/card"],
@@ -382,10 +484,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [bankAccounts, setBankAccounts] = useState<BankAccountDraft[]>(() => [newBankAccount("entire", "bank-1")]);
   const [savedBankAccounts, setSavedBankAccounts] = useState<SavedBankAccount[]>([]);
   const [activePolicyKey, setActivePolicyKey] = useState<string | null>(null);
-  const [policyPreview, setPolicyPreview] = useState<{ key: string; url: string; page: number } | null>(null);
-  const [i9Url, setI9Url] = useState("/forms/02-i-9-2026.pdf");
-  const [w4Url, setW4Url] = useState("/forms/W-4_Form_2026.pdf");
-  const [directDepositUrl, setDirectDepositUrl] = useState("/forms/04-direct-deposit-auth-form.pdf");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const packetIdRef = useRef<string | null>(null);
 
@@ -577,75 +675,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     };
   }, [data, currentStep, loaded, accessState, activeOfficerId, hireId, hiringApplicationId, status]);
 
-  useEffect(() => {
-    if (![1, 2, 7].includes(currentStep)) return;
-    const timer = setTimeout(async () => {
-      try {
-        const [i9Bytes, w4Bytes] = await Promise.all([buildI9(data, ssn), buildW4(data, ssn)]);
-        const nextI9 = pdfUrl(i9Bytes);
-        const nextW4 = pdfUrl(w4Bytes);
-        setI9Url((previous) => {
-          if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
-          return nextI9;
-        });
-        setW4Url((previous) => {
-          if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
-          return nextW4;
-        });
-      } catch (error) {
-        console.error("Official form preview failed", error);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [data, ssn, currentStep]);
-
-  useEffect(() => {
-    if (currentStep !== 3 || data.paymentMethod !== "direct_deposit" || bankAccounts.length === 0) return;
-    const timer = setTimeout(async () => {
-      try {
-        const bytes = await buildDirectDeposit(data, bankAccounts, ssn);
-        const nextUrl = pdfUrl(bytes);
-        setDirectDepositUrl((previous) => {
-          if (previous.startsWith("blob:")) URL.revokeObjectURL(previous);
-          return nextUrl;
-        });
-      } catch (error) {
-        console.error("Direct deposit form preview failed", error);
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [data, bankAccounts, ssn, currentStep]);
-
-  useEffect(() => {
-    if (currentStep !== 5 || !activePolicyKey) return;
-    const item = policyItems.find(([key]) => key === activePolicyKey);
-    if (!item) return;
-    const [key, title, path] = item;
-    const acknowledgement = data.policyAcknowledgements[key] || {
-      viewedAt: "",
-      printedName: [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" "),
-      employeeTitle: data.offeredPosition || "Security Officer",
-      signatureDate: new Date().toISOString().slice(0, 10),
-      signatureImage: "",
-      accepted: false,
-      notes: "",
-      documentFields: {},
-    };
-    const timer = setTimeout(async () => {
-      try {
-        const result = await buildPolicyAcknowledgement(path, { title, ...acknowledgement }, data);
-        const nextUrl = pdfUrl(result.bytes);
-        setPolicyPreview((previous) => {
-          if (previous?.url.startsWith("blob:")) URL.revokeObjectURL(previous.url);
-          return { key, url: nextUrl, page: 1 };
-        });
-      } catch (error) {
-        console.error("Company document preview failed", error);
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [activePolicyKey, currentStep, data]);
-
   const policyDetailsComplete = (key: string) => {
     if (key === "trackTik") return Boolean(data.trackTikUsername && data.employeeIdNumber && data.trackTikPasswordSet);
     if (key === "uniform") {
@@ -723,7 +752,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const go = async (nextStep: number) => {
     const destination = Math.max(0, Math.min(7, nextStep));
     try {
-      await saveSensitiveForStep(currentStep);
+      if (currentStep === 1 && isValidSsn(ssn)) await saveSensitiveForStep(currentStep);
+      if (currentStep === 3 && (data.paymentMethod === "paper_check" || directDepositComplete)) await saveSensitiveForStep(currentStep);
       if (!(await saveDraft(destination))) throw new Error("Your progress could not be saved");
       setCurrentStep(destination);
       requestAnimationFrame(() => document.getElementById("employee-onboarding-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
@@ -733,13 +763,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   };
 
   const next = async () => {
-    if (!completeStep(currentStep)) {
-      if (currentStep === 1) {
-        const missing = [["legal first name", data.legalFirstName], ["legal last name", data.legalLastName], ["street address", data.address], ["city", data.city], ["state", data.state], ["ZIP code", data.zip], ["date of birth", data.dateOfBirth], ["email", data.email], ["phone", data.phone], ["citizenship or immigration status", data.citizenshipStatus], ["Social Security number", ssnMasked || isValidSsn(ssn)], ["drawn I-9 signature", data.signatureImage], ...(data.citizenshipStatus === "Lawful permanent resident" ? [["USCIS or A-Number", data.alienNumber]] : []), ...(data.citizenshipStatus === "Authorized to work until a specified date" ? [["work authorization expiration date", data.workAuthorizationExpiration], ["USCIS/A-Number, I-94 number, or foreign passport details", data.alienNumber || data.i94Number || (data.foreignPassportNumber && data.passportCountry)]] : [])].filter(([, value]) => !value).map(([label]) => label);
-        toast.error(missing.length === 1 ? `Add your ${missing[0]} before continuing` : `Complete: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? ` and ${missing.length - 3} more` : ""}`);
-      } else toast.error("Complete the required fields before continuing");
-      return;
-    }
     await go(currentStep + 1);
   };
 
@@ -861,7 +884,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
   };
 
-  const progress = Math.round(((currentStep + 1) / steps.length) * 100);
+  const completedStepCount = Array.from({ length: steps.length }, (_, index) => completeStep(index)).filter(Boolean).length;
+  const progress = Math.round((completedStepCount / steps.length) * 100);
   const completedPolicyCount = policyItems.filter(([key]) => {
     const acknowledgement = data.policyAcknowledgements[key];
     return Boolean(data.policies[key] && policyDetailsComplete(key) && acknowledgement?.viewedAt && acknowledgement.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
@@ -883,18 +907,13 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         ...current,
         policyAcknowledgements: {
           ...current.policyAcknowledgements,
-          [key]: existing ? { ...existing, ...identity } : { viewedAt: "", ...identity, accepted: false, notes: "", documentFields: {} },
+          [key]: existing ? { ...existing, ...identity, viewedAt: existing.viewedAt || new Date().toISOString() } : { viewedAt: new Date().toISOString(), ...identity, accepted: false, notes: "", documentFields: {} },
         },
       };
     });
     if (!closing) requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(`policy-${key}`)?.scrollIntoView({ behavior: "smooth", block: "start" })));
   };
   const updatePolicyAcknowledgement = (key: string, changes: Partial<PolicyAcknowledgement>) => {
-    setPolicyPreview((current) => {
-      if (current?.key !== key) return current;
-      if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
-      return null;
-    });
     setData((current) => ({
       ...current,
       policies: { ...current.policies, [key]: false },
@@ -905,29 +924,20 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }));
   };
   const updateTrackTik = (field: "trackTikUsername" | "employeeIdNumber" | "trackTikPasswordSet", value: string | boolean) => {
-    setPolicyPreview((current) => {
-      if (current?.key !== "trackTik") return current;
-      if (current.url.startsWith("blob:")) URL.revokeObjectURL(current.url);
-      return null;
-    });
     setData((current) => ({ ...current, [field]: value, policies: { ...current.policies, trackTik: false } }));
   };
   const savePolicyAcknowledgement = async (key: string) => {
     const acknowledgement = data.policyAcknowledgements[key];
     if (!acknowledgement?.viewedAt) {
-      toast.error("Open and review the document before signing and saving it");
+      toast.error("Open and review this policy section before signing and saving it");
       return;
     }
     if (!acknowledgement?.accepted || !acknowledgement.printedName || !acknowledgement.signatureDate || !acknowledgement.signatureImage) {
-      toast.error("Accept the document, add your name and date, and sign before saving");
+      toast.error("Accept the policy, add your name and date, and sign before saving");
       return;
     }
     if (!policyDetailsComplete(key)) {
       toast.error(key === "trackTik" ? "Add the TrackTik username and employee number, then confirm the password was set" : key === "uniform" ? "Check the uniform items received or returned, or confirm that no items were issued" : "The company must provide the complete worksite, start date, and expected schedule in the offer");
-      return;
-    }
-    if (policyPreview?.key !== key) {
-      toast.error("Wait for the updated PDF preview to finish, then save the document");
       return;
     }
     const policyItem = policyItems.find(([itemKey]) => itemKey === key);
@@ -942,7 +952,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         employerName: data.employerName,
       });
     } catch (error: any) {
-      toast.error(error.message || "The signed PDF could not be archived");
+      toast.error(error.message || "The signed company record could not be archived");
       return;
     }
     const nextData = { ...data, policies: { ...data.policies, [key]: true } };
@@ -950,11 +960,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     const saved = await saveDraft(currentStep, nextData);
     if (!saved) {
       setData((current) => ({ ...current, policies: { ...current.policies, [key]: false } }));
-      toast.error("The document could not be saved. Please try again.");
+      toast.error("The section could not be saved. Please try again.");
       return;
     }
     setActivePolicyKey(null);
-    toast.success("Document verified, saved, and marked complete");
+    toast.success("Section signed, saved, and marked complete");
     const currentIndex = policyItems.findIndex(([k]) => k === key);
     const nextItem = policyItems[currentIndex + 1];
     if (nextItem) {
@@ -998,7 +1008,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             <p className="mt-6 text-xs font-bold uppercase tracking-[.2em] text-green-700">Onboarding complete</p>
             <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Your onboarding packet has been submitted</h2>
             <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              {data.employerName} can now review your completed forms and signed documents. Someone from the company will contact you with your next steps.
+              {data.employerName} can now review your completed forms and signed records. Someone from the company will contact you with your next steps.
             </p>
             <div className="mt-8 grid w-full gap-3 text-left sm:grid-cols-2">
               <div className="flex gap-3 rounded-2xl border border-green-200 bg-green-50 p-4">
@@ -1047,31 +1057,35 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           </div>
         </div>
       )}
-      <div className="grid items-start gap-6 lg:grid-cols-[230px_minmax(0,1fr)] 2xl:grid-cols-[250px_minmax(0,1fr)]">
+      <div className="grid items-start gap-8 lg:grid-cols-[270px_minmax(0,900px)] lg:justify-center">
         <aside className="hidden lg:block">
-          <nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">
+          <nav className="sticky top-4 space-y-2 rounded-2xl border bg-zinc-100 p-3 shadow-inner">
             {steps.map((step, index) => (
-              <button key={step[0]} type="button" onClick={() => go(index)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${index === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index === currentStep ? "bg-white/20" : completeStep(index) ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</span>
+              <button key={step[0]} type="button" onClick={() => go(index)} className={`group flex min-h-[84px] w-full items-center gap-3 rounded-lg border bg-white px-3 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${index === currentStep ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold ${index === currentStep ? "bg-primary text-primary-foreground" : completeStep(index) ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold">{step[0]}</span>
-                  <span className={`block truncate text-xs ${index === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{step[1]}</span>
+                  <span className="block text-sm font-semibold">Page {index + 1}: {step[0]}</span>
+                  <span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{step[1]}</span>
+                  <span className={`mt-1 block text-[10px] font-bold uppercase tracking-wide ${completeStep(index) ? "text-green-700" : "text-amber-700"}`}>{completeStep(index) ? "Complete" : "Needs information"}</span>
                 </span>
               </button>
             ))}
           </nav>
         </aside>
         <main className="min-w-0">
-          <div className="mb-4 flex justify-between lg:hidden">
-            <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Step {currentStep + 1} of 8</span>
-            <span className="text-sm text-muted-foreground">{progress}% complete</span>
+          <div className="mb-4 lg:hidden">
+            <div className="mb-3 flex justify-between"><span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Page {currentStep + 1} of 8</span><span className="text-sm text-muted-foreground">{progress}% complete</span></div>
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {steps.map((step, index) => <button key={step[0]} type="button" onClick={() => go(index)} aria-label={`Open ${step[0]}`} className={`flex h-12 min-w-12 items-center justify-center rounded-lg border text-sm font-bold shadow-sm ${index === currentStep ? "border-primary bg-primary text-primary-foreground" : completeStep(index) ? "border-green-300 bg-green-50 text-green-700" : "bg-background text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</button>)}
+            </div>
           </div>
-          <Card className="min-w-0 rounded-2xl shadow-sm">
-            <CardHeader className="border-b px-5 py-6 sm:px-8">
+          <Card className="relative min-w-0 overflow-hidden rounded-lg border-zinc-300 bg-white shadow-[0_18px_50px_-24px_rgba(15,23,42,0.45)] ring-1 ring-black/5 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary">
+            <CardHeader className="border-b bg-zinc-50/70 px-5 py-6 sm:px-10">
+              <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Onboarding page {currentStep + 1} of {steps.length}</p>
               <CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle>
               <CardDescription className="text-base">{steps[currentStep][1]}</CardDescription>
             </CardHeader>
-            <CardContent className="px-5 py-7 sm:px-8 sm:py-9">
+            <CardContent className="min-h-[650px] px-5 py-7 sm:px-10 sm:py-10">
               {currentStep === 0 && (
                 <div className="space-y-6">
                   <div className="rounded-2xl border border-primary/20 bg-primary/5 p-6">
@@ -1086,19 +1100,15 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <strong className="text-foreground">Sensitive information is encrypted.</strong> SSN and bank numbers are not stored in the ordinary onboarding draft or displayed back in full.
                     </p>
                   </div>
-                  <OfficialDocument title="Employee onboarding packet checklist" url="/forms/00-kairos-security-checklist-for-employee-folders.pdf" />
+                  <div className="rounded-2xl border bg-zinc-50 p-5"><h3 className="font-semibold">Your onboarding packet</h3><p className="mt-1 text-sm text-muted-foreground">Move between any page at any time. Incomplete pages stay marked so you can return before final submission.</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{steps.slice(1).map((step, index) => <button key={step[0]} type="button" onClick={() => go(index + 1)} className="flex items-center gap-3 rounded-xl border bg-white p-3 text-left hover:border-primary/50 hover:shadow-sm"><span className={`flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold ${completeStep(index + 1) ? "bg-green-600 text-white" : "bg-muted"}`}>{completeStep(index + 1) ? <Check className="h-4 w-4" /> : index + 2}</span><span className="text-sm font-medium">{step[0]}</span></button>)}</div></div>
                 </div>
               )}
               {currentStep === 1 && (
                 <div className="space-y-6">
                   <div className="rounded-xl bg-primary/5 p-4 text-sm">
-                    <strong>Official USCIS Form I-9 — Section 1.</strong> This is the actual government document. Complete the guided fields below and the official form preview updates in place. Your employer completes Section 2.
+                    <strong>USCIS Form I-9 — Employee Section 1.</strong> Complete the guided fields below. We Find Guards creates and securely archives the official form for your employer; your employer completes Section 2.
                   </div>
-                  <div className="grid items-start gap-6 2xl:grid-cols-[minmax(430px,0.8fr)_minmax(620px,1.2fr)]">
-                    <div className="2xl:sticky 2xl:top-4 2xl:order-2">
-                      <OfficialDocument title="Official Form I-9" url={i9Url} initiallyExpanded />
-                    </div>
-                    <div className="space-y-6 2xl:order-1">
+                  <div className="space-y-6">
                       <div className="grid gap-5 md:grid-cols-3 2xl:grid-cols-2">
                     <Field label="Legal first name" value={data.legalFirstName} onChange={(v) => update("legalFirstName", v)} required />
                     <Field label="Middle initial" value={data.middleInitial} onChange={(v) => update("middleInitial", v)} />
@@ -1154,20 +1164,15 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <Button type="button" size="lg" onClick={submitI9} disabled={submittingI9 || saving} className="shrink-0"><FileCheck2 className="mr-2 h-5 w-5" />{submittingI9 ? "Submitting I-9…" : i9SubmittedAt ? "Update submitted I-9" : "Submit Form I-9"}</Button>
                     </div>
                   </div>
-                    </div>
                   </div>
                 </div>
               )}
               {currentStep === 2 && (
                 <div className="space-y-7">
                   <div className="rounded-xl bg-primary/5 p-4 text-sm">
-                    <strong>Official IRS Form W-4 — Employee’s Withholding Certificate.</strong> The actual government form appears below and updates from the answers you enter in We Find Guards.
+                    <strong>IRS Form W-4 — Employee’s Withholding Certificate.</strong> Enter your withholding choices below. We Find Guards creates and securely archives the official form for your employer.
                   </div>
-                  <div className="grid items-start gap-6 2xl:grid-cols-[minmax(430px,0.8fr)_minmax(620px,1.2fr)]">
-                    <div className="2xl:sticky 2xl:top-4 2xl:order-2">
-                      <OfficialDocument title="Official Form W-4" url={w4Url} initiallyExpanded />
-                    </div>
-                    <div className="space-y-7 2xl:order-1">
+                  <div className="space-y-7">
                   <Choice label="Federal filing status" value={data.filingStatus} onChange={(v) => update("filingStatus", v)} options={["Single or Married filing separately", "Married filing jointly or Qualifying surviving spouse", "Head of household"]} />
                   <label className="flex items-start gap-3 rounded-xl border p-4">
                     <Checkbox checked={data.multipleJobs} onCheckedChange={(value) => update("multipleJobs", Boolean(value))} />
@@ -1209,13 +1214,12 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">We Find Guards does not provide tax advice. If you are unsure what to enter, consult the official IRS instructions or a tax professional.</p>
-                    </div>
                   </div>
                 </div>
               )}
               {currentStep === 3 && (
                 <div className="space-y-7">
-                  <OfficialDocument title="Direct deposit authorization form" url={directDepositUrl} autoFilled initialPage={2} />
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Digital pay authorization</strong><p className="mt-1">Choose how you want to be paid. If you select direct deposit, your bank information is encrypted separately and the signed authorization is created for company records.</p></div>
                   <Choice
                     label="How would you like to be paid?"
                     value={data.paymentMethod}
@@ -1290,7 +1294,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               )}
               {currentStep === 4 && (
                 <div className="space-y-6">
-                  <OfficialDocument title="Emergency contact form" url="/forms/05-emergency-contact-form-fill.pdf" />
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Emergency contact record</strong><p className="mt-1">Enter the person your employer should contact in an emergency. Optional medical instructions are shared only as part of this employment record.</p></div>
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field label="Emergency contact name" value={data.emergencyName} onChange={(v) => update("emergencyName", v)} required />
                     <Field label="Relationship" value={data.emergencyRelationship} onChange={(v) => update("emergencyRelationship", v)} required />
@@ -1307,13 +1311,13 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               {currentStep === 5 && (
                 <div className="space-y-5">
                   <div className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">How company documents work</p>
+                    <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">How company policies work</p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                      <div className="rounded-xl bg-background p-4"><strong className="block">1. Fill it out</strong><span className="text-sm text-muted-foreground">Add your name, date, acknowledgment, and signature.</span></div>
-                      <div className="rounded-xl bg-background p-4"><strong className="block">2. See it update</strong><span className="text-sm text-muted-foreground">The PDF preview changes automatically as you type.</span></div>
-                      <div className="rounded-xl bg-background p-4"><strong className="block">3. Save it</strong><span className="text-sm text-muted-foreground">Save the signed document to complete it.</span></div>
+                      <div className="rounded-xl bg-background p-4"><strong className="block">1. Read it</strong><span className="text-sm text-muted-foreground">Every required term is shown directly in the app.</span></div>
+                      <div className="rounded-xl bg-background p-4"><strong className="block">2. Complete it</strong><span className="text-sm text-muted-foreground">Add any requested information and acknowledge the policy.</span></div>
+                      <div className="rounded-xl bg-background p-4"><strong className="block">3. Sign and save</strong><span className="text-sm text-muted-foreground">We create the company’s archived record in the background.</span></div>
                     </div>
-                    <p className="mt-4 text-sm font-medium">{completedPolicyCount} of {policyItems.length} documents completed</p>
+                    <p className="mt-4 text-sm font-medium">{completedPolicyCount} of {policyItems.length} policy sections completed</p>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/10"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((completedPolicyCount / policyItems.length) * 100)}%` }} /></div>
                   </div>
                   <div className="grid gap-5 rounded-2xl border p-5 md:grid-cols-2">
@@ -1332,7 +1336,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Assignment</span><strong className="block">{data.scheduledPost || "Not provided"}</strong></div>
                     <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift || "Not provided"}</strong></div>
                   </div>
-                  {policyItems.map(([key, label, document], index) => {
+                  {policyItems.map(([key, label], index) => {
                     const acknowledgement = data.policyAcknowledgements[key];
                     const expanded = activePolicyKey === key;
                     const viewed = Boolean(acknowledgement?.viewedAt);
@@ -1343,28 +1347,22 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : index + 1}</div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2"><p className={`font-semibold ${completed ? "text-green-900" : ""}`}>{label}</p>{completed && <span className="rounded-full bg-green-600 px-2.5 py-1 text-xs font-semibold text-white">Completed</span>}</div>
-                            <p className="text-sm text-muted-foreground">{completed ? "Verified, signed, and saved." : expanded ? "Complete the fields and preview directly below." : "Fill out, preview, sign, and save this document."}</p>
+                            <p className="text-sm text-muted-foreground">{completed ? "Reviewed, signed, and saved." : expanded ? "Read the policy and complete it below." : "Read, acknowledge, sign, and save."}</p>
                           </div>
                           <Button type="button" variant={completed || expanded ? "outline" : "default"} size="sm" onClick={() => openPolicy(key)}>
-                            {expanded ? <><ChevronUp className="mr-2 h-4 w-4" />Close</> : completed ? <><ChevronDown className="mr-2 h-4 w-4" />Edit & preview</> : <><ChevronDown className="mr-2 h-4 w-4" />Fill out</>}
+                            {expanded ? <><ChevronUp className="mr-2 h-4 w-4" />Close</> : completed ? <><ChevronDown className="mr-2 h-4 w-4" />Review or edit</> : <><ChevronDown className="mr-2 h-4 w-4" />Open section</>}
                           </Button>
                         </div>
                         {expanded && acknowledgement && (
                           <div className="space-y-6 border-t bg-background p-4 sm:p-6">
-                            <div className={`rounded-xl border p-4 text-sm ${viewed ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                              <strong>{viewed ? "Document viewed." : "Step 1: View the document."}</strong> {viewed ? "You may now complete the acknowledgment and signature below." : "Open the document preview before the acknowledgment and signature are unlocked."}
-                            </div>
-                            <OfficialDocument title={label} url={policyPreview?.key === key ? policyPreview.url : document} autoFilled initialPage={policyPreview?.key === key ? policyPreview.page : 1} viewed={viewed} onViewed={() => {
-                              if (!acknowledgement.viewedAt) updatePolicyAcknowledgement(key, { viewedAt: new Date().toISOString() });
-                            }} />
-                            {viewed && (
+                            <DigitalPolicyContent title={label} content={policyContent[key]} />
                               <div className="space-y-6">
-                                <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Step 2: Complete and sign.</strong> Existing profile information is added automatically, and the preview refreshes inside this same card.</div>
+                                <div className="rounded-xl bg-primary/5 p-4 text-sm"><strong>Complete and sign.</strong> Your name and role are filled from your profile when available. The final company record is created after you save.</div>
                                 <div className="grid gap-5 md:grid-cols-2">
                                   <Field label="Employee legal name" value={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { printedName: value })} required />
                                   <Field label="Position or title" value={acknowledgement.employeeTitle} onChange={(value) => updatePolicyAcknowledgement(key, { employeeTitle: value })} required />
                                   <Field label="Date signed" type="date" value={acknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(key, { signatureDate: value })} required />
-                                  <div className="space-y-2"><Label>Notes for this document</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
+                                  <div className="space-y-2"><Label>Notes for this section</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
                                 </div>
                                 {key === "property" && (
                                   <PropertyDocumentFields acknowledgement={acknowledgement} data={data} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
@@ -1378,15 +1376,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                                 )}
                                 <label className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
                                   <Checkbox checked={acknowledgement.accepted} onCheckedChange={(value) => updatePolicyAcknowledgement(key, { accepted: Boolean(value) })} />
-                                  <span className="text-sm"><strong className="block">I have reviewed and accept this document.</strong>I received the complete document and agree to the policies and responsibilities that apply to my employment.</span>
+                                  <span className="text-sm"><strong className="block">I have reviewed and accept this policy.</strong>I read the complete digital terms shown above and agree to the responsibilities that apply to my employment.</span>
                                 </label>
                                 <SignaturePad value={acknowledgement.signatureImage} suggestedName={acknowledgement.printedName} onChange={(value) => updatePolicyAcknowledgement(key, { signatureImage: value })} />
-                                <div className={`rounded-xl border p-4 text-sm ${policyPreview?.key === key ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                                  <strong>{policyPreview?.key === key ? "Preview verified:" : "Updating preview:"}</strong> {policyPreview?.key === key ? "the PDF contains your latest information and signature." : "wait a moment for your latest changes to appear before saving."}
-                                </div>
-                                <Button type="button" size="lg" className="w-full" disabled={policyPreview?.key !== key} onClick={() => savePolicyAcknowledgement(key)}><FileCheck2 className="mr-2 h-5 w-5" />{completed ? "Update saved document" : "Verify and save document"}</Button>
+                                <Button type="button" size="lg" className="w-full" onClick={() => savePolicyAcknowledgement(key)}><FileCheck2 className="mr-2 h-5 w-5" />{completed ? "Update saved section" : "Sign and save section"}</Button>
                               </div>
-                            )}
                           </div>
                         )}
                       </div>
@@ -1436,9 +1430,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <h3 className="font-semibold">Packet review</h3>
                     <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
                       {steps.slice(1, 7).map((step, index) => (
-                        <div key={step[0]} className="flex items-center gap-2">
-                          {completeStep(index + 1) ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <span className="h-4 w-4 rounded-full border" />} {step[0]}
-                        </div>
+                        <button key={step[0]} type="button" onClick={() => go(index + 1)} className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-left transition-colors hover:border-primary/50 hover:bg-primary/5">
+                          {completeStep(index + 1) ? <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" /> : <span className="h-4 w-4 shrink-0 rounded-full border" />}
+                          <span className="flex-1">{step[0]}</span>
+                          <span className="text-xs text-muted-foreground">{completeStep(index + 1) ? "Complete" : "Needs information"}</span>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -1459,7 +1455,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             </Button>
             {currentStep < 7 ? (
               <Button type="button" onClick={next} disabled={saving}>
-                Save and continue
+                Save and next page
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
@@ -1477,7 +1473,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         </Button>
         {currentStep < 7 ? (
           <Button type="button" size="lg" className="flex-1" onClick={next} disabled={saving}>
-            Save and continue
+            Save and next page
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         ) : (
@@ -1499,7 +1495,7 @@ function PropertyDocumentFields({ acknowledgement, data, onChange }: { acknowled
     <section className="space-y-5 rounded-2xl border bg-muted/10 p-4 sm:p-5">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company property receipt</p>
-        <h4 className="mt-1 text-lg font-semibold">Enter the information shown on the PDF</h4>
+        <h4 className="mt-1 text-lg font-semibold">Record issued company property</h4>
         <p className="mt-1 text-sm text-muted-foreground">Your name, employee ID, and hire date are filled from onboarding. Add only property actually issued to you. Return information can be completed later when an item is returned.</p>
       </div>
       <div className="grid gap-3 rounded-xl border bg-background p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1555,7 +1551,7 @@ function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onCh
       </div>
       <label className="flex items-start gap-3 rounded-xl border bg-background p-4">
         <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(value) => onChange("trackTikPasswordSet", Boolean(value))} />
-        <span className="text-sm"><strong className="block">My TrackTik password has been set *</strong>The PDF will show “Set privately” instead of exposing the password.</span>
+        <span className="text-sm"><strong className="block">My TrackTik password has been set *</strong>Only the completion status is stored. Your private password is never exposed.</span>
       </label>
     </section>
   );
@@ -1568,8 +1564,8 @@ function UniformDocumentFields({ acknowledgement, onChange }: { acknowledgement:
     <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Uniform checklist</p>
-        <h4 className="mt-1 text-lg font-semibold">Check the same boxes that appear on the PDF</h4>
-        <p className="mt-1 text-sm text-muted-foreground">Mark every item received or returned. Your selections are written into the official checklist.</p>
+        <h4 className="mt-1 text-lg font-semibold">Record each uniform item digitally</h4>
+        <p className="mt-1 text-sm text-muted-foreground">Mark every item received or returned. Your selections become part of the official company record.</p>
       </div>
       <label className="flex items-center gap-3 rounded-xl border bg-background p-4">
         <Checkbox checked={fields.uniformNone === "true"} onCheckedChange={(value) => toggle("uniformNone", Boolean(value))} />
@@ -1710,61 +1706,13 @@ function SignaturePad({ value, suggestedName, onChange }: { value: string; sugge
   );
 }
 
-function OfficialDocument({ title, url, autoFilled = false, initialPage = 1, viewed = false, onViewed, initiallyExpanded = false }: { title: string; url: string; autoFilled?: boolean; initialPage?: number; viewed?: boolean; onViewed?: () => void; initiallyExpanded?: boolean }) {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
-  const updatesFromAnswers = autoFilled || title.startsWith("Official Form");
-  const helpText = updatesFromAnswers ? "Your answers automatically update this official PDF. You can preview it at any time." : "Review this document here without leaving your onboarding application.";
-  const previewUrl = `${url}#page=${initialPage}&view=FitH&toolbar=1`;
-
+function DigitalPolicyContent({ title, content }: { title: string; content?: { intro: string; paragraphs?: string[]; bullets?: string[] } }) {
   return (
-    <section className="overflow-hidden rounded-2xl border bg-muted/20">
-      <div className="flex flex-col gap-4 bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="rounded-xl bg-primary/10 p-2 text-primary">
-            <FileCheck2 className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">{title}</span>
-              <span className="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-semibold text-green-700">{updatesFromAnswers ? "Auto-filled document" : "Onboarding document"}</span>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">{helpText}</p>
-          </div>
-        </div>
-        <div className="hidden shrink-0 md:block">
-          <Button type="button" variant="outline" onClick={() => setExpanded((value) => {
-            if (!value) onViewed?.();
-            return !value;
-          })}>
-            {expanded ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}
-            {expanded ? "Hide document" : "Click to view document"}
-          </Button>
-        </div>
-        <Dialog onOpenChange={(open) => { if (open) onViewed?.(); }}>
-          <DialogTrigger asChild>
-            <Button type="button" variant="outline" className="w-full md:w-auto">
-              <Maximize2 className="mr-2 h-4 w-4" />
-              Open full screen
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="left-0 top-0 h-[100dvh] max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 sm:rounded-none">
-            <DialogHeader className="border-b px-5 py-4 pr-12 text-left">
-              <DialogTitle>{title}</DialogTitle>
-              <DialogDescription>{helpText}</DialogDescription>
-            </DialogHeader>
-            <iframe key={url} title={`${title} mobile preview`} src={previewUrl} className="h-[calc(100dvh-82px)] w-full bg-white" />
-          </DialogContent>
-        </Dialog>
-      </div>
-      {onViewed && <div className={`border-t px-4 py-2 text-xs font-semibold ${viewed ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-800"}`}>{viewed ? "Viewed — acknowledgment unlocked" : "Open this document to unlock the acknowledgment"}</div>}
-      {expanded && (
-        <div className="hidden border-t md:block">
-          <div className="border-b bg-primary/5 px-4 py-2 text-xs font-medium text-muted-foreground">
-            The document is shown at page width. Use the PDF controls to zoom further, move between pages, print, or download.
-          </div>
-          <iframe key={url} title={title} src={previewUrl} className="h-[calc(100vh-10rem)] min-h-[760px] max-h-[1100px] w-full bg-white" />
-        </div>
-      )}
+    <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 sm:p-6">
+      <div className="flex items-start gap-3"><div className="rounded-xl bg-primary/10 p-2 text-primary"><FileCheck2 className="h-5 w-5" /></div><div><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Policy terms</p><h4 className="mt-1 text-xl font-bold">{title}</h4></div></div>
+      <p className="mt-5 text-sm font-medium leading-6 text-foreground">{content?.intro || "Review the information requested below and confirm that it is accurate."}</p>
+      {content?.paragraphs?.map((paragraph) => <p key={paragraph} className="mt-4 text-sm leading-6 text-muted-foreground">{paragraph}</p>)}
+      {content?.bullets && <ul className="mt-4 space-y-3">{content.bullets.map((item) => <li key={item} className="flex items-start gap-3 text-sm leading-6 text-muted-foreground"><CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-primary" /><span>{item}</span></li>)}</ul>}
     </section>
   );
 }
