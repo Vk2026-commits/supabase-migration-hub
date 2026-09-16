@@ -139,6 +139,25 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     if (pendingEmploymentOffer?.id) setShowOfferPrompt(true);
   }, [pendingEmploymentOffer?.id]);
 
+  useEffect(() => {
+    if (!upcomingInterview?.scheduled_at || upcomingInterview.status === "cancelled") return;
+    const remaining = new Date(upcomingInterview.scheduled_at).getTime() - Date.now();
+
+    const moveToHistory = async () => {
+      setUpcomingInterview(null);
+      const { data, error } = await (supabase as any).rpc("get_my_interview_history");
+      if (!error) setInterviewHistory(Array.isArray(data) ? data : []);
+    };
+
+    if (remaining <= 0) {
+      void moveToHistory();
+      return;
+    }
+
+    const timer = window.setTimeout(() => void moveToHistory(), Math.min(remaining + 1000, 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [upcomingInterview?.id, upcomingInterview?.scheduled_at, upcomingInterview?.status]);
+
   const ensureOfficerProfile = async () => {
     if (officerProfile) return officerProfile;
     if (ensureOfficerProfilePromise.current) return ensureOfficerProfilePromise.current;
@@ -258,7 +277,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
         if (interviewResult.error && interviewResult.error.code !== "42P01") console.error("Failed to load upcoming interview", interviewResult.error);
-        setUpcomingInterview(interviewResult.data || null);
+        const nextInterview = interviewResult.data || null;
+        setUpcomingInterview(nextInterview?.status === "cancelled" || (nextInterview?.scheduled_at && new Date(nextInterview.scheduled_at).getTime() > Date.now()) ? nextInterview : null);
         if (interviewHistoryResult.error && interviewHistoryResult.error.code !== "42883") console.error("Failed to load interview history", interviewHistoryResult.error);
         setInterviewHistory(Array.isArray(interviewHistoryResult.data) ? interviewHistoryResult.data : []);
         setOnboardingOfferAvailable(Boolean(pendingOfferResult.data?.id || (preparedOfferResult.data?.id && preparedOfferResult.data?.hiring_application_id)));
