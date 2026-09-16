@@ -249,7 +249,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
       // Load counts for completion status
       if (data.id) {
-        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, pendingOfferResult, acceptedOfferResult, interviewResult, interviewHistoryResult] = await Promise.all([
+        const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, confirmedHireResult, pendingOfferResult, acceptedOfferResult, interviewResult, interviewHistoryResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
@@ -258,6 +258,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at,employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("hires").select("employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("employment_confirmed_at", "is", null).order("employment_confirmed_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).rpc("get_my_upcoming_interview"),
@@ -272,7 +273,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setApplicationSubmitted(applicationResult.data?.status === "submitted");
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
-        setEmploymentConfirmedAt((preparedOfferResult.data as any)?.employment_confirmed_at || null);
+        if (confirmedHireResult.error) console.error("Failed to load confirmed employment status", confirmedHireResult.error);
+        setEmploymentConfirmedAt((confirmedHireResult.data as any)?.employment_confirmed_at || null);
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
@@ -288,7 +290,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
         if (!choseInitialExperience.current) {
           choseInitialExperience.current = true;
-          if (!requestedTab && (initialTab === "overview" || initialTab === "profile") && applicationResult.data?.status !== "submitted") selectTab("hiring-application");
+          if (!requestedTab && (initialTab === "overview" || initialTab === "profile") && applicationResult.data?.status !== "submitted" && !confirmedHireResult.data?.employment_confirmed_at) selectTab("hiring-application");
         }
       }
     }
@@ -666,6 +668,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           onboardingAvailable={onboardingOfferAvailable}
           onboardingOfferLoaded={onboardingOfferLoaded}
           offerNeedsResponse={Boolean(pendingEmploymentOffer)}
+          employmentConfirmed={Boolean(employmentConfirmedAt)}
         />
         <div className="flex min-w-0 flex-1">
           <div className={`min-w-0 flex-1 p-4 sm:p-6 ${activeTab === "employee-onboarding" ? "lg:px-6 lg:py-8" : "lg:p-8"}`}>
@@ -678,7 +681,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
             {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
-            {onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding" && (
+            {(employmentConfirmedAt || (onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding")) && (
               <div className={`mb-6 flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-sm sm:flex-row sm:items-center ${employmentConfirmedAt ? "border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background" : "border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background"}`}>
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />

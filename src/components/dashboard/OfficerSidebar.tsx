@@ -16,9 +16,10 @@ interface OfficerSidebarProps {
   onboardingAvailable?: boolean;
   onboardingOfferLoaded?: boolean;
   offerNeedsResponse?: boolean;
+  employmentConfirmed?: boolean;
 }
 
-export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboardingAvailable = false, onboardingOfferLoaded = false, offerNeedsResponse = false }: OfficerSidebarProps) {
+export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboardingAvailable = false, onboardingOfferLoaded = false, offerNeedsResponse = false, employmentConfirmed = false }: OfficerSidebarProps) {
   const { open } = useSidebar();
 
   const completionKeyFor = (value: string) => {
@@ -44,6 +45,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
   const getNavCls = (value: string) => {
     // Messages and Find a Job tabs don't need completion status
     if (value === 'hiring-application') {
+      if (employmentConfirmed) return activeTab === value ? "font-semibold bg-green-600 text-white hover:bg-green-700" : "font-semibold bg-green-50 text-green-700 hover:bg-green-100";
       return activeTab === value ? "font-semibold bg-primary text-primary-foreground hover:bg-primary/90" : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
     }
     if (value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'employee-onboarding') {
@@ -82,7 +84,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
                   >
                     <div className="flex min-w-0 w-full items-start gap-2">
                       <item.icon className="mt-0.5 h-4 w-4 shrink-0" />
-                      {open && <span className="min-w-0 flex-1 break-words text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className="ml-2 inline-flex whitespace-nowrap rounded-full bg-primary/15 px-2 py-0.5 text-[10px] uppercase tracking-wide group-data-[active=true]:bg-white/15">Start here</span>}{item.value === "employee-onboarding" && <span className={`ml-2 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${offerNeedsResponse ? "bg-amber-100 text-amber-800" : "bg-muted"}`}>{offerNeedsResponse ? "Review offer" : onboardingAvailable ? "Offer accepted" : "Offer required"}</span>}</span>}
+                      {open && <span className="min-w-0 flex-1 break-words text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className={`ml-2 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${employmentConfirmed ? "bg-green-100 text-green-800 group-data-[active=true]:bg-white/20 group-data-[active=true]:text-white" : "bg-primary/15 group-data-[active=true]:bg-white/15"}`}>{employmentConfirmed ? "Hired" : "Start here"}</span>}{item.value === "employee-onboarding" && <span className={`ml-2 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${offerNeedsResponse ? "bg-amber-100 text-amber-800" : "bg-muted"}`}>{employmentConfirmed ? "Completed" : offerNeedsResponse ? "Review offer" : onboardingAvailable ? "Offer accepted" : "Offer required"}</span>}</span>}
                       {item.value === "employee-onboarding" && onboardingOfferLoaded && !onboardingAvailable && open && <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
                       {isTabComplete(item.value) && open && item.value !== 'messages' && item.value !== 'find-jobs' && (
                         <Check className="h-3 w-3 shrink-0 text-blue-600" />
