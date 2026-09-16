@@ -330,8 +330,14 @@ Deno.serve(async (request) => {
       const canSendOffer = company?.user_id === authData.user.id || ["owner", "admin", "hiring_manager"].includes(memberRole || "");
       if (!company || !canSendOffer) return json({ error: "Company hiring access denied" }, 403);
       if (!companyProfileReady(company)) return json({ error: "Complete the company profile before sending an offer" }, 403);
-      const { data: application } = await admin.from("guard_hiring_applications").select("id,officer_id,job_application_id,status,application_type,application_data").eq("id", applicationId).maybeSingle();
-      if (!application || application.officer_id !== officerId || application.application_type !== "employer_copy" || application.status !== "submitted") return json({ error: "A submitted company application is required" }, 400);
+      const { data: application } = await admin.from("guard_hiring_applications").select("id,officer_id,job_application_id,status,submitted_at,application_type,application_data,evidence_snapshot_status").eq("id", applicationId).maybeSingle();
+      if (!application) return json({ error: "A submitted company application is required" }, 400);
+      const preservedSubmittedApplication = Boolean(
+        application.officer_id === officerId
+        && application.application_type === "employer_copy"
+        && (application.status === "submitted" || application.submitted_at || application.evidence_snapshot_status === "complete")
+      );
+      if (!preservedSubmittedApplication) return json({ error: "A submitted company application is required" }, 400);
       const { data: jobApplication } = application.job_application_id ? await admin.from("job_applications").select("id,job_posting_id").eq("id", application.job_application_id).maybeSingle() : { data: null };
       const { data: jobPosting } = jobApplication?.job_posting_id ? await admin.from("job_postings").select("id,company_id").eq("id", jobApplication.job_posting_id).maybeSingle() : { data: null };
       if (!jobPosting || jobPosting.company_id !== companyId) return json({ error: "Application does not belong to this company" }, 403);

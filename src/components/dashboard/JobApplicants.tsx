@@ -141,6 +141,11 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     const noteByApplication = new Map((notesResult.data || []).map((note: any) => [note.job_application_id, note]));
     const applicationRows = (data || []).map((app: any) => {
       const hiringApplications = [...(app.hiring_application || [])].sort((left: any, right: any) => new Date(right.submitted_at || right.created_at || 0).getTime() - new Date(left.submitted_at || left.created_at || 0).getTime());
+      const offerApplication = hiringApplications.find((application: any) =>
+        application.status === "submitted"
+        || Boolean(application.submitted_at)
+        || application.evidence_snapshot_status === "complete"
+      );
       const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
       const applicationSnapshot = hiringApplications[0]?.application_data || {};
       const hireId = hireByApplication.get(app.id);
@@ -148,6 +153,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       return {
         ...app,
         hiring_application: hiringApplications,
+        offerHiringApplicationId: offerApplication?.id || null,
         officerName: profile?.full_name || applicationSnapshot.applicantName || "Unknown",
         officerEmail: applicationSnapshot.email || profile?.email || "",
         officerPhone: applicationSnapshot.phone || app.officer?.phone || "",
@@ -337,12 +343,12 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         Accept as hired
                       </Button>
                     )}
-                    {app.hiring_application?.[0]?.id && app.status !== "accepted" && (
+                    {app.offerHiringApplicationId && app.status !== "accepted" && (
                       <HireButton
                         officerId={app.officer.id}
                         officerName={app.officerName}
                         companyId={companyId}
-                        hiringApplicationId={app.hiring_application[0].id}
+                        hiringApplicationId={app.offerHiringApplicationId}
                         jobApplicationId={app.id}
                         jobTitle={app.job_posting?.title}
                         onChanged={loadApplications}

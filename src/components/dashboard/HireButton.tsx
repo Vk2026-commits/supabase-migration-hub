@@ -138,7 +138,17 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
     };
     try {
       const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody });
-      if (error) throw error; if (data?.error) throw new Error(data.error);
+      if (error) {
+        let serverMessage = "";
+        try {
+          const payload = await error.context?.clone?.().json?.();
+          serverMessage = payload?.error || (Array.isArray(payload?.missing) && payload.missing.length ? `Complete: ${payload.missing.join(", ")}` : "");
+        } catch {
+          // The function response is not always JSON. Fall back to the SDK error below.
+        }
+        throw new Error(serverMessage || error.message || "The offer could not be securely generated and sent");
+      }
+      if (data?.error) throw new Error(data.error);
       const initialOffer = data?.offer || data;
       if (initialOffer?.status === "sent") {
         finishSuccessfulSend(initialOffer);
