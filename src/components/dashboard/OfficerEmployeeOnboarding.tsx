@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { buildI9, buildPolicyAcknowledgement, buildW4 } from "@/lib/officialOnboardingForms";
 
@@ -511,6 +512,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [bankAccounts, setBankAccounts] = useState<BankAccountDraft[]>(() => [newBankAccount("entire", "bank-1")]);
   const [savedBankAccounts, setSavedBankAccounts] = useState<SavedBankAccount[]>([]);
   const [activePolicyKey, setActivePolicyKey] = useState<string | null>(null);
+  const [policyConfirmationOpen, setPolicyConfirmationOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const packetIdRef = useRef<string | null>(null);
 
@@ -1012,6 +1014,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           document.getElementById(`policy-${nextKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       });
+    } else {
+      setPolicyConfirmationOpen(true);
     }
   };
   if (!loaded)
@@ -1547,6 +1551,24 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           </Button>
         )}
       </div>
+      <AlertDialog open={policyConfirmationOpen} onOpenChange={setPolicyConfirmationOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{completedPolicyCount === policyItems.length ? "Confirm your company policy information" : "Review your company policy sections"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {completedPolicyCount === policyItems.length
+                ? "You have completed all 16 policy sections. Please confirm that the information, acknowledgements, and signatures you provided are correct before continuing to Page 7."
+                : `You saved the final policy section, but ${policyItems.length - completedPolicyCount} ${policyItems.length - completedPolicyCount === 1 ? "section still needs" : "sections still need"} information. You can continue to Page 7 and return here from the packet review before submitting.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel type="button">Review again</AlertDialogCancel>
+            <AlertDialogAction type="button" onClick={() => { setPolicyConfirmationOpen(false); void go(6); }}>
+              Yes, continue to Page 7
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }
