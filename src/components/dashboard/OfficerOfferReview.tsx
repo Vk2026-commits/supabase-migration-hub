@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { SignaturePad } from "./SignaturePad";
 import { toast } from "sonner";
-import { BriefcaseBusiness, CalendarDays, CheckCircle2, Clock3, DollarSign, Eye, FileSignature, MapPin, ShieldCheck, XCircle, type LucideIcon } from "lucide-react";
+import { BriefcaseBusiness, CalendarDays, CheckCircle2, Clock3, DollarSign, FileSignature, MapPin, ShieldCheck, XCircle, type LucideIcon } from "lucide-react";
 import { employmentTypeLabel, payFrequencyLabel, type EmploymentOfferTerms } from "@/lib/employmentOffer";
 
 const readableDate = (value: string) => {
@@ -21,8 +21,6 @@ const meaningful = (value?: string) => Boolean(value?.trim() && value.trim().toL
 
 export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: any; officerName: string; onChanged: () => void }) {
   const terms = offer.terms as EmploymentOfferTerms;
-  const [pdfUrl, setPdfUrl] = useState("");
-  const [viewed, setViewed] = useState(Boolean(offer.viewed_at));
   const [printedName, setPrintedName] = useState(officerName || "");
   const [signature, setSignature] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -34,22 +32,9 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
     if (data?.error) throw new Error(data.error);
     return data;
   };
-  const viewPdf = async () => {
-    setBusy(true);
-    try {
-      const data = await invoke("preview");
-      setPdfUrl(data.url);
-      setViewed(true);
-      toast.success("Offer viewed — acceptance is now unlocked");
-    } catch (e: any) {
-      toast.error(e.message || "Offer could not be opened");
-    } finally {
-      setBusy(false);
-    }
-  };
   const accept = async () => {
-    if (!viewed || !confirmed || !printedName.trim() || !signature) {
-      toast.error("View the PDF, confirm the terms, and sign before accepting");
+    if (!confirmed || !printedName.trim() || !signature) {
+      toast.error("Confirm the terms, enter your legal name, and sign before accepting");
       return;
     }
     setBusy(true);
@@ -99,7 +84,7 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
             <div className="max-w-2xl">
               <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-primary">Employment offer</p>
               <h1 className="text-3xl font-bold tracking-tight text-foreground">Your employment offer</h1>
-              <p className="mt-3 text-base leading-7 text-muted-foreground">Review the key terms below, then open the company-signed offer document. Nothing is final until you choose to accept and add your signature.</p>
+              <p className="mt-3 text-base leading-7 text-muted-foreground">Review the complete offer terms below. Nothing is final until you choose to accept and add your signature.</p>
               <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-800"><ShieldCheck className="h-4 w-4" />Company signed - awaiting your decision</div>
             </div>
             <Badge variant="outline" className="bg-background/80 px-3 py-1">Offer version {offer.version}</Badge>
@@ -140,14 +125,9 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Eye className="h-5 w-5" />Review the signed offer</CardTitle><CardDescription>Open the official company-signed PDF and compare it with the summary above before making your decision.</CardDescription></CardHeader>
-        <CardContent className="space-y-4"><Button type="button" onClick={viewPdf} disabled={busy}>{viewed ? "Open signed offer again" : "Open signed offer"}</Button>{pdfUrl && <iframe title="Employment offer PDF" src={pdfUrl} className="h-[60vh] min-h-[420px] w-full rounded-xl border bg-white" />}{viewed && <p className="flex items-center gap-2 text-sm font-medium text-green-700"><CheckCircle2 className="h-4 w-4" />Signed offer reviewed</p>}</CardContent>
-      </Card>
-
-      <Card className={!viewed ? "opacity-60" : "border-green-200"}>
+      <Card className="border-green-200">
         <CardHeader><CardTitle className="flex items-center gap-2"><FileSignature className="h-5 w-5" />Your decision</CardTitle><CardDescription>Accepting adds your signature to an immutable copy of this exact offer. Declining keeps employee onboarding locked.</CardDescription></CardHeader>
-        <CardContent className="space-y-5"><div className="space-y-2"><Label htmlFor="offer-printed-name">Printed legal name *</Label><Input id="offer-printed-name" value={printedName} onChange={(e) => setPrintedName(e.target.value)} disabled={!viewed} /></div><SignaturePad value={signature} suggestedName={printedName} onChange={setSignature} /><label className="flex items-start gap-3 rounded-xl border p-4"><Checkbox disabled={!viewed} checked={confirmed} onCheckedChange={(v) => setConfirmed(Boolean(v))} /><span className="text-sm">I reviewed the complete signed offer, understand the terms summarized above, and accept this offer of employment.</span></label><div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between"><Button variant="destructive" onClick={decline} disabled={busy}><XCircle className="mr-2 h-4 w-4" />Decline Offer</Button><Button onClick={accept} disabled={busy || !viewed}>{busy ? "Saving securely…" : "Accept Offer"}</Button></div></CardContent>
+        <CardContent className="space-y-5"><div className="space-y-2"><Label htmlFor="offer-printed-name">Printed legal name *</Label><Input id="offer-printed-name" value={printedName} onChange={(e) => setPrintedName(e.target.value)} /></div><SignaturePad value={signature} suggestedName={printedName} onChange={setSignature} /><label className="flex items-start gap-3 rounded-xl border p-4"><Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(Boolean(v))} /><span className="text-sm">I reviewed the complete offer terms shown above, understand them, and accept this offer of employment.</span></label><div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-between"><Button variant="destructive" onClick={decline} disabled={busy}><XCircle className="mr-2 h-4 w-4" />Decline Offer</Button><Button onClick={accept} disabled={busy}>{busy ? "Saving securely…" : "Accept Offer"}</Button></div></CardContent>
       </Card>
     </div>
   );

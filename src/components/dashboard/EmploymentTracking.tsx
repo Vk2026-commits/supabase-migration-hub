@@ -27,6 +27,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [complianceHire, setComplianceHire] = useState<any>(null);
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [downloadingDocuments, setDownloadingDocuments] = useState(false);
+  const [downloadingOfferId, setDownloadingOfferId] = useState<string | null>(null);
   const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string }>>([]);
 
   useEffect(() => {
@@ -68,6 +69,29 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
     const { data, error } = await supabase.functions.invoke("manage-employment-offer", { body: { action: "preview", offer_id: hire.offer_id } });
     if (error || data?.error || !data?.url) { toast.error(data?.error || "The accepted offer could not be opened"); return; }
     window.open(data.url, "_blank", "noopener,noreferrer");
+  };
+
+  const downloadAcceptedOffer = async (hire: any) => {
+    if (!hire.offer_id) { toast.info("This is a legacy hire without captured offer evidence"); return; }
+    setDownloadingOfferId(hire.offer_id);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-employment-offer", { body: { action: "preview", offer_id: hire.offer_id } });
+      if (error || data?.error || !data?.url) throw new Error(data?.error || "The accepted offer could not be downloaded");
+      const response = await fetch(data.url);
+      if (!response.ok) throw new Error("The accepted offer could not be downloaded");
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      const officerName = hire.officer_profiles?.profiles?.full_name || "officer";
+      link.href = url;
+      link.download = `${officerName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase()}-accepted-offer.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Accepted offer downloaded");
+    } catch (error: any) {
+      toast.error(error.message || "The accepted offer could not be downloaded");
+    } finally {
+      setDownloadingOfferId(null);
+    }
   };
 
   const openComplianceFile = async (hire: any) => {
@@ -327,7 +351,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-3">
                   <div><strong className="block text-sm">Offer accepted</strong><span className="text-xs text-muted-foreground">Accepted terms are immutable and retained with this hire.</span></div>
-                  <Button size="sm" variant="outline" onClick={() => openAcceptedOffer(hire)}>{hire.offer_id ? "View signed offer" : "Legacy record"}</Button>
+                  {hire.offer_id ? <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => openAcceptedOffer(hire)}><Eye className="mr-2 h-4 w-4" />View</Button><Button size="sm" onClick={() => void downloadAcceptedOffer(hire)} disabled={downloadingOfferId === hire.offer_id}><Download className="mr-2 h-4 w-4" />{downloadingOfferId === hire.offer_id ? "Downloading…" : "Download offer"}</Button></div> : <Badge variant="secondary">Legacy record</Badge>}
                 </div>
                 <div className={`rounded-xl border p-4 ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
                   <div className="flex items-start justify-between gap-3">
