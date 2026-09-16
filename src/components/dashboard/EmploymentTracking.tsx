@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2 } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 import { createZip } from "@/lib/createZip";
 
@@ -28,6 +29,9 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [complianceLoading, setComplianceLoading] = useState(false);
   const [downloadingDocuments, setDownloadingDocuments] = useState(false);
   const [downloadingOfferId, setDownloadingOfferId] = useState<string | null>(null);
+  const [expandedHireId, setExpandedHireId] = useState<string | null>(null);
+  const [showManualUpdate, setShowManualUpdate] = useState(false);
+  const [hireSearch, setHireSearch] = useState("");
   const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string }>>([]);
 
   useEffect(() => {
@@ -219,6 +223,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       setNotes("");
       setRating(5);
       setSelectedHire("");
+      setShowManualUpdate(false);
       loadHires();
     } catch (error) {
       console.error("Error submitting update:", error);
@@ -247,207 +252,69 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
     );
   }
 
+  const filteredHires = hires.filter((hire) => {
+    const search = hireSearch.trim().toLowerCase();
+    if (!search) return true;
+    return [hire.officer_profiles?.profiles?.full_name, hire.position_title, hire.status]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(search));
+  });
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Add Manual Employment Update</CardTitle>
-          <CardDescription>Track performance and updates for your hired officers</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Select Employee</Label>
-            <Select value={selectedHire} onValueChange={setSelectedHire}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose an employee" />
-              </SelectTrigger>
-              <SelectContent>
-                {hires.map((hire) => (
-                  <SelectItem key={hire.id} value={hire.id}>
-                    {hire.officer_profiles?.profiles?.full_name || "Unknown"} - {hire.position_title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+    <div className="mx-auto max-w-6xl space-y-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-bold">Hired officers</h2>
+            <Badge variant="secondary">{hires.length}</Badge>
           </div>
+          <p className="mt-1 text-sm text-muted-foreground">A compact roster with employment records and upcoming evaluations.</p>
+        </div>
+        <Button onClick={() => setShowManualUpdate(true)}><Plus className="mr-2 h-4 w-4" />Add update</Button>
+      </div>
 
-          <div className="space-y-2">
-            <Label>Update Type</Label>
-            <Select value={updateType} onValueChange={setUpdateType}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="performance_review">Performance Review</SelectItem>
-                <SelectItem value="status_update">Status Update</SelectItem>
-                <SelectItem value="incident_report">Incident Report</SelectItem>
-                <SelectItem value="commendation">Commendation</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {hires.length > 4 && <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={hireSearch} onChange={(event) => setHireSearch(event.target.value)} placeholder="Search hired officers" /></div>}
 
-          {updateType === "performance_review" && (
-            <div className="space-y-2">
-              <Label>Performance Rating</Label>
-              <div className="flex gap-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setRating(star)}
-                    className="focus:outline-none"
-                  >
-                    <Star
-                      className={`h-6 w-6 ${
-                        star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
-                      }`}
-                    />
-                  </button>
-                ))}
-              </div>
+      <div className="space-y-2">
+        {filteredHires.map((hire) => {
+          const onboarding = onboardingStatus(hire);
+          const evaluations = [...(hire.evaluations || [])].sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+          const nextEvaluation = evaluations.find((evaluation: any) => !evaluation.completed_date);
+          const name = hire.officer_profiles?.profiles?.full_name || "Unknown officer";
+          const initials = name.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase();
+          const expanded = expandedHireId === hire.id;
+          return <Card key={hire.id} className={`overflow-hidden transition-shadow ${expanded ? "shadow-md ring-1 ring-primary/10" : "shadow-sm hover:shadow-md"}`}>
+            <div className="flex items-center gap-2 p-3 sm:p-4">
+              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-expanded={expanded}>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">{initials}</span>
+                <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{name}</span><span className="block truncate text-xs text-muted-foreground">{hire.position_title || "Security Officer"} · Hired {new Date(hire.hire_date).toLocaleDateString()}</span></span>
+                <span className="hidden items-center gap-2 md:flex"><Badge variant="outline" className={onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}>{onboarding.percent === 100 ? "Onboarding complete" : `${onboarding.percent}% onboarding`}</Badge>{nextEvaluation ? <Badge variant="secondary">Next: {periodNames[nextEvaluation.evaluation_period]} · {new Date(nextEvaluation.due_date).toLocaleDateString()}</Badge> : <Badge variant="secondary">Evaluations complete</Badge>}</span>
+              </button>
+              <Badge variant={hire.status === "active" ? "default" : "secondary"} className="hidden capitalize sm:inline-flex">{hire.status}</Badge>
+              <Button type="button" size="icon" variant="ghost" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-label={expanded ? "Close employee details" : "Open employee details"}><ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} /></Button>
             </div>
-          )}
 
-          <div className="space-y-2">
-            <Label>Notes</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add details about this update..."
-              rows={4}
-            />
-          </div>
-
-          <Button onClick={handleSubmitUpdate}>Submit Update</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Hired Officers</CardTitle>
-          <CardDescription>Track performance evaluations and employment status</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {hires.map((hire) => {
-              const onboarding = onboardingStatus(hire);
-              return (
-              <div key={hire.id} className="border rounded-lg p-4 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold text-lg">
-                      {hire.officer_profiles?.profiles?.full_name || "Unknown"}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">{hire.position_title}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Hired: {new Date(hire.hire_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <Badge
-                    variant={hire.status === "active" ? "default" : "secondary"}
-                  >
-                    {hire.status}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-green-200 bg-green-50 p-3">
-                  <div><strong className="block text-sm">Offer accepted</strong><span className="text-xs text-muted-foreground">Accepted terms are immutable and retained with this hire.</span></div>
-                  {hire.offer_id ? <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => openAcceptedOffer(hire)}><Eye className="mr-2 h-4 w-4" />View</Button><Button size="sm" onClick={() => void downloadAcceptedOffer(hire)} disabled={downloadingOfferId === hire.offer_id}><Download className="mr-2 h-4 w-4" />{downloadingOfferId === hire.offer_id ? "Downloading…" : "Download offer"}</Button></div> : <Badge variant="secondary">Legacy record</Badge>}
-                </div>
-                <div className={`rounded-xl border p-4 ${onboarding.percent === 100 ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50/70"}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3"><ClipboardCheck className={`mt-0.5 h-5 w-5 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div><strong className="block text-sm">{onboarding.label}</strong><span className="text-xs text-muted-foreground">{onboarding.detail}</span>{hire.onboarding_progress?.updated_at && <span className="mt-1 block text-[11px] text-muted-foreground">Last saved {new Date(hire.onboarding_progress.updated_at).toLocaleString()}</span>}</div></div>
-                    <Badge variant="outline" className="shrink-0 bg-background">{onboarding.percent}%</Badge>
-                  </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
-                </div>
-                <Button type="button" variant="outline" className="w-full" disabled={!hire.onboarding_progress?.packet_id} onClick={() => openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />{onboarding.percent === 100 ? "View and download onboarding documents" : "View available onboarding documents"}</Button>
-
-                {hire.evaluations && hire.evaluations.length > 0 && (
-                  <div className="space-y-2 border-t pt-3">
-                    <h4 className="text-sm font-semibold">Performance Evaluations:</h4>
-                    <div className="grid gap-2">
-                      {hire.evaluations
-                        .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-                        .map((evaluation: any) => {
-                          const status = getEvaluationStatus(evaluation);
-                          const StatusIcon = status.icon;
-                          
-                          return (
-                            <div
-                              key={evaluation.id}
-                              className="flex items-center justify-between bg-muted p-3 rounded"
-                            >
-                              <div className="flex items-center gap-3">
-                                <StatusIcon className="h-4 w-4 text-muted-foreground" />
-                                <div>
-                                  <p className="font-medium text-sm">
-                                    {periodNames[evaluation.evaluation_period]} Evaluation
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Due: {new Date(evaluation.due_date).toLocaleDateString()}
-                                  </p>
-                                  {evaluation.completed_date && evaluation.overall_rating && (
-                                    <div className="flex gap-1 mt-1">
-                                      {[...Array(evaluation.overall_rating)].map((_, i) => (
-                                        <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Badge className={status.color}>
-                                  {status.label}
-                                </Badge>
-                                {!evaluation.completed_date && (
-                                  <Button
-                                    size="sm"
-                                    onClick={() => setSelectedEvaluation(evaluation)}
-                                  >
-                                    Complete
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  </div>
-                )}
-
-                {hire.employment_updates && hire.employment_updates.length > 0 && (
-                  <div className="space-y-2 border-t pt-3">
-                    <h4 className="text-sm font-semibold">Manual Updates:</h4>
-                    {hire.employment_updates.slice(0, 3).map((update: any) => (
-                      <div key={update.id} className="text-sm bg-muted p-2 rounded">
-                        <div className="flex justify-between">
-                          <span className="font-medium">{update.update_type.replace(/_/g, " ")}</span>
-                          {update.rating && (
-                            <div className="flex gap-1">
-                              {[...Array(update.rating)].map((_, i) => (
-                                <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-muted-foreground">{update.notes}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(update.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {expanded && <div className="space-y-4 border-t bg-muted/10 p-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-xl border bg-background p-3"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-600" /><div><p className="text-sm font-semibold">Offer accepted</p><p className="text-xs text-muted-foreground">Signed offer retained with this hire</p></div></div>{hire.offer_id ? <div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => void openAcceptedOffer(hire)}><Eye className="mr-1.5 h-4 w-4" />View</Button><Button size="sm" variant="ghost" onClick={() => void downloadAcceptedOffer(hire)} disabled={downloadingOfferId === hire.offer_id}><Download className="mr-1.5 h-4 w-4" />PDF</Button></div> : <Badge variant="secondary">Legacy</Badge>}</div></div>
+                <div className="rounded-xl border bg-background p-3"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><ClipboardCheck className={`h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-600" : "text-primary"}`} /><div className="min-w-0"><p className="truncate text-sm font-semibold">{onboarding.label}</p><p className="truncate text-xs text-muted-foreground">{onboarding.detail}</p></div></div><Badge variant="outline">{onboarding.percent}%</Badge></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div></div>
               </div>
-            )})}
-            {hires.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">
-                No officers hired yet
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+
+              <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={!hire.onboarding_progress?.packet_id} onClick={() => void openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Onboarding documents</Button><Button type="button" size="sm" variant="outline" onClick={() => { setSelectedHire(hire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add note or update</Button></div>
+
+              {evaluations.length > 0 && <div><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Performance evaluations</h4><div className="grid gap-2 lg:grid-cols-3">{evaluations.map((evaluation: any) => { const status = getEvaluationStatus(evaluation); const StatusIcon = status.icon; return <div key={evaluation.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3"><div className="flex min-w-0 items-center gap-2"><StatusIcon className="h-4 w-4 shrink-0 text-muted-foreground" /><div><p className="text-sm font-medium">{periodNames[evaluation.evaluation_period]}</p><p className="text-xs text-muted-foreground">Due {new Date(evaluation.due_date).toLocaleDateString()}</p></div></div><div className="flex items-center gap-1"><Badge className={status.color}>{status.label}</Badge>{!evaluation.completed_date && <Button size="sm" variant="ghost" onClick={() => setSelectedEvaluation(evaluation)}>Open</Button>}</div></div>; })}</div></div>}
+
+              {hire.employment_updates?.length > 0 && <div><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Recent updates</h4><div className="grid gap-2 md:grid-cols-2">{hire.employment_updates.slice(0, 4).map((update: any) => <div key={update.id} className="rounded-lg border bg-background p-3 text-sm"><div className="flex items-center justify-between gap-2"><span className="font-medium capitalize">{update.update_type.replace(/_/g, " ")}</span><span className="text-xs text-muted-foreground">{new Date(update.created_at).toLocaleDateString()}</span></div>{update.notes && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{update.notes}</p>}</div>)}</div></div>}
+            </div>}
+          </Card>;
+        })}
+        {hires.length === 0 && <Card className="border-dashed"><CardContent className="flex flex-col items-center py-12 text-center"><UsersRound className="h-9 w-9 text-muted-foreground/50" /><p className="mt-3 font-medium">No officers hired yet</p><p className="text-sm text-muted-foreground">Confirmed hires will appear here as a compact roster.</p></CardContent></Card>}
+        {hires.length > 0 && filteredHires.length === 0 && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No hired officers match “{hireSearch}”.</div>}
+      </div>
+
+      <Dialog open={showManualUpdate} onOpenChange={setShowManualUpdate}>
+        <DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Add employment update</DialogTitle><DialogDescription>Record a note, status, incident, commendation, or performance review.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label>Select employee</Label><Select value={selectedHire} onValueChange={setSelectedHire}><SelectTrigger><SelectValue placeholder="Choose an employee" /></SelectTrigger><SelectContent>{hires.map((hire) => <SelectItem key={hire.id} value={hire.id}>{hire.officer_profiles?.profiles?.full_name || "Unknown"} — {hire.position_title}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Update type</Label><Select value={updateType} onValueChange={setUpdateType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="performance_review">Performance review</SelectItem><SelectItem value="status_update">Status update</SelectItem><SelectItem value="incident_report">Incident report</SelectItem><SelectItem value="commendation">Commendation</SelectItem></SelectContent></Select></div>{updateType === "performance_review" && <div className="space-y-2"><Label>Performance rating</Label><div className="flex gap-2">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none"><Star className={`h-6 w-6 ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`} /></button>)}</div></div>}<div className="space-y-2"><Label>Notes</Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Add details about this update…" rows={4} /></div><Button className="w-full" onClick={() => void handleSubmitUpdate()}>Save update</Button></div></DialogContent>
+      </Dialog>
       <Dialog open={Boolean(complianceHire)} onOpenChange={(open) => !open && setComplianceHire(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} onboarding documents</DialogTitle><DialogDescription>Review and download the forms this officer completed. Signed records are retained by version and protected by expiring links.</DialogDescription></DialogHeader>
