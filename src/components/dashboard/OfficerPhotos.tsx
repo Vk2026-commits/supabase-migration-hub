@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { CheckCircle2, Save, Upload, X } from "lucide-react";
+import { CheckCircle2, Info, Save, Upload, X } from "lucide-react";
 
 interface OfficerPhotosProps {
   userId: string;
@@ -27,11 +27,24 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
   const [uploading, setUploading] = useState<string | null>(null);
   const [savingPhotos, setSavingPhotos] = useState(false);
   const [photosConfirmed, setPhotosConfirmed] = useState(false);
+  const [hasSubmittedApplication, setHasSubmittedApplication] = useState(false);
+  const [showResubmitReminder, setShowResubmitReminder] = useState(false);
 
   const requiredPhotosComplete = Boolean(photos.headshot && photos["full-body"]);
 
   useEffect(() => {
     void loadPhotos(true);
+    void (async () => {
+      const { data } = await (supabase as any)
+        .from("guard_hiring_applications")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("application_type", "master")
+        .eq("status", "submitted")
+        .limit(1)
+        .maybeSingle();
+      setHasSubmittedApplication(Boolean(data));
+    })();
   }, [userId]);
 
   const loadPhotos = async (confirmExisting = false) => {
@@ -108,6 +121,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
       if (uploadError) throw uploadError;
 
       toast.success("Photo uploaded successfully!");
+      if (hasSubmittedApplication) setShowResubmitReminder(true);
       void loadPhotos();
     } catch (error: any) {
       toast.error("Error uploading photo: " + error.message);
@@ -167,6 +181,15 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
       </CardHeader>}
       <CardContent className={embedded ? "px-0" : "px-5 py-7 sm:px-8 sm:py-9"}>
         {embedded && <p className="mb-5 text-sm text-muted-foreground">{optional ? "Photos are recommended but do not block application submission. You can add them now or later from your profile." : "Your headshot and full-body photo are required. Action photos are optional."}</p>}
+        {showResubmitReminder && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-blue-950">
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+            <div>
+              <p className="font-semibold">Your profile photo was updated</p>
+              <p className="mt-1 text-sm">Your previously submitted company copy remains unchanged. Open Hiring Application, select Edit Application, and then Resubmit to share this photo with the company.</p>
+            </div>
+          </div>
+        )}
         <div className={`mb-6 flex items-start gap-3 rounded-xl border p-4 ${requiredPhotosComplete ? "border-green-200 bg-green-50 text-green-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
           <CheckCircle2 className={`mt-0.5 h-5 w-5 shrink-0 ${requiredPhotosComplete ? "text-green-600" : "text-amber-500"}`} />
           <div>
