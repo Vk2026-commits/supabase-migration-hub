@@ -450,31 +450,20 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     setShowCalendarOptions(false);
   };
 
-  const openInterviewCalendar = (provider: "google" | "outlook-personal") => {
+  const openInterviewCalendar = () => {
     const details = interviewCalendarDetails();
     if (!details) return;
     const { start, end, companyName, title, location, description } = details;
     const summary = `Interview with ${companyName} — ${title}`;
     const params = new URLSearchParams();
     let url = "";
-    if (provider === "google") {
-      const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-      params.set("action", "TEMPLATE");
-      params.set("text", summary);
-      params.set("dates", `${stamp(start)}/${stamp(end)}`);
-      params.set("details", description);
-      params.set("location", location);
-      url = `https://calendar.google.com/calendar/render?${params.toString()}`;
-    } else {
-      params.set("rru", "addevent");
-      params.set("allday", "false");
-      params.set("subject", summary);
-      params.set("startdt", start.toISOString());
-      params.set("enddt", end.toISOString());
-      params.set("body", description);
-      params.set("location", location);
-      url = `https://outlook.live.com/calendar/0/action/compose?${params.toString()}`;
-    }
+    const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    params.set("action", "TEMPLATE");
+    params.set("text", summary);
+    params.set("dates", `${stamp(start)}/${stamp(end)}`);
+    params.set("details", description);
+    params.set("location", location);
+    url = `https://calendar.google.com/calendar/render?${params.toString()}`;
     window.open(url, "_blank", "noopener,noreferrer");
     setShowCalendarOptions(false);
   };
@@ -536,8 +525,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               <DialogDescription className="text-base">Choose the calendar you use. Your confirmed date, location or meeting link, and company instructions will be included.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-3 py-2">
-              <Button type="button" className="h-12 justify-start" onClick={() => openInterviewCalendar("google")}>Google Calendar</Button>
-              <Button type="button" variant="outline" className="h-12 justify-start" onClick={() => openInterviewCalendar("outlook-personal")}>Outlook.com personal calendar</Button>
+              <Button type="button" className="h-12 justify-start" onClick={openInterviewCalendar}>Google Calendar</Button>
               <Button type="button" variant="outline" className="h-12 justify-start" onClick={downloadInterviewCalendarFile}>Apple Calendar or another app (.ics)</Button>
             </div>
           </DialogContent>
