@@ -133,9 +133,19 @@ serve(async (request) => {
 
     const archivedAt = new Date().toISOString();
     const rows = [];
+    const warnings: Array<{ label: string; reason: string }> = [];
     for (const source of sources) {
       const { data: blob, error: downloadError } = await admin.storage.from(source.bucket).download(source.path);
-      if (downloadError || !blob) throw downloadError || new Error(`Could not read ${source.label}`);
+      if (downloadError || !blob) {
+        const statusCode = String((downloadError as { statusCode?: string | number } | null)?.statusCode ?? "");
+        const isMissing = statusCode === "404" || /not found|NoSuchKey/i.test(downloadError?.message || "");
+        if (!source.required && isMissing) {
+          warnings.push({ label: source.label, reason: "The original optional upload is no longer available." });
+          console.warn("Skipping missing optional application evidence", { applicationId: application.id, bucket: source.bucket, path: source.path });
+          continue;
+        }
+        throw downloadError || new Error(`Could not read ${source.label}`);
+      }
       const bytes = await blob.arrayBuffer();
       const digest = hex(await crypto.subtle.digest("SHA-256", bytes));
       const safeName = basename(source.path).replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -164,9 +174,12 @@ serve(async (request) => {
       });
     }
 
-    const { data: inserted, error: insertError } = await admin.from("application_evidence_files").upsert(rows, { onConflict: "hiring_application_id,evidence_kind,evidence_role,source_path", ignoreDuplicates: true }).select("*");
-    if (insertError) throw insertError;
-    const attachments = inserted?.length ? inserted : (await admin.from("application_evidence_files").select("*").eq("hiring_application_id", application.id)).data || [];
+    let attachments: Array<Record<string, unknown>> = [];
+    if (rows.length) {
+      const { data: inserted, error: insertError } = await admin.from("application_evidence_files").upsert(rows, { onConflict: "hiring_application_id,evidence_kind,evidence_role,source_path", ignoreDuplicates: true }).select("*");
+      if (insertError) throw insertError;
+      attachments = inserted?.length ? inserted : (await admin.from("application_evidence_files").select("*").eq("hiring_application_id", application.id)).data || [];
+    }
     const manifest = attachments.map((item: Record<string, unknown>) => ({
       id: item.id,
       kind: item.evidence_kind,
@@ -185,7 +198,7 @@ serve(async (request) => {
     if (archiveKind === "submission") Object.assign(update, { status: "submitted", submitted_at: application.submitted_at || completedAt });
     const { error: updateError } = await admin.from("guard_hiring_applications").update(update).eq("id", application.id);
     if (updateError) throw updateError;
-    return json({ attachments, manifest, snapshot_status: "complete", archive_kind: archiveKind, completed_at: completedAt });
+    return json({ attachments, manifest, warnings, snapshot_status: "complete", archive_kind: archiveKind, completed_at: completedAt });
   } catch (error) {
     console.error("Application evidence archive failed", error);
     if (failureAdmin && failureApplicationId) {

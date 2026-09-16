@@ -375,7 +375,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       }
       if (!jobApplication) throw new Error("Could not link this application to the selected company");
       const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
-      const employerInsert = await (supabase as any).from("guard_hiring_applications").insert({
+      const employerPayload = {
         ...base,
         application_type: "employer_copy",
         source_application_id: result.data.id,
@@ -387,9 +387,24 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         submitted_at: null,
         evidence_snapshot_status: "pending",
         evidence_snapshot_kind: "submission",
-      }).select("id,evidence_snapshot_status").single();
-      if (employerInsert.error) throw employerInsert.error;
-      const employerApplicationResult = { data: employerInsert.data, error: null };
+      };
+      // A failed archive is retryable. Reuse that unfinished employer copy so
+      // repeated clicks do not leave duplicate draft applications behind.
+      const existingEmployerDraft = await (supabase as any)
+        .from("guard_hiring_applications")
+        .select("id")
+        .eq("job_application_id", jobApplication.id)
+        .eq("source_application_id", result.data.id)
+        .eq("application_type", "employer_copy")
+        .eq("status", "draft")
+        .in("evidence_snapshot_status", ["pending", "failed"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingEmployerDraft.error) throw existingEmployerDraft.error;
+      const employerApplicationResult = existingEmployerDraft.data
+        ? await (supabase as any).from("guard_hiring_applications").update(employerPayload).eq("id", existingEmployerDraft.data.id).select("id,evidence_snapshot_status").single()
+        : await (supabase as any).from("guard_hiring_applications").insert(employerPayload).select("id,evidence_snapshot_status").single();
       if (employerApplicationResult.error || !employerApplicationResult.data) throw employerApplicationResult.error || new Error("Could not create the employer application copy");
 
       const archiveResult = await supabase.functions.invoke("archive-application-evidence", {
