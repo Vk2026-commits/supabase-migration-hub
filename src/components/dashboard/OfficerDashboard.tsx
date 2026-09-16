@@ -466,14 +466,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
       params.set("location", location);
       url = `https://calendar.google.com/calendar/render?${params.toString()}`;
     } else {
-      params.set("path", "/calendar/action/compose");
       params.set("rru", "addevent");
+      params.set("allday", "false");
       params.set("subject", summary);
       params.set("startdt", start.toISOString());
       params.set("enddt", end.toISOString());
       params.set("body", description);
       params.set("location", location);
-      url = `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+      url = `https://outlook.live.com/calendar/0/action/compose?${params.toString()}`;
     }
     window.open(url, "_blank", "noopener,noreferrer");
     setShowCalendarOptions(false);
