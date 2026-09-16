@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Lock, User, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, Loader2, UserCheck, ShieldCheck } from "lucide-react";
+import { Lock, User, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, Loader2, UserCheck, ShieldCheck, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -12,6 +12,7 @@ import HireButton from "./HireButton";
 import { InterviewScheduler } from "./InterviewScheduler";
 import { OnboardingDocumentsDialog } from "./OnboardingDocumentsDialog";
 import { PreEmploymentScreeningDialog } from "./PreEmploymentScreeningDialog";
+import { ApplicantNotesDialog } from "./ApplicantNotesDialog";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -75,6 +76,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [screeningApplication, setScreeningApplication] = useState<any>(null);
   const [confirmingHire, setConfirmingHire] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "compact">("cards");
+  const [notesApplication, setNotesApplication] = useState<any>(null);
 
   useEffect(() => {
     void loadApplications();
@@ -112,13 +114,14 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
 
     // Get display names and non-sensitive onboarding progress for accepted offers.
     const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
-    const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, unreadResult] = await Promise.all([
+    const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, notesResult, unreadResult] = await Promise.all([
       officerUserIds.length ? supabase.from("profiles").select("id, full_name, email").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
       (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
       (supabase as any).from("hires").select("id,employment_confirmed_at").eq("company_id", companyId).eq("status", "active"),
       (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
       (supabase as any).from("hire_screening_checks").select("*").eq("company_id", companyId).order("created_at"),
       (supabase as any).from("interview_schedules").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+      (supabase as any).from("company_applicant_notes").select("id,job_application_id,note,updated_at").eq("company_id", companyId),
       supabase.from("messages").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("sender_type", "officer").eq("is_read", false),
     ]);
     if (offersResult.error) console.error("Failed to match accepted offers", offersResult.error);
@@ -126,6 +129,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     if (progressResult.error) console.error("Failed to load onboarding progress", progressResult.error);
     if (screeningResult.error) console.error("Failed to load screening checks", screeningResult.error);
     if (interviewsResult.error) console.error("Failed to load interviews", interviewsResult.error);
+    if (notesResult.error) console.error("Failed to load applicant notes", notesResult.error);
     if (!unreadResult.error) setUnreadCount(unreadResult.count || 0);
     const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
     const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
@@ -134,6 +138,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     for (const check of screeningResult.data || []) screeningByHire.set(check.hire_id, [...(screeningByHire.get(check.hire_id) || []), check]);
     const interviewByApplication = new Map<string, any>();
     for (const interview of interviewsResult.data || []) if (!interviewByApplication.has(interview.job_application_id)) interviewByApplication.set(interview.job_application_id, interview);
+    const noteByApplication = new Map((notesResult.data || []).map((note: any) => [note.job_application_id, note]));
     const applicationRows = (data || []).map((app: any) => {
       const hiringApplications = [...(app.hiring_application || [])].sort((left: any, right: any) => new Date(right.submitted_at || right.created_at || 0).getTime() - new Date(left.submitted_at || left.created_at || 0).getTime());
       const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
@@ -152,6 +157,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         screeningChecks,
         screeningReady: screeningChecks.length > 0 && screeningChecks.filter((check: any) => check.required).every((check: any) => check.status === "cleared"),
         interview: interviewByApplication.get(app.id) || null,
+        companyNote: noteByApplication.get(app.id) || null,
       };
     });
     setApplications(applicationRows.filter((app: any) => !app.employmentConfirmedAt));
@@ -293,6 +299,15 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                       <MessageCircle className="mr-1.5 h-3 w-3" />
                       Chat
                     </Button>
+                    <Button
+                      size="sm"
+                      variant={app.companyNote?.note ? "secondary" : "outline"}
+                      className="h-9 px-3 text-xs"
+                      onClick={() => setNotesApplication(app)}
+                    >
+                      <StickyNote className="mr-1.5 h-3.5 w-3.5" />
+                      {app.companyNote?.note ? "View notes" : "Add note"}
+                    </Button>
                     <InterviewScheduler
                       companyId={companyId}
                       companyName={companyProfile?.company_name || "The company"}
@@ -361,6 +376,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       <ApplicantReviewDialog open={Boolean(reviewApplication)} onOpenChange={(open) => !open && setReviewApplication(null)} application={reviewApplication} />
       <OnboardingDocumentsDialog open={Boolean(onboardingApplication)} onOpenChange={(open) => !open && setOnboardingApplication(null)} application={onboardingApplication} />
       <PreEmploymentScreeningDialog open={Boolean(screeningApplication)} onOpenChange={(open) => !open && setScreeningApplication(null)} application={screeningApplication} onChanged={loadApplications} />
+      <ApplicantNotesDialog open={Boolean(notesApplication)} onOpenChange={(open) => !open && setNotesApplication(null)} companyId={companyId} application={notesApplication} onSaved={loadApplications} />
       <AlertDialog open={Boolean(hireToConfirm)} onOpenChange={(open) => !open && !confirmingHire && setHireToConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
