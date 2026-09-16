@@ -450,7 +450,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     setShowCalendarOptions(false);
   };
 
-  const openInterviewCalendar = (provider: "google" | "outlook") => {
+  const openInterviewCalendar = (provider: "google" | "outlook-work" | "outlook-personal") => {
     const details = interviewCalendarDetails();
     if (!details) return;
     const { start, end, companyName, title, location, description } = details;
@@ -473,7 +473,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
       params.set("enddt", end.toISOString());
       params.set("body", description);
       params.set("location", location);
-      url = `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+      const outlookHost = provider === "outlook-work" ? "https://outlook.office.com" : "https://outlook.live.com";
+      url = `${outlookHost}/calendar/0/deeplink/compose?${params.toString()}`;
     }
     window.open(url, "_blank", "noopener,noreferrer");
     setShowCalendarOptions(false);
@@ -537,7 +538,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             </DialogHeader>
             <div className="grid gap-3 py-2">
               <Button type="button" className="h-12 justify-start" onClick={() => openInterviewCalendar("google")}>Google Calendar</Button>
-              <Button type="button" variant="outline" className="h-12 justify-start" onClick={() => openInterviewCalendar("outlook")}>Outlook Calendar</Button>
+              <Button type="button" variant="outline" className="h-12 justify-start" onClick={() => openInterviewCalendar("outlook-work")}>Outlook for work or school</Button>
+              <Button type="button" variant="outline" className="h-12 justify-start" onClick={() => openInterviewCalendar("outlook-personal")}>Outlook.com personal calendar</Button>
               <Button type="button" variant="outline" className="h-12 justify-start" onClick={downloadInterviewCalendarFile}>Apple Calendar or another app (.ics)</Button>
             </div>
           </DialogContent>
