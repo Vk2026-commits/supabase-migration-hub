@@ -1283,12 +1283,31 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             )}
 
             {activeTab === "hiring-application" && (
-              <GuardHiringApplication
-                userId={userId}
-                officerId={officerProfile?.id || null}
-                onEnsureProfile={ensureOfficerProfile}
-                onChanged={loadProfile}
-              />
+              employeeOnboardingSubmitted ? (
+                <Card className="mx-auto max-w-3xl rounded-2xl border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background shadow-sm">
+                  <CardContent className="flex flex-col items-center gap-4 p-8 text-center sm:flex-row sm:text-left">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-green-600 text-white shadow-sm">
+                      <CheckCircle2 className="h-8 w-8" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-green-700">Completed and received</p>
+                      <h2 className="mt-1 text-2xl font-bold text-foreground">Your application process is complete</h2>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Your hiring application and completed onboarding packet were received by {completedCompanyName}
+                        {completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. No additional submission is needed.
+                      </p>
+                    </div>
+                    <Badge className="shrink-0 border border-green-200 bg-green-100 text-green-800 hover:bg-green-100">Complete</Badge>
+                  </CardContent>
+                </Card>
+              ) : (
+                <GuardHiringApplication
+                  userId={userId}
+                  officerId={officerProfile?.id || null}
+                  onEnsureProfile={ensureOfficerProfile}
+                  onChanged={loadProfile}
+                />
+              )
             )}
 
             {activeTab === "employee-onboarding" && onboardingOfferLoaded && !onboardingOfferAvailable && (
