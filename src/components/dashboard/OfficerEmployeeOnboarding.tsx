@@ -442,6 +442,33 @@ function Field({ label, value, onChange, type = "text", required = false, placeh
   );
 }
 
+function SensitiveNumberField({ label, value, onChange, maxLength, placeholder }: { label: string; value: string; onChange: (value: string) => void; maxLength: number; placeholder: string }) {
+  const [revealed, setRevealed] = useState(false);
+  const id = `employee-onboarding-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  return (
+    <div className="min-w-0 space-y-2">
+      <Label htmlFor={id}>{label} *</Label>
+      <div className="relative">
+        <Input
+          id={id}
+          className={`h-12 pr-12 font-mono text-base tracking-wider ${revealed ? "" : "text-transparent caret-foreground"}`}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={maxLength}
+          value={value}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, maxLength))}
+        />
+        {!revealed && value && <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 right-12 flex items-center overflow-hidden font-mono text-base tracking-wider text-foreground">{"X".repeat(value.length)}</span>}
+        <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1 h-10 w-10" onClick={() => setRevealed((current) => !current)} aria-label={revealed ? `Hide ${label}` : `Show ${label}`}>
+          {revealed ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function Choice({ label, value, onChange, options, optionLabels = {}, stacked = false }: { label: string; value: string; onChange: (value: string) => void; options: string[]; optionLabels?: Record<string, string>; stacked?: boolean }) {
   return (
     <div className="space-y-3">
@@ -1298,8 +1325,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                             <Choice label="Account type" value={account.accountType} onChange={(v) => updateBankAccount(account.id, "accountType", v as BankAccountDraft["accountType"])} options={["checking", "savings", "other"]} optionLabels={{ checking: "Checking", savings: "Savings", other: "Other" }} stacked />
                             <Field label="Bank city" value={account.bankCity} onChange={(v) => updateBankAccount(account.id, "bankCity", v)} required />
                             <Field label="Bank state" value={account.bankState} onChange={(v) => updateBankAccount(account.id, "bankState", v)} required />
-                            <Field label="9-digit routing number" value={account.routingNumber} onChange={(v) => updateBankAccount(account.id, "routingNumber", v.replace(/\D/g, "").slice(0, 9))} required />
-                            <Field label="Account number" value={account.accountNumber} onChange={(v) => updateBankAccount(account.id, "accountNumber", v.replace(/\D/g, "").slice(0, 17))} required />
+                            <SensitiveNumberField label="9-digit routing number" value={account.routingNumber} onChange={(v) => updateBankAccount(account.id, "routingNumber", v)} maxLength={9} placeholder="Enter routing number" />
+                            <SensitiveNumberField label="Account number" value={account.accountNumber} onChange={(v) => updateBankAccount(account.id, "accountNumber", v)} maxLength={17} placeholder="Enter account number" />
                             {index < bankAccounts.length - 1 ? (
                               <Field label="Amount to deposit each payday" type="number" value={account.allocationAmount} onChange={(v) => updateBankAccount(account.id, "allocationAmount", v)} required />
                             ) : (
