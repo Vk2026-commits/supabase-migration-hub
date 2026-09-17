@@ -430,7 +430,10 @@ Deno.serve(async (request) => {
       if (!isOfficer) return json({ error: "Only the receiving officer can accept this offer" }, 403);
       if (offer.status === "accepted") return json({ status: "accepted", hire_id: offer.hire_id });
       if (!clean(body.printed_name) || !dataUrlBytes(body.signature)) return json({ error: "Printed name and signature are required" }, 400);
-      if (!offer.viewed_at && offer.status === "sent") return json({ error: "View the offer document before accepting" }, 400);
+      if (!offer.viewed_at && ["sent", "viewed"].includes(offer.status)) {
+        const { error: viewedError } = await userClient.rpc("mark_employment_offer_viewed", { _offer_id: offerId });
+        if (viewedError) throw viewedError;
+      }
       const acceptedAt = new Date().toISOString();
       const original = await admin.storage.from("employment-offers").download(offer.offer_document_path);
       if (original.error || !original.data) throw original.error || new Error("Company-signed offer could not be loaded");

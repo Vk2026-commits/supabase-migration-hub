@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,9 +26,28 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!["sent", "viewed"].includes(offer.status)) return;
+
+    void supabase
+      .rpc("mark_employment_offer_viewed", { _offer_id: offer.id })
+      .then(({ error }) => {
+        if (error) console.error("Could not record employment offer review", error);
+      });
+  }, [offer.id, offer.status]);
+
   const invoke = async (action: string, extra: Record<string, unknown> = {}) => {
     const { data, error } = await supabase.functions.invoke("manage-employment-offer", { body: { action, offer_id: offer.id, ...extra } });
-    if (error) throw error;
+    if (error) {
+      let serverMessage = "";
+      try {
+        const payload = await error.context?.clone?.().json?.();
+        serverMessage = payload?.error || "";
+      } catch {
+        // Fall back to the SDK message when the response body is unavailable.
+      }
+      throw new Error(serverMessage || error.message || "Employment offer request failed");
+    }
     if (data?.error) throw new Error(data.error);
     return data;
   };
