@@ -333,6 +333,17 @@ Deno.serve(async (request) => {
       const { data: application } = await admin.from("guard_hiring_applications").select("id,officer_id,job_application_id,status,submitted_at,application_type,application_data,evidence_snapshot_status").eq("id", applicationId).maybeSingle();
       if (!application) return json({ error: "A submitted company application is required" }, 400);
       if (application.officer_id !== officerId || application.application_type !== "employer_copy" || !application.job_application_id) return json({ error: "A company application for this officer is required" }, 400);
+      const hasSubmissionEvidence = Boolean(application.submitted_at) || application.evidence_snapshot_status === "complete";
+      if (application.status !== "submitted" && !hasSubmissionEvidence) {
+        return json({ error: "The officer must submit the company application before an offer can be sent" }, 409);
+      }
+      if (application.status !== "submitted") {
+        const { error: repairError } = await admin
+          .from("guard_hiring_applications")
+          .update({ status: "submitted", submitted_at: application.submitted_at || new Date().toISOString() })
+          .eq("id", application.id);
+        if (repairError) throw repairError;
+      }
       const { data: jobApplication } = application.job_application_id ? await admin.from("job_applications").select("id,job_posting_id").eq("id", application.job_application_id).maybeSingle() : { data: null };
       const { data: jobPosting } = jobApplication?.job_posting_id ? await admin.from("job_postings").select("id,company_id").eq("id", jobApplication.job_posting_id).maybeSingle() : { data: null };
       if (!jobPosting || jobPosting.company_id !== companyId) return json({ error: "Application does not belong to this company" }, 403);
@@ -451,6 +462,7 @@ Deno.serve(async (request) => {
     return json({ error: "Unknown action" }, 400);
   } catch (error) {
     console.error("Employment offer operation failed", error);
-    return json({ error: error instanceof Error ? error.message : "Employment offer operation failed" }, 500);
+    const message = error instanceof Error ? error.message : clean((error as { message?: unknown } | null)?.message);
+    return json({ error: message || "Employment offer operation failed" }, 500);
   }
 });
