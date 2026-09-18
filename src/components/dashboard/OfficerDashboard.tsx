@@ -87,6 +87,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [completedOnboardingRecord, setCompletedOnboardingRecord] = useState<any>(null);
   const [employmentConfirmedAt, setEmploymentConfirmedAt] = useState<string | null>(null);
   const [onboardingReviewedAt, setOnboardingReviewedAt] = useState<string | null>(null);
+  const [hireDecisionStatus, setHireDecisionStatus] = useState<string | null>(null);
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
@@ -163,9 +164,10 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "hires", filter: `officer_id=eq.${officerProfile.id}` },
         (payload) => {
-          const updatedHire = payload.new as { employment_confirmed_at?: string | null; onboarding_reviewed_at?: string | null };
+          const updatedHire = payload.new as { employment_confirmed_at?: string | null; onboarding_reviewed_at?: string | null; status?: string | null };
           if (updatedHire.employment_confirmed_at) setEmploymentConfirmedAt(updatedHire.employment_confirmed_at);
           setOnboardingReviewedAt(updatedHire.onboarding_reviewed_at || null);
+          setHireDecisionStatus(updatedHire.status || null);
         },
       )
       .subscribe();
@@ -298,7 +300,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at,employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
-          (supabase as any).from("hires").select("employment_confirmed_at,onboarding_reviewed_at").eq("officer_id", data.id).eq("status", "active").not("employment_confirmed_at", "is", null).order("employment_confirmed_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase as any).from("hires").select("employment_confirmed_at,onboarding_reviewed_at,status,created_at").eq("officer_id", data.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).rpc("get_my_upcoming_interview"),
@@ -321,6 +323,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         if (confirmedHireResult.error) console.error("Failed to load confirmed employment status", confirmedHireResult.error);
         setEmploymentConfirmedAt((confirmedHireResult.data as any)?.employment_confirmed_at || null);
         setOnboardingReviewedAt((confirmedHireResult.data as any)?.onboarding_reviewed_at || null);
+        setHireDecisionStatus((confirmedHireResult.data as any)?.status || null);
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
@@ -721,7 +724,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           onboardingAvailable={onboardingOfferAvailable}
           onboardingOfferLoaded={onboardingOfferLoaded}
           offerNeedsResponse={Boolean(pendingEmploymentOffer)}
-          employmentConfirmed={Boolean(employmentConfirmedAt)}
+          employmentConfirmed={Boolean(employmentConfirmedAt && onboardingReviewedAt)}
         />
         <div className="flex min-w-0 flex-1">
           <div className={`min-w-0 flex-1 p-4 sm:p-6 ${activeTab === "employee-onboarding" ? "lg:px-6 lg:py-8" : "lg:p-8"}`}>
@@ -733,21 +736,21 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               <span><span className="block text-2xl font-bold sm:text-3xl">Welcome, {profile?.full_name || profile?.email}</span><span className="block text-sm text-muted-foreground">View account settings</span></span>
             </button>
 
-            {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
+            {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={hireDecisionStatus === "not_hired" ? { label: "Application closed", tone: "amber" } : onboardingReviewedAt && employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
 
-            {activeTab === "overview" && !onboardingReviewedAt && (employmentConfirmedAt || onboardingComplete) && (
-              <div className={`mb-6 flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-sm sm:flex-row sm:items-center ${employmentConfirmedAt ? "border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background" : "border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background"}`}>
+            {activeTab === "overview" && hireDecisionStatus !== "not_hired" && !onboardingReviewedAt && (employmentConfirmedAt || onboardingComplete) && (
+              <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background px-5 py-4 shadow-sm sm:flex-row sm:items-center">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-xs font-bold uppercase tracking-[0.14em] ${employmentConfirmedAt ? "text-green-700" : "text-primary"}`}>{employmentConfirmedAt ? "Employment confirmed" : "Onboarding submitted"}</p>
-                  <h2 className="mt-0.5 text-lg font-bold text-foreground">{employmentConfirmedAt ? `Congratulations—${completedCompanyName} has confirmed your hire!` : `Your part is complete—${completedCompanyName} will be in touch`}</h2>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Onboarding submitted</p>
+                  <h2 className="mt-0.5 text-lg font-bold text-foreground">Your part is complete—{completedCompanyName} will be in touch</h2>
                   <p className="mt-0.5 text-sm text-muted-foreground">
-                    {employmentConfirmedAt ? `Confirmed on ${new Date(employmentConfirmedAt).toLocaleDateString()}. ${completedCompanyName} will contact you with any remaining pre-employment or first-day instructions.` : `Your onboarding packet was submitted${completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. No further action is needed from you right now. ${completedCompanyName} will review your packet, complete the required background check and drug screening, and contact you with an update.`}
+                    Your onboarding packet was submitted{completedOnboardingRecord?.submitted_at ? ` on ${new Date(completedOnboardingRecord.submitted_at).toLocaleDateString()}` : ""}. No further action is needed from you right now. {completedCompanyName} will review your packet, complete the required background check and drug screening, and contact you with an update.
                   </p>
                 </div>
-                <span className={`w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${employmentConfirmedAt ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{employmentConfirmedAt ? "Hired" : "Awaiting company review"}</span>
+                <span className="w-fit shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Pending onboarding</span>
               </div>
             )}
 

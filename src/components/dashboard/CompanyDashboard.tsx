@@ -13,11 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, BellRing, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, BellRing, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, UserX, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
 import EmploymentTracking from "./EmploymentTracking";
+import NotHiredTracking from "./NotHiredTracking";
 import InterestedOfficers from "./InterestedOfficers";
 import JobPostings from "./JobPostings";
 import JobApplicants from "./JobApplicants";
@@ -47,6 +48,7 @@ const companyTabs = new Set([
   "applicants",
   "interested",
   "employment",
+  "not-hired",
   "team",
   "subscriptions",
   "account",
@@ -61,6 +63,7 @@ const companySectionDetails: Record<string, { title: string; description: string
   applicants: { title: "Applicants", description: "Review applications and move candidates through hiring.", icon: UserCheck },
   interested: { title: "Interested officers", description: "Review officers who expressed interest in your jobs.", icon: Heart },
   employment: { title: "Hired officers", description: "Access employee records, documents, and evaluations.", icon: Users },
+  "not-hired": { title: "Not Hired", description: "Review closed pending hires and retained decision history.", icon: UserX },
   team: { title: "Company team", description: "Manage staff access and hiring permissions.", icon: UsersRound },
   subscriptions: { title: "Subscription", description: "Review your plan, features, and account access.", icon: CreditCard },
   account: { title: "Account settings", description: "Update your name, username, profile picture, or password.", icon: Settings },
@@ -381,6 +384,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                     ["applicants", "Applicants", "Review applications and move hiring forward", UserCheck],
                     ["interested", "Interested officers", "See officers interested in your work", Heart],
                     ["employment", "Hired officers", "Access records, documents, and evaluations", Users],
+                    ["not-hired", "Not Hired", "Review closed pending hires and decision history", UserX],
                     ["team", "Company team", "Manage staff access and roles", UsersRound],
                     ["subscriptions", "Subscription", companyProfile?.subscription_tier ? `${companyProfile.subscription_tier} plan` : "View plans and access", CreditCard],
                     ["account", "Account settings", "Update your name, username, photo, or password", Settings],
@@ -996,6 +1000,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
             {activeTab === "employment" && companyProfile && (
               <EmploymentTracking companyId={companyProfile.id} onPendingReviewCountChange={setPendingOnboardingReviews} />
+            )}
+
+            {activeTab === "not-hired" && companyProfile && (
+              <NotHiredTracking companyId={companyProfile.id} />
             )}
 
             {activeTab === "team" && companyProfile && (

@@ -19,6 +19,7 @@ const statusLabels: Record<string, string> = {
   not_started: "Not started",
   pending: "In progress",
   cleared: "Cleared",
+  failed: "Failed",
   review_required: "Needs review",
   not_required: "Not required",
 };
@@ -71,7 +72,7 @@ export function PreEmploymentScreeningDialog({ open, onOpenChange, application, 
     <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
       <DialogHeader>
         <DialogTitle>Pre-employment screening for {application?.officerName}</DialogTitle>
-        <DialogDescription>Record each required result. The officer cannot be moved to Hired until every required check is cleared.</DialogDescription>
+        <DialogDescription>Record each required result. A failed item prevents final hiring and can be used when moving the officer to Not Hired.</DialogDescription>
       </DialogHeader>
       <div className="space-y-3">
         {checks.map(check => <div key={check.id} className="rounded-xl border bg-muted/20 p-4">
@@ -86,6 +87,7 @@ export function PreEmploymentScreeningDialog({ open, onOpenChange, application, 
                 <option value="not_started">Not started</option>
                 <option value="pending">In progress</option>
                 <option value="cleared">Cleared</option>
+                <option value="failed">Failed</option>
                 <option value="review_required">Needs review</option>
                 {!check.required && <option value="not_required">Not required</option>}
               </select>

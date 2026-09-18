@@ -3,8 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, Loader2, UserCheck, ShieldCheck, StickyNote } from "lucide-react";
+import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, ShieldCheck, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -36,7 +35,7 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
   if (app.interview?.change_requested_by === "company" && app.interview?.change_request_status === "pending") return { label: "Waiting for officer to accept new interview time", tone: "border-blue-300 bg-blue-50 text-blue-800" };
   if (app.status === "accepted") {
     if (app.employmentConfirmedAt) return { label: "Employment confirmed — view in Hired", tone: "border-green-300 bg-green-50 text-green-800" };
-    if (onboarding.percent === 100 && app.screeningReady) return { label: "Next: Accept as hired", tone: "border-green-300 bg-green-50 text-green-800" };
+    if (onboarding.percent === 100 && app.screeningReady) return { label: "Ready to finalize in Hired", tone: "border-green-300 bg-green-50 text-green-800" };
     if (onboarding.percent === 100) return { label: "Next: Complete required screening", tone: "border-amber-300 bg-amber-50 text-amber-800" };
     if (onboarding.percent === 0) return { label: "Next: Officer starts onboarding", tone: "border-blue-300 bg-blue-50 text-blue-800" };
     return { label: `Officer completing: ${onboarding.detail}`, tone: "border-blue-300 bg-blue-50 text-blue-800" };
@@ -73,9 +72,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [reviewApplication, setReviewApplication] = useState<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [onboardingApplication, setOnboardingApplication] = useState<any>(null);
-  const [hireToConfirm, setHireToConfirm] = useState<any>(null);
   const [screeningApplication, setScreeningApplication] = useState<any>(null);
-  const [confirmingHire, setConfirmingHire] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "compact">("cards");
   const [notesApplication, setNotesApplication] = useState<any>(null);
 
@@ -118,7 +115,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, notesResult, unreadResult] = await Promise.all([
       officerUserIds.length ? supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
       (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
-      (supabase as any).from("hires").select("id,employment_confirmed_at").eq("company_id", companyId).eq("status", "active"),
+      (supabase as any).from("hires").select("id,employment_confirmed_at,status").eq("company_id", companyId),
       (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
       (supabase as any).from("hire_screening_checks").select("*").eq("company_id", companyId).order("created_at"),
       (supabase as any).from("interview_schedules").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -134,7 +131,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     if (!unreadResult.error) setUnreadCount(unreadResult.count || 0);
     const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
     const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
-    const confirmationByHire = new Map((hiresResult.data || []).map((hire: any) => [hire.id, hire.employment_confirmed_at]));
+    const hireStateById = new Map((hiresResult.data || []).map((hire: any) => [hire.id, hire]));
     const screeningByHire = new Map<string, any[]>();
     for (const check of screeningResult.data || []) screeningByHire.set(check.hire_id, [...(screeningByHire.get(check.hire_id) || []), check]);
     const interviewByApplication = new Map<string, any>();
@@ -160,7 +157,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         officerEmail: applicationSnapshot.email || profile?.email || "",
         officerPhone: applicationSnapshot.phone || app.officer?.phone || "",
         hireId,
-        employmentConfirmedAt: confirmationByHire.get(hireId) || null,
+        employmentConfirmedAt: hireStateById.get(hireId)?.employment_confirmed_at || null,
+        hireStatus: hireStateById.get(hireId)?.status || null,
         onboardingProgress: progressByHire.get(hireId) || null,
         screeningChecks,
         screeningReady: screeningChecks.length > 0 && screeningChecks.filter((check: any) => check.required).every((check: any) => check.status === "cleared"),
@@ -168,24 +166,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         companyNote: noteByApplication.get(app.id) || null,
       };
     });
-    setApplications(applicationRows.filter((app: any) => !app.employmentConfirmedAt));
-  };
-
-  const confirmHire = async () => {
-    if (!hireToConfirm?.hireId) return;
-    setConfirmingHire(true);
-    try {
-      const { error } = await (supabase as any).rpc("confirm_officer_hire", { _hire_id: hireToConfirm.hireId });
-      if (error) throw error;
-      toast.success(`${hireToConfirm.officerName} was moved to Hired`);
-      setHireToConfirm(null);
-      await loadApplications();
-    } catch (error: any) {
-      console.error("Failed to confirm hire", error);
-      toast.error(error?.message || "The hire could not be confirmed");
-    } finally {
-      setConfirmingHire(false);
-    }
+    setApplications(applicationRows.filter((app: any) => !app.employmentConfirmedAt && app.hireStatus !== "not_hired"));
   };
 
   const getMaskedName = (fullName: string) => {
@@ -339,12 +320,6 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                         Review screening
                       </Button>
                     )}
-                    {app.status === "accepted" && onboarding.percent === 100 && !app.employmentConfirmedAt && app.hireId && (
-                      <Button size="sm" disabled={!app.screeningReady} title={!app.screeningReady ? "Clear every required screening check first" : undefined} className="h-9 bg-green-600 px-3 text-xs text-white shadow-sm hover:bg-green-700" onClick={() => setHireToConfirm(app)}>
-                        <UserCheck className="mr-1.5 h-3.5 w-3.5" />
-                        Accept as hired
-                      </Button>
-                    )}
                     {app.offerHiringApplicationId && app.status !== "accepted" && (
                       <HireButton
                         officerId={app.officer.id}
@@ -385,22 +360,6 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       <OnboardingDocumentsDialog open={Boolean(onboardingApplication)} onOpenChange={(open) => !open && setOnboardingApplication(null)} application={onboardingApplication} />
       <PreEmploymentScreeningDialog open={Boolean(screeningApplication)} onOpenChange={(open) => !open && setScreeningApplication(null)} application={screeningApplication} onChanged={loadApplications} />
       <ApplicantNotesDialog open={Boolean(notesApplication)} onOpenChange={(open) => !open && setNotesApplication(null)} companyId={companyId} application={notesApplication} onSaved={loadApplications} />
-      <AlertDialog open={Boolean(hireToConfirm)} onOpenChange={(open) => !open && !confirmingHire && setHireToConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Accept {hireToConfirm?.officerName} as hired?</AlertDialogTitle>
-            <AlertDialogDescription>
-              All required screening checks are recorded as cleared. Confirm that you have reviewed the results and want to move this officer into the Hired section.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={confirmingHire}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={confirmingHire} onClick={(event) => { event.preventDefault(); void confirmHire(); }} className="bg-green-600 text-white hover:bg-green-700">
-              {confirmingHire ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Confirming…</> : "Confirm and move to Hired"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Card>
   );
 };
