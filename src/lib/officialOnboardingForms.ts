@@ -1,4 +1,4 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFName, StandardFonts, rgb } from "pdf-lib";
 
 export type OfficialOnboardingValues = {
   legalFirstName: string;
@@ -571,7 +571,10 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     // is immutable, so bake the completed fields into the original page.
     // This preserves the form title, instructions, tables, labels, and lines
     // consistently in every PDF viewer.
-    try { form.flatten(); } catch { /* retain the filled form if flattening fails */ }
+    try {
+      form.flatten();
+      document.catalog.delete(PDFName.of("AcroForm"));
+    } catch { /* retain the filled form if flattening fails */ }
   }
   if (isHandbookAcknowledgement && employerRepresentativeName) {
     try {
