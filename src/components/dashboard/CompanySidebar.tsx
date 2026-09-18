@@ -1,5 +1,5 @@
 import { NavLink } from "@/lib/router-compat";
-import { Briefcase, Users, Heart, UserCheck, Building2, CheckCircle2, CreditCard, UsersRound, MapPinned } from "lucide-react";
+import { Briefcase, Users, Heart, UserCheck, Building2, CheckCircle2, CreditCard, UsersRound, MapPinned, LayoutDashboard } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +23,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete }: Comp
   const { open } = useSidebar();
 
   const items = [
+    { title: "Dashboard", value: "overview", icon: LayoutDashboard },
     { title: "Company Profile", value: "profile", icon: Building2 },
     { title: "Browse Guards", value: "browse", icon: Users },
     { title: "Job Postings", value: "jobs", icon: Briefcase },

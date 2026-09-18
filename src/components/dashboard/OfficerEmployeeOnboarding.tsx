@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Eye, EyeOff, FileCheck2, LockKeyhole, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Eye, EyeOff, FileCheck2, IdCard, LockKeyhole, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,9 +90,23 @@ type OnboardingData = {
   signatureName: string;
   signatureDate: string;
   signatureImage: string;
+  signatureSignedAt: string;
+  packetSignatureImage: string;
+  packetSignatureSignedAt: string;
   w4SignatureName: string;
   w4SignatureDate: string;
   w4SignatureImage: string;
+  w4SignatureSignedAt: string;
+  bankSignatureSignedAt: string;
+  identityDocuments: Record<string, IdentityDocumentRecord>;
+};
+
+type IdentityDocumentRecord = {
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  uploadedAt: string;
+  version: number;
 };
 
 type PolicyAcknowledgement = {
@@ -101,6 +115,7 @@ type PolicyAcknowledgement = {
   employeeTitle: string;
   signatureDate: string;
   signatureImage: string;
+  signedAt?: string;
   accepted: boolean;
   notes: string;
   documentFields: Record<string, string>;
@@ -385,9 +400,15 @@ const initialData: OnboardingData = {
   signatureName: "",
   signatureDate: new Date().toISOString().slice(0, 10),
   signatureImage: "",
+  signatureSignedAt: "",
+  packetSignatureImage: "",
+  packetSignatureSignedAt: "",
   w4SignatureName: "",
   w4SignatureDate: new Date().toISOString().slice(0, 10),
   w4SignatureImage: "",
+  w4SignatureSignedAt: "",
+  bankSignatureSignedAt: "",
+  identityDocuments: {},
   offeredPosition: "Security Officer",
   hourlyRate: "",
   supervisorName: "",
@@ -513,6 +534,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [savedBankAccounts, setSavedBankAccounts] = useState<SavedBankAccount[]>([]);
   const [activePolicyKey, setActivePolicyKey] = useState<string | null>(null);
   const [policyConfirmationOpen, setPolicyConfirmationOpen] = useState(false);
+  const [uploadingIdentityDocument, setUploadingIdentityDocument] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const packetIdRef = useRef<string | null>(null);
 
@@ -723,7 +745,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     account.bankName && account.bankCity && account.bankState && /^\d{9}$/.test(account.routingNumber.replace(/\D/g, "")) && /^\d{4,17}$/.test(account.accountNumber.replace(/\D/g, "")) && (index === bankAccounts.length - 1 ? account.allocationType === "entire" : account.allocationType === "amount" && Number(account.allocationAmount) > 0)
   )));
   const directDepositComplete = bankAccountsComplete && data.bankAuthorizationAccepted && Boolean(data.bankSignatureName && data.bankSignatureDate && data.bankSignatureImage);
-  const completeStep = (step: number) => (step === 0 ? Boolean(accessState === "ready" && hireId && hiringApplicationId && data.offerPreparedAt) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.offerPreparedAt && data.startDate && data.scheduledPost && data.scheduledShift && data.supervisorName) : Boolean(data.signatureName && data.signatureDate && data.signatureImage));
+  const completeStep = (step: number) => (step === 0 ? Boolean(accessState === "ready" && hireId && hiringApplicationId && data.offerPreparedAt) : step === 1 ? Boolean(data.legalFirstName && data.legalLastName && data.address && data.city && data.state && data.zip && data.dateOfBirth && data.email && data.phone && data.citizenshipStatus && (ssnMasked || isValidSsn(ssn)) && data.signatureImage && (data.citizenshipStatus !== "Lawful permanent resident" || data.alienNumber) && i9AuthorizationComplete) : step === 2 ? Boolean(data.filingStatus && data.w4SignatureName && data.w4SignatureDate && data.w4SignatureImage) : step === 3 ? data.paymentMethod === "paper_check" || directDepositComplete : step === 4 ? Boolean(data.emergencyName && data.emergencyRelationship && data.emergencyPhone) : step === 5 ? policiesComplete : step === 6 ? Boolean(data.offerPreparedAt && data.startDate && data.scheduledPost && data.scheduledShift && data.supervisorName && data.uniformShirt && data.uniformPants && data.uniformShoes) : Boolean(data.signatureName && data.signatureDate && data.packetSignatureImage));
   const allComplete = useMemo(() => Array.from({ length: 8 }, (_, index) => completeStep(index)).every(Boolean), [data, ssn, ssnMasked, bankAccounts, savedBankAccounts, accessState, hireId, hiringApplicationId]);
 
   const saveSensitiveForStep = async (step: number) => {
@@ -777,6 +799,64 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     return { storagePath, submittedAt, version };
   };
 
+  const uploadIdentityDocument = async (documentType: string, documentLabel: string, file: File) => {
+    const acceptedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    if (!acceptedTypes.includes(file.type)) {
+      toast.error("Upload a JPG, PNG, WebP, or PDF file");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Identity documents must be 10 MB or smaller");
+      return;
+    }
+    setUploadingIdentityDocument(documentType);
+    try {
+      if (!packetIdRef.current && !(await saveDraft(currentStep))) throw new Error("The onboarding file is not ready yet");
+      if (!packetIdRef.current || !activeOfficerId) throw new Error("The onboarding file is not ready yet");
+      const existing = await (supabase as any).from("officer_compliance_documents").select("version").eq("packet_id", packetIdRef.current).eq("document_type", documentType).order("version", { ascending: false }).limit(1).maybeSingle();
+      if (existing.error) throw existing.error;
+      const version = Number(existing.data?.version || 0) + 1;
+      const uploadedAt = new Date().toISOString();
+      const safeName = file.name.replace(/[^a-z0-9._-]+/gi, "-").toLowerCase();
+      const storagePath = `${userId}/${packetIdRef.current}/identity/${documentType}/v${version}-${uploadedAt.replace(/[:.]/g, "-")}-${safeName}`;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
+      const sha256 = Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
+      const upload = await supabase.storage.from("onboarding-documents").upload(storagePath, file, { upsert: false, contentType: file.type });
+      if (upload.error) throw upload.error;
+      const record = await (supabase as any).from("officer_compliance_documents").insert({
+        packet_id: packetIdRef.current,
+        officer_id: activeOfficerId,
+        hiring_application_id: hiringApplicationId,
+        document_type: documentType,
+        document_label: documentLabel,
+        version,
+        storage_path: storagePath,
+        sha256,
+        signed_at: null,
+        submitted_at: uploadedAt,
+        metadata: { category: "identity", originalFileName: file.name, mimeType: file.type },
+        created_by: userId,
+      });
+      if (record.error) throw record.error;
+      const nextData = {
+        ...data,
+        identityDocuments: {
+          ...(data.identityDocuments || {}),
+          [documentType]: { storagePath, fileName: file.name, mimeType: file.type, uploadedAt, version },
+        },
+      };
+      setData(nextData);
+      await saveDraft(currentStep, nextData);
+      toast.success(`${documentLabel} uploaded securely`);
+      onChanged?.();
+    } catch (error: any) {
+      toast.error(error.message || `${documentLabel} could not be uploaded`);
+    } finally {
+      setUploadingIdentityDocument(null);
+    }
+  };
+
   const go = async (nextStep: number) => {
     const destination = Math.max(0, Math.min(7, nextStep));
     try {
@@ -808,7 +888,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       await saveSensitiveForStep(1);
       if (!(await saveDraft(1)) || !packetIdRef.current) throw new Error("The I-9 draft could not be saved");
       const i9Bytes = await buildI9(data, formatSsn(ssn));
-      const archived = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureDate, { form: "USCIS I-9", employeeSection: 1 });
+      const archived = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureSignedAt || new Date().toISOString(), { form: "USCIS I-9", employeeSection: 1, declaredSignatureDate: data.signatureDate });
       const i9Path = archived.storagePath;
       const submittedAt = archived.submittedAt;
       const { error } = await (supabase as any).from("officer_onboarding_packets").update({ i9_document_path: i9Path, i9_submitted_at: submittedAt, form_data: data, signature_name: data.signatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" "), signature_date: data.signatureDate, updated_at: submittedAt }).eq("id", packetIdRef.current);
@@ -837,7 +917,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       await saveSensitiveForStep(1);
       if (!(await saveDraft(2)) || !packetIdRef.current) throw new Error("The W-4 draft could not be saved");
       const w4Bytes = await buildW4(data, formatSsn(ssn));
-      const archived = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureDate, { form: "IRS W-4" });
+      const archived = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureSignedAt || new Date().toISOString(), { form: "IRS W-4", declaredSignatureDate: data.w4SignatureDate });
       const w4Path = archived.storagePath;
       const submittedAt = archived.submittedAt;
       const { error } = await (supabase as any).from("officer_onboarding_packets").update({ w4_document_path: w4Path, w4_submitted_at: submittedAt, form_data: data, updated_at: submittedAt }).eq("id", packetIdRef.current);
@@ -866,6 +946,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
     setSubmitting(true);
     try {
+      const submissionStartedAt = new Date().toISOString();
       await saveSensitiveForStep(currentStep);
       let i9Path: string | undefined;
       let w4Path: string | undefined;
@@ -873,11 +954,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         const normalizedSsn = formatSsn(ssn);
         const [i9Bytes, w4Bytes] = await Promise.all([buildI9(data, normalizedSsn), buildW4(data, normalizedSsn)]);
         if (!i9SubmittedAt) {
-          const i9Archive = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureDate, { form: "USCIS I-9", packetSubmission: true });
+          const i9Archive = await archiveComplianceDocument("form-i9", "Signed Form I-9", i9Bytes, data.signatureSignedAt || submissionStartedAt, { form: "USCIS I-9", packetSubmission: true, declaredSignatureDate: data.signatureDate });
           i9Path = i9Archive.storagePath;
         }
         if (!w4SubmittedAt) {
-          const w4Archive = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureDate, { form: "IRS W-4", packetSubmission: true });
+          const w4Archive = await archiveComplianceDocument("form-w4", "Signed Form W-4", w4Bytes, data.w4SignatureSignedAt || submissionStartedAt, { form: "IRS W-4", packetSubmission: true, declaredSignatureDate: data.w4SignatureDate });
           w4Path = w4Archive.storagePath;
         }
       }
@@ -923,18 +1004,24 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     setActivePolicyKey(key);
     setData((current) => {
       const existing = current.policyAcknowledgements[key];
-      const reusable = [...Object.values(current.policyAcknowledgements)].reverse().find((item) => Boolean(item.signatureImage));
-      const identity = {
-        printedName: existing?.printedName || reusable?.printedName || [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
-        employeeTitle: existing?.employeeTitle || reusable?.employeeTitle || current.offeredPosition || "Security Officer",
-        signatureDate: existing?.signatureDate || reusable?.signatureDate || new Date().toISOString().slice(0, 10),
-        signatureImage: existing?.signatureImage || reusable?.signatureImage || current.signatureImage || "",
-      };
+      if (existing) {
+        if (existing.viewedAt) return current;
+        return { ...current, policyAcknowledgements: { ...current.policyAcknowledgements, [key]: { ...existing, viewedAt: new Date().toISOString() } } };
+      }
       return {
         ...current,
         policyAcknowledgements: {
           ...current.policyAcknowledgements,
-          [key]: existing ? { ...existing, ...identity, viewedAt: existing.viewedAt || new Date().toISOString() } : { viewedAt: new Date().toISOString(), ...identity, accepted: false, notes: "", documentFields: {} },
+          [key]: {
+            viewedAt: new Date().toISOString(),
+            printedName: [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
+            employeeTitle: current.offeredPosition || "Security Officer",
+            signatureDate: "",
+            signatureImage: "",
+            accepted: false,
+            notes: "",
+            documentFields: {},
+          },
         },
       };
     });
@@ -944,6 +1031,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       if (tab && scroller) {
         scroller.scrollTo({ left: tab.offsetLeft - scroller.clientWidth / 2 + tab.clientWidth / 2, behavior: "smooth" });
       }
+      document.getElementById("policy-document-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
   };
   useEffect(() => {
@@ -980,11 +1068,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     }
     const policyItem = policyItems.find(([itemKey]) => itemKey === key);
     if (!policyItem) return;
+    const signedAt = new Date().toISOString();
+    const signedAcknowledgement = { ...acknowledgement, signedAt };
     try {
       const [, label, path] = policyItem;
-      const result = await buildPolicyAcknowledgement(path, { title: label, ...acknowledgement }, data);
-      await archiveComplianceDocument(`policy-${key}`, label, result.bytes, acknowledgement.signatureDate, {
+      const result = await buildPolicyAcknowledgement(path, { title: label, ...signedAcknowledgement }, data);
+      await archiveComplianceDocument(`policy-${key}`, label, result.bytes, signedAt, {
         viewedAt: acknowledgement.viewedAt,
+        signedAt,
         accepted: acknowledgement.accepted,
         employeeName: acknowledgement.printedName,
         employerName: data.employerName,
@@ -993,7 +1084,11 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       toast.error(error.message || "The signed company record could not be archived");
       return;
     }
-    const nextData = { ...data, policies: { ...data.policies, [key]: true } };
+    const nextData = {
+      ...data,
+      policies: { ...data.policies, [key]: true },
+      policyAcknowledgements: { ...data.policyAcknowledgements, [key]: signedAcknowledgement },
+    };
     setData(nextData);
     const saved = await saveDraft(currentStep, nextData);
     if (!saved) {
@@ -1006,13 +1101,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     const nextItem = policyItems[currentIndex + 1];
     if (nextItem) {
       const nextKey = nextItem[0];
-      setActivePolicyKey(nextKey);
       openPolicy(nextKey);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          document.getElementById(`policy-${nextKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-      });
     } else {
       setPolicyConfirmationOpen(true);
     }
@@ -1093,14 +1182,28 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         <aside className="hidden lg:block">
           <nav className="sticky top-4 space-y-2 rounded-2xl border bg-zinc-100 p-3 shadow-inner">
             {steps.map((step, index) => (
-              <button key={step[0]} type="button" onClick={() => go(index)} className={`group flex min-h-[84px] w-full items-center gap-3 rounded-lg border bg-white px-3 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${index === currentStep ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
-                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold ${index === currentStep ? "bg-primary text-primary-foreground" : completeStep(index) ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold">Page {index + 1}: {step[0]}</span>
-                  <span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{step[1]}</span>
-                  <span className={`mt-1 block text-[10px] font-bold uppercase tracking-wide ${completeStep(index) ? "text-green-700" : "text-amber-700"}`}>{completeStep(index) ? "Complete" : "Needs information"}</span>
-                </span>
-              </button>
+              <div key={step[0]}>
+                <button type="button" onClick={() => go(index)} className={`group flex min-h-[84px] w-full items-center gap-3 rounded-lg border bg-white px-3 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${index === currentStep ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold ${index === currentStep ? "bg-primary text-primary-foreground" : completeStep(index) ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">Page {index + 1}: {step[0]}</span>
+                    <span className="mt-1 block line-clamp-2 text-xs text-muted-foreground">{step[1]}</span>
+                    <span className={`mt-1 block text-[10px] font-bold uppercase tracking-wide ${completeStep(index) ? "text-green-700" : "text-amber-700"}`}>{completeStep(index) ? "Complete" : "Needs information"}</span>
+                  </span>
+                </button>
+                {index === 5 && currentStep === 5 && (
+                  <div id="policy-tabs-scroll" className="ml-5 mt-2 max-h-[44vh] space-y-1 overflow-y-auto border-l-2 border-primary/20 pl-3" role="tablist" aria-label="Company policy documents">
+                    {policyItems.map(([key, label], policyIndex) => {
+                      const complete = isPolicyComplete(key);
+                      const selected = activePolicyKey === key;
+                      return <button key={key} id={`policy-tab-${key}`} type="button" role="tab" aria-selected={selected} onClick={() => openPolicy(key)} className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors ${selected ? "border-primary bg-primary text-primary-foreground shadow-sm" : complete ? "border-green-300 bg-green-50 text-green-800" : "bg-white hover:border-primary/50"}`}>
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold ${selected ? "bg-white/20" : complete ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{complete ? <Check className="h-3.5 w-3.5" /> : policyIndex + 1}</span>
+                        <span className="line-clamp-2">{label}</span>
+                      </button>;
+                    })}
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
         </aside>
@@ -1110,6 +1213,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             <div className="flex gap-2 overflow-x-auto pb-2">
               {steps.map((step, index) => <button key={step[0]} type="button" onClick={() => go(index)} aria-label={`Open ${step[0]}`} className={`flex h-12 min-w-12 items-center justify-center rounded-lg border text-sm font-bold shadow-sm ${index === currentStep ? "border-primary bg-primary text-primary-foreground" : completeStep(index) ? "border-green-300 bg-green-50 text-green-700" : "bg-background text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</button>)}
             </div>
+            {currentStep === 5 && <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy documents">{policyItems.map(([key, label], index) => { const complete = isPolicyComplete(key); const selected = activePolicyKey === key; return <button key={key} type="button" role="tab" aria-selected={selected} onClick={() => openPolicy(key)} className={`flex min-w-[145px] items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold ${selected ? "border-primary bg-primary text-primary-foreground" : complete ? "border-green-300 bg-green-50 text-green-800" : "bg-background"}`}><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-black/5">{complete ? <Check className="h-3.5 w-3.5" /> : index + 1}</span><span className="line-clamp-2">{label}</span></button>; })}</div>}
           </div>
           <Card className="relative min-w-0 overflow-hidden rounded-lg border-zinc-300 bg-white shadow-[0_18px_50px_-24px_rgba(15,23,42,0.45)] ring-1 ring-black/5 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary">
             <CardHeader className="border-b bg-zinc-50/70 px-5 py-6 sm:px-10">
@@ -1117,34 +1221,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               <CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle>
               <CardDescription className="text-base">{steps[currentStep][1]}</CardDescription>
             </CardHeader>
-            {currentStep === 5 && (
-              <div className="border-b bg-white px-5 py-4 sm:px-10">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-[.16em] text-muted-foreground">Policy sections</p>
-                  <p className="text-xs font-semibold text-primary">{completedPolicyCount} of {policyItems.length} complete</p>
-                </div>
-                <div id="policy-tabs-scroll" className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy sections">
-                  {policyItems.map(([key, label], index) => {
-                    const complete = isPolicyComplete(key);
-                    const selected = activePolicyKey === key;
-                    return (
-                      <button
-                        key={key}
-                        id={`policy-tab-${key}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        onClick={() => openPolicy(key)}
-                        className={`flex min-w-[150px] max-w-[190px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-all ${selected ? "border-primary bg-primary text-primary-foreground shadow-md" : complete ? "border-green-300 bg-green-50 text-green-800 hover:border-green-500" : "bg-zinc-50 text-foreground hover:border-primary/50 hover:bg-primary/5"}`}
-                      >
-                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${selected ? "bg-white/20" : complete ? "bg-green-600 text-white" : "bg-white text-muted-foreground shadow-sm"}`}>{complete ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
-                        <span className="line-clamp-2 leading-tight">{label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
             <CardContent className="min-h-[650px] px-5 py-7 sm:px-10 sm:py-10">
               {currentStep === 0 && (
                 <div className="space-y-6">
@@ -1168,6 +1244,35 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   <div className="rounded-xl bg-primary/5 p-4 text-sm">
                     <strong>USCIS Form I-9 — Employee Section 1.</strong> Complete the guided fields below. We Find Guards creates and securely archives the official form for your employer; your employer completes Section 2.
                   </div>
+                  <section className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-6">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-primary p-2.5 text-primary-foreground"><IdCard className="h-5 w-5" /></div>
+                      <div>
+                        <h3 className="font-semibold">Identity document uploads</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">Optionally upload clear copies of your driver’s license and Social Security card. Files are kept in the private onboarding archive and are available only to you and the hiring company.</p>
+                      </div>
+                    </div>
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      {[
+                        ["driver-license-front", "Driver’s license — front"],
+                        ["driver-license-back", "Driver’s license — back"],
+                        ["social-security-card", "Social Security card"],
+                      ].map(([documentType, label]) => {
+                        const uploaded = data.identityDocuments?.[documentType];
+                        const inputId = `identity-upload-${documentType}`;
+                        return <div key={documentType} className={`rounded-xl border p-4 ${uploaded ? "border-green-300 bg-green-50" : "bg-background"}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div><p className="text-sm font-semibold">{label}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{uploaded ? `${uploaded.fileName} · ${new Date(uploaded.uploadedAt).toLocaleString()}` : "JPG, PNG, WebP, or PDF · up to 10 MB"}</p></div>
+                            {uploaded && <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />}
+                          </div>
+                          <input id={inputId} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadIdentityDocument(documentType, label, file); event.currentTarget.value = ""; }} />
+                          <Button type="button" variant={uploaded ? "outline" : "default"} size="sm" className="mt-4 w-full" disabled={uploadingIdentityDocument === documentType} onClick={() => document.getElementById(inputId)?.click()}>
+                            <Upload className="mr-2 h-4 w-4" />{uploadingIdentityDocument === documentType ? "Uploading…" : uploaded ? "Replace file" : "Choose file"}
+                          </Button>
+                        </div>;
+                      })}
+                    </div>
+                  </section>
                   <div className="space-y-6">
                       <div className="grid gap-5 md:grid-cols-3 2xl:grid-cols-2">
                     <Field label="Legal first name" value={data.legalFirstName} onChange={(v) => update("legalFirstName", v)} required />
@@ -1213,7 +1318,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <h3 className="font-semibold">Employee signature for Form I-9</h3>
                       <p className="mt-1 text-sm text-muted-foreground">Sign with your finger, mouse, or stylus. Your signature is placed on the official I-9 and carried into your onboarding packet. You can review or redraw it before final submission.</p>
                     </div>
-                    <SignaturePad value={data.signatureImage} suggestedName={[data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("signatureImage", value)} />
+                    <SignaturePad value={data.signatureImage} suggestedName={[data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => setData((current) => ({ ...current, signatureImage: value, signatureSignedAt: value ? new Date().toISOString() : "" }))} />
                   </div>
                   <div className={`rounded-2xl border p-5 ${i9SubmittedAt ? "border-green-200 bg-green-50" : "border-primary/30 bg-card"}`}>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1262,7 +1367,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       <Field label="W-4 full legal name" value={data.w4SignatureName} onChange={(v) => update("w4SignatureName", v)} required />
                       <Field label="W-4 signature date" type="date" value={data.w4SignatureDate} onChange={(v) => update("w4SignatureDate", v)} required />
                     </div>
-                    <SignaturePad value={data.w4SignatureImage} suggestedName={data.w4SignatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("w4SignatureImage", value)} />
+                    <SignaturePad value={data.w4SignatureImage} suggestedName={data.w4SignatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => setData((current) => ({ ...current, w4SignatureImage: value, w4SignatureSignedAt: value ? new Date().toISOString() : "" }))} />
                   </div>
                   <div className={`rounded-2xl border p-5 ${w4SubmittedAt ? "border-green-200 bg-green-50" : "border-primary/30 bg-card"}`}>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1346,7 +1451,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                           <Field label="Full legal name for direct deposit" value={data.bankSignatureName} onChange={(v) => update("bankSignatureName", v)} required />
                           <Field label="Direct deposit signature date" type="date" value={data.bankSignatureDate} onChange={(v) => update("bankSignatureDate", v)} required />
                         </div>
-                        <SignaturePad value={data.bankSignatureImage} suggestedName={data.bankSignatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("bankSignatureImage", value)} />
+                        <SignaturePad value={data.bankSignatureImage} suggestedName={data.bankSignatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => setData((current) => ({ ...current, bankSignatureImage: value, bankSignatureSignedAt: value ? new Date().toISOString() : "" }))} />
                       </div>
                     </div>
                   )}
@@ -1402,7 +1507,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     const viewed = Boolean(acknowledgement?.viewedAt);
                     const completed = Boolean(data.policies[key] && policyDetailsComplete(key) && viewed && acknowledgement?.accepted && acknowledgement.printedName && acknowledgement.signatureDate && acknowledgement.signatureImage);
                     return (
-                      <div key={key} id={`policy-${key}`} role="tabpanel" aria-live="polite" className={`scroll-mt-4 overflow-hidden rounded-2xl border-2 bg-background shadow-lg ring-4 ring-primary/5 animate-in fade-in-0 slide-in-from-right-2 duration-300 ${completed ? "border-green-400" : "border-primary/40"}`}>
+                      <div key={key} id="policy-document-top" role="tabpanel" aria-live="polite" className={`scroll-mt-24 overflow-hidden rounded-2xl border-2 bg-background shadow-lg ring-4 ring-primary/5 animate-in fade-in-0 slide-in-from-right-2 duration-300 ${completed ? "border-green-400" : "border-primary/40"}`}>
                         <div className={`flex flex-wrap items-center gap-3 border-b p-4 sm:p-5 ${completed ? "bg-green-50" : "bg-primary/5"}`}>
                           <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${completed ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"}`}>{completed ? <Check className="h-5 w-5" /> : <FileCheck2 className="h-5 w-5" />}</div>
                           <div className="min-w-0 flex-1">
@@ -1462,9 +1567,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                   </div>
                   <div className="grid gap-5 border-t pt-6 md:grid-cols-4">
                     <Field label="Employee ID number" value={data.employeeIdNumber} onChange={(v) => update("employeeIdNumber", v)} />
-                    <Field label="Shirt size" value={data.uniformShirt} onChange={(v) => update("uniformShirt", v)} />
-                    <Field label="Pants size" value={data.uniformPants} onChange={(v) => update("uniformPants", v)} />
-                    <Field label="Shoe size" value={data.uniformShoes} onChange={(v) => update("uniformShoes", v)} />
+                    <Field label="Shirt size" value={data.uniformShirt} onChange={(v) => update("uniformShirt", v)} required />
+                    <Field label="Pants size" value={data.uniformPants} onChange={(v) => update("uniformPants", v)} required />
+                    <Field label="Shoe size" value={data.uniformShoes} onChange={(v) => update("uniformShoes", v)} required />
                   </div>
                   <div className="border-t pt-6">
                     <h3 className="mb-4 text-lg font-semibold">Assignment and schedule</h3>
@@ -1501,7 +1606,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     <Field label="Full legal name as signature" value={data.signatureName} onChange={(v) => update("signatureName", v)} required />
                     <Field label="Date signed" type="date" value={data.signatureDate} onChange={(v) => update("signatureDate", v)} required />
                   </div>
-                  <SignaturePad value={data.signatureImage} suggestedName={data.signatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => update("signatureImage", value)} />
+                  <SignaturePad value={data.packetSignatureImage} suggestedName={data.signatureName || [data.legalFirstName, data.middleInitial, data.legalLastName].filter(Boolean).join(" ")} onChange={(value) => setData((current) => ({ ...current, packetSignatureImage: value, packetSignatureSignedAt: value ? new Date().toISOString() : "" }))} />
                 </div>
               )}
             </CardContent>

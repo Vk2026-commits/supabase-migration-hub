@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, Building2, Crown, Users, Upload, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, UserCheck, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
@@ -36,6 +36,7 @@ interface CompanyDashboardProps {
 }
 
 const companyTabs = new Set([
+  "overview",
   "profile",
   "jobs",
   "sites",
@@ -59,7 +60,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(
-    requestedTab && companyTabs.has(requestedTab) ? requestedTab : "profile",
+    requestedTab && companyTabs.has(requestedTab) ? requestedTab : "overview",
   );
   const [formData, setFormData] = useState<CompanyProfileForm>({
     company_name: "",
@@ -107,7 +108,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   );
 
   const selectTab = (tab: string) => {
-    if (!companyProfileComplete && tab !== "profile" && tab !== "subscriptions") {
+    if (!companyProfileComplete && tab !== "overview" && tab !== "profile" && tab !== "subscriptions") {
       toast.error(
         "Complete your company profile, including your hiring contact mobile number, before using the hiring workspace",
       );
@@ -314,6 +315,25 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             id="company-dashboard-content"
             className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6"
           >
+            {activeTab === "overview" && (
+              <div className="mx-auto w-full max-w-6xl space-y-5">
+                <div><p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Company workspace</p><h2 className="mt-1 text-2xl font-bold">Manage your hiring operation</h2><p className="mt-1 text-sm text-muted-foreground">Use these cards or the side menu to open any company workspace.</p></div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {([
+                    ["profile", "Company profile", companyProfileComplete ? "Complete" : "Finish your company details", Building2],
+                    ["jobs", "Job postings", "Create and manage open positions", Briefcase],
+                    ["sites", "Client sites", "Manage locations, addresses, and shifts", MapPinned],
+                    ["applicants", "Applicants", "Review applications and move hiring forward", UserCheck],
+                    ["interested", "Interested officers", "See officers interested in your work", Heart],
+                    ["employment", "Hired officers", "Access records, documents, and evaluations", Users],
+                    ["team", "Company team", "Manage staff access and roles", UsersRound],
+                    ["subscriptions", "Subscription", companyProfile?.subscription_tier ? `${companyProfile.subscription_tier} plan` : "View plans and access", CreditCard],
+                  ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => selectTab(tab)} className="group flex min-h-28 items-start gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                    <span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                  </button>)}
+                </div>
+              </div>
+            )}
             {activeTab === "profile" &&
               (profileLoaded ? (
                 <CompanyProfileWizard

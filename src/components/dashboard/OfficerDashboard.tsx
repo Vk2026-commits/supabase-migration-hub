@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { AlertTriangle, Award, Video, User, Briefcase, Clock, Upload, FileText, GraduationCap, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock } from "lucide-react";
+import { Award, Video, User, Briefcase, Clock, Upload, FileText, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock, ArrowRight, Images, MessageCircle, Search, ClipboardList } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { OfficerPhotos } from "./OfficerPhotos";
@@ -751,82 +751,26 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
           <div className={`${activeTab === "employee-onboarding" ? "w-full max-w-none" : "mx-auto max-w-6xl"} space-y-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12`}>
             {activeTab === "overview" && (
-              <div className="grid md:grid-cols-5 gap-4">
-        <Card>
-          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
-            <CardTitle className="text-sm font-medium leading-tight">Profile</CardTitle>
-            <User className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="whitespace-nowrap text-xl font-bold">
-              {officerProfile ? "Complete" : "Incomplete"}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {officerProfile ? "Your profile is live" : "Complete your profile to get started"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
-            <CardTitle className="text-sm font-medium leading-tight">Certifications and Certificates</CardTitle>
-            <Award className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{certCount}</div>
-            <p className="text-xs text-muted-foreground">Add your certifications and certificates</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
-            <CardTitle className="text-sm font-medium leading-tight">Trainings</CardTitle>
-            <GraduationCap className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{trainingCount}</div>
-            <p className="text-xs text-muted-foreground">Add your training certificates</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`cursor-pointer transition-colors hover:bg-accent/50 ${urgentExpiring ? "border-destructive/50" : ""}`}
-          onClick={() => handleTabChange("certifications")}
-        >
-          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
-            <CardTitle className="text-sm font-medium leading-tight">Expiring Skills</CardTitle>
-            <AlertTriangle className={`h-4 w-4 shrink-0 mt-0.5 ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`} />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-xl font-bold ${urgentExpiring ? "text-destructive" : ""}`}>
-              {expiringItems.length}
-            </div>
-            <p className={`text-xs ${urgentExpiring ? "text-destructive" : "text-muted-foreground"}`}>
-              {expiringItems.length === 0
-                ? "No credentials expiring soon"
-                : urgentExpiring
-                  ? "Expiring within 30 days"
-                  : "Expiring within 90 days"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="cursor-pointer transition-colors hover:bg-accent/50"
-          onClick={() => handleTabChange("videos")}
-        >
-          <CardHeader className="flex h-[4.5rem] flex-row items-start justify-between space-y-0 py-2">
-            <CardTitle className="text-sm font-medium leading-tight">Video Interviews</CardTitle>
-            <Video className="h-4 w-4 shrink-0 mt-0.5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl font-bold">{videoInterviewCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {videoInterviewCount === 0 ? "Upload your interview" : "Manage your interviews"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+              <div className="space-y-5">
+                <div><p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Officer workspace</p><h2 className="mt-1 text-2xl font-bold">What would you like to do?</h2><p className="mt-1 text-sm text-muted-foreground">Every dashboard card opens the same destination as the side menu.</p></div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {([
+                    ["hiring-application", "Hiring application", applicationSubmitted ? "Submitted" : "Complete and submit your application", ClipboardList],
+                    ["employee-onboarding", "Employee onboarding", employeeOnboardingSubmitted ? "Submitted" : onboardingOfferAvailable ? "Continue your new-hire paperwork" : "Available after an accepted offer", ClipboardCheck],
+                    ["profile", "Profile", completionStatus.profile ? "Complete" : "Add your contact and professional details", User],
+                    ["availability", "Availability", completionStatus.availability ? "Complete" : "Set the shifts you can work", Clock],
+                    ["photos", "Photos", `${photoCount} uploaded`, Images],
+                    ["certifications", "Licenses and certificates", `${certCount + trainingCount} on file${urgentExpiring ? ` · ${expiringItems.length} expiring` : ""}`, Award],
+                    ["work-history", "Work history", `${workHistoryCount} ${workHistoryCount === 1 ? "employer" : "employers"}`, Briefcase],
+                    ["interview-history", "Interview history", `${interviewHistory.length} past ${interviewHistory.length === 1 ? "interview" : "interviews"}`, CalendarClock],
+                    ["videos", "Video interviews", `${videoInterviewCount} uploaded`, Video],
+                    ["find-jobs", "Find a job", "Browse open security positions", Search],
+                    ["messages", "Messages", "Chat with potential employers", MessageCircle],
+                  ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => handleTabChange(tab)} className="group flex min-h-28 items-start gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                    <span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold">{title as string}</span><span className="mt-1 block text-sm text-muted-foreground">{description as string}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                  </button>)}
+                </div>
+              </div>
             )}
 
             {activeTab === "profile" && (
