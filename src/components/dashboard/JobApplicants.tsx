@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, ShieldCheck, StickyNote } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, ShieldCheck, StickyNote, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -64,6 +66,13 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
   return steps[String(app.status || "")] || { label: "Next: Review application", tone: "border-amber-300 bg-amber-50 text-amber-800" };
 };
 
+const getApplicantFilterStage = (app: any) => {
+  if (app.status === "accepted") return app.onboardingProgress?.status === "submitted" ? "screening" : "onboarding";
+  if (app.interview?.status === "scheduled") return "interview";
+  if (["offer_sent", "offer_expired"].includes(String(app.status))) return "offer";
+  return "review";
+};
+
 const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions }: JobApplicantsProps) => {
   const [applications, setApplications] = useState<any[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
@@ -75,6 +84,10 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [screeningApplication, setScreeningApplication] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"cards" | "compact">("cards");
   const [notesApplication, setNotesApplication] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState("all");
+  const [positionFilter, setPositionFilter] = useState("all");
+  const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
 
   useEffect(() => {
     void loadApplications();
@@ -178,6 +191,16 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   };
 
   const isPaidSubscriber = subscriptionTier === "professional" || subscriptionTier === "premium";
+  const positions = useMemo(() => Array.from(new Set(applications.map((app) => app.job_posting?.title).filter(Boolean))).sort(), [applications]);
+  const filteredApplications = useMemo(() => applications.filter((app) => {
+    const matchesSearch = !deferredSearchQuery || [app.officerName, app.officerEmail, app.officerPhone, app.job_posting?.title]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(deferredSearchQuery));
+    const matchesStage = stageFilter === "all" || getApplicantFilterStage(app) === stageFilter;
+    const matchesPosition = positionFilter === "all" || app.job_posting?.title === positionFilter;
+    return matchesSearch && matchesStage && matchesPosition;
+  }), [applications, deferredSearchQuery, positionFilter, stageFilter]);
+  const hasActiveFilters = Boolean(searchQuery.trim()) || stageFilter !== "all" || positionFilter !== "all";
 
   return (
     <Card className="overflow-hidden">
@@ -209,14 +232,22 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           </div>
         )}
 
-        {applications.length > 0 && <div className="mb-4 flex justify-end"><div className="inline-flex rounded-lg border bg-muted/40 p-1" aria-label="Applicant layout"><Button type="button" size="sm" variant={viewMode === "cards" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("cards")}><LayoutGrid className="mr-2 h-4 w-4" />Cards</Button><Button type="button" size="sm" variant={viewMode === "compact" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("compact")}><List className="mr-2 h-4 w-4" />Compact</Button></div></div>}
+        {applications.length > 0 && <div className="mb-4 space-y-3 rounded-xl border bg-muted/20 p-3">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search applicants" className="bg-background pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name, email, phone, or position" /></div>
+            <Select value={stageFilter} onValueChange={setStageFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter applicants by stage"><SelectValue placeholder="All stages" /></SelectTrigger><SelectContent><SelectItem value="all">All stages</SelectItem><SelectItem value="review">Needs review</SelectItem><SelectItem value="interview">Interview</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="onboarding">Onboarding</SelectItem><SelectItem value="screening">Screening / final review</SelectItem></SelectContent></Select>
+            <Select value={positionFilter} onValueChange={setPositionFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter applicants by position"><SelectValue placeholder="All positions" /></SelectTrigger><SelectContent><SelectItem value="all">All positions</SelectItem>{positions.map((position) => <SelectItem key={position} value={position}>{position}</SelectItem>)}</SelectContent></Select>
+            {hasActiveFilters && <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setStageFilter("all"); setPositionFilter("all"); }}><X className="mr-1.5 h-4 w-4" />Clear</Button>}
+          </div>
+          <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Showing {filteredApplications.length} of {applications.length}</p><div className="inline-flex rounded-lg border bg-background p-1" aria-label="Applicant layout"><Button type="button" size="sm" variant={viewMode === "cards" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("cards")}><LayoutGrid className="mr-2 h-4 w-4" />Cards</Button><Button type="button" size="sm" variant={viewMode === "compact" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("compact")}><List className="mr-2 h-4 w-4" />Compact</Button></div></div>
+        </div>}
         <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"}>
           {applications.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               No applications yet. Post jobs to attract security officers.
             </p>
           ) : (
-            applications.map((app) => {
+            filteredApplications.map((app) => {
               const onboarding = getOnboardingStatus(app.onboardingProgress);
               const nextStep = getNextStep(app, onboarding);
               return (
@@ -341,6 +372,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
               </div>
             )})
           )}
+          {applications.length > 0 && filteredApplications.length === 0 && <div className="col-span-full rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">No applicants match the selected filters.</div>}
         </div>
       </CardContent>
       {chatOpen && selectedOfficer && companyProfile && (

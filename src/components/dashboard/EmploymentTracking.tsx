@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound, ArrowRight, ShieldCheck, UserX } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound, ArrowRight, ShieldCheck, UserX, X } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 import { createZip } from "@/lib/createZip";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -42,6 +42,9 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
   const [savingRejection, setSavingRejection] = useState(false);
   const [showManualUpdate, setShowManualUpdate] = useState(false);
   const [hireSearch, setHireSearch] = useState("");
+  const [hireStatusFilter, setHireStatusFilter] = useState("all");
+  const [hirePositionFilter, setHirePositionFilter] = useState("all");
+  const deferredHireSearch = useDeferredValue(hireSearch.trim().toLowerCase());
   const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string }>>([]);
 
   useEffect(() => {
@@ -286,6 +289,26 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
     }
   };
 
+  const hirePositions = useMemo(() => Array.from(new Set(hires.map((hire) => hire.position_title || "Security Officer"))).sort(), [hires]);
+  const filteredHires = useMemo(() => hires.filter((hire) => {
+    const requiredChecks = (hire.screening_checks || []).filter((check: any) => check.required);
+    const screeningFailed = requiredChecks.some((check: any) => check.status === "failed");
+    const screeningReady = (hire.screening_checks || []).length === 4 && requiredChecks.every((check: any) => check.status === "cleared");
+    const finalized = Boolean(hire.onboarding_reviewed_at);
+    const readyForReview = !finalized && screeningReady && hire.onboarding_progress?.status === "submitted";
+    const matchesSearch = !deferredHireSearch || [hire.officer_profiles?.profiles?.full_name, hire.officer_profiles?.profiles?.email, hire.officer_profiles?.phone, hire.position_title]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(deferredHireSearch));
+    const matchesStatus = hireStatusFilter === "all"
+      || (hireStatusFilter === "hired" && finalized)
+      || (hireStatusFilter === "pending" && !finalized)
+      || (hireStatusFilter === "ready_review" && readyForReview)
+      || (hireStatusFilter === "screening_failed" && screeningFailed);
+    const matchesPosition = hirePositionFilter === "all" || (hire.position_title || "Security Officer") === hirePositionFilter;
+    return matchesSearch && matchesStatus && matchesPosition;
+  }), [deferredHireSearch, hirePositionFilter, hireStatusFilter, hires]);
+  const hasActiveHireFilters = Boolean(hireSearch.trim()) || hireStatusFilter !== "all" || hirePositionFilter !== "all";
+
   if (loading) {
     return <div>Loading employment tracking...</div>;
   }
@@ -307,13 +330,6 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
     );
   }
 
-  const filteredHires = hires.filter((hire) => {
-    const search = hireSearch.trim().toLowerCase();
-    if (!search) return true;
-    return [hire.officer_profiles?.profiles?.full_name, hire.position_title, hire.status]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(search));
-  });
   const pendingReviewHires = hires.filter((hire) => hire.onboarding_progress?.status === "submitted" && !hire.onboarding_reviewed_at);
 
   return (
@@ -335,7 +351,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
         <ArrowRight className="h-4 w-4 text-amber-700" />
       </button>}
 
-      {hires.length > 4 && <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={hireSearch} onChange={(event) => setHireSearch(event.target.value)} placeholder="Search hired officers" /></div>}
+      {hires.length > 0 && <div className="space-y-3 rounded-xl border bg-muted/20 p-3"><div className="flex flex-col gap-2 lg:flex-row lg:items-center"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search hired officers" className="bg-background pl-9" value={hireSearch} onChange={(event) => setHireSearch(event.target.value)} placeholder="Search name, email, phone, or position" /></div><Select value={hireStatusFilter} onValueChange={setHireStatusFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter hired officers by status"><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="pending">Pending onboarding</SelectItem><SelectItem value="ready_review">Ready for final review</SelectItem><SelectItem value="screening_failed">Screening failed</SelectItem><SelectItem value="hired">Hired</SelectItem></SelectContent></Select><Select value={hirePositionFilter} onValueChange={setHirePositionFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter hired officers by position"><SelectValue placeholder="All positions" /></SelectTrigger><SelectContent><SelectItem value="all">All positions</SelectItem>{hirePositions.map((position) => <SelectItem key={position} value={position}>{position}</SelectItem>)}</SelectContent></Select>{hasActiveHireFilters && <Button type="button" variant="ghost" size="sm" onClick={() => { setHireSearch(""); setHireStatusFilter("all"); setHirePositionFilter("all"); }}><X className="mr-1.5 h-4 w-4" />Clear</Button>}</div><p className="text-xs text-muted-foreground">Showing {filteredHires.length} of {hires.length} officers</p></div>}
 
       <div className="space-y-2">
         {filteredHires.map((hire) => {
@@ -376,7 +392,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
           </Card>;
         })}
         {hires.length === 0 && <Card className="border-dashed"><CardContent className="flex flex-col items-center py-12 text-center"><UsersRound className="h-9 w-9 text-muted-foreground/50" /><p className="mt-3 font-medium">No officers hired yet</p><p className="text-sm text-muted-foreground">Confirmed hires will appear here as a compact roster.</p></CardContent></Card>}
-        {hires.length > 0 && filteredHires.length === 0 && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No hired officers match “{hireSearch}”.</div>}
+        {hires.length > 0 && filteredHires.length === 0 && <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No officers match the selected filters.</div>}
       </div>
 
       <Dialog open={showManualUpdate} onOpenChange={setShowManualUpdate}>
