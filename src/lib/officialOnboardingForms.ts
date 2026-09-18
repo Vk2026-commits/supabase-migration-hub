@@ -453,6 +453,26 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     try { form.getTextField("This Confidentiality Agreement the Agreement dated as of").setFontSize(9); } catch { /* field differs */ }
     try { form.getTextField("Text1").setFontSize(8); } catch { /* field differs */ }
   }
+  if (isAvailabilityForm) {
+    const availabilityFontSizes: Record<string, number> = {
+      "Employee Name": 11,
+      Position: 9,
+      "Manager Initials": 8,
+      "NotesExplanations ex School MonFri 700am300pm": 8,
+      Date: 8,
+      Date_2: 8,
+    };
+    ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].forEach((day) => {
+      const upper = day.toUpperCase();
+      availabilityFontSizes[`${upper}From`] = 7;
+      availabilityFontSizes[`${upper}To`] = 7;
+      availabilityFontSizes[`${upper}From_2`] = 7;
+      availabilityFontSizes[`${upper}To_2`] = 7;
+    });
+    Object.entries(availabilityFontSizes).forEach(([name, size]) => {
+      try { form.getTextField(name).setFontSize(size); } catch { /* template field differs */ }
+    });
+  }
 
   const signatureImage = acknowledgement.signatureImage ? await document.embedPng(await trimSignature(acknowledgement.signatureImage)) : null;
   const drawSignature = (page: any, x: number, y: number, width: number, height: number, signerName = employeeName, image = signatureImage) => {
@@ -543,6 +563,15 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
         drawSignature(page, rect.x, rect.y, rect.width, rect.height, employerRepresentativeName, null);
       }
     } catch { /* manager signature field differs */ }
+  }
+  if (isAvailabilityForm) {
+    // Chrome's PDF viewer can render this template's AcroForm appearances
+    // without its underlying page artwork, which makes the completed record
+    // look like disconnected values on a blank page. The archived submission
+    // is immutable, so bake the completed fields into the original page.
+    // This preserves the form title, instructions, tables, labels, and lines
+    // consistently in every PDF viewer.
+    try { form.flatten(); } catch { /* retain the filled form if flattening fails */ }
   }
   if (isHandbookAcknowledgement && employerRepresentativeName) {
     try {
