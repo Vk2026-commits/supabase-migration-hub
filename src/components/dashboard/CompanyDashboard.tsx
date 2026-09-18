@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,8 @@ import ClientSites from "./ClientSites";
 import type { Database } from "@/integrations/supabase/types";
 import { AccountSettings } from "./AccountSettings";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { DashboardSectionHeader } from "./DashboardSectionHeader";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CompanyDashboardProps {
   userId: string;
@@ -52,6 +54,18 @@ const companyTabs = new Set([
 
 type CompanyProfile = Database["public"]["Tables"]["company_profiles"]["Row"];
 
+const companySectionDetails: Record<string, { title: string; description: string; icon: LucideIcon }> = {
+  profile: { title: "Company profile", description: "Keep your company and hiring-contact information current.", icon: Building2 },
+  jobs: { title: "Job postings", description: "Create and manage open security positions.", icon: Briefcase },
+  sites: { title: "Client sites", description: "Manage client locations, addresses, and shift details.", icon: MapPinned },
+  applicants: { title: "Applicants", description: "Review applications and move candidates through hiring.", icon: UserCheck },
+  interested: { title: "Interested officers", description: "Review officers who expressed interest in your jobs.", icon: Heart },
+  employment: { title: "Hired officers", description: "Access employee records, documents, and evaluations.", icon: Users },
+  team: { title: "Company team", description: "Manage staff access and hiring permissions.", icon: UsersRound },
+  subscriptions: { title: "Subscription", description: "Review your plan, features, and account access.", icon: CreditCard },
+  account: { title: "Account settings", description: "Update your name, username, profile picture, or password.", icon: Settings },
+};
+
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
@@ -66,6 +80,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [activeTab, setActiveTab] = useState(
     requestedTab && companyTabs.has(requestedTab) ? requestedTab : "overview",
   );
+  const sectionHeaderRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState<CompanyProfileForm>({
     company_name: "",
     company_address: "",
@@ -119,21 +134,30 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       setActiveTab("profile");
       const profileParams = new URLSearchParams(searchParams);
       profileParams.set("tab", "profile");
-      setSearchParams(profileParams, { replace: true });
+      setSearchParams(profileParams);
       return;
     }
     setActiveTab(tab);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", tab);
-    setSearchParams(nextParams, { replace: true });
+    setSearchParams(nextParams);
   };
 
   useEffect(() => {
-    requestAnimationFrame(() =>
-      document
-        .getElementById("company-dashboard-content")
-        ?.scrollIntoView({ behavior: "auto", block: "start" }),
-    );
+    const nextTab = requestedTab && companyTabs.has(requestedTab) ? requestedTab : "overview";
+    setActiveTab((current) => current === nextTab ? current : nextTab);
+  }, [requestedTab]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (activeTab === "overview") {
+        document.getElementById("company-dashboard-content")?.scrollIntoView({ behavior: "auto", block: "start" });
+        return;
+      }
+      sectionHeaderRef.current?.scrollIntoView({ behavior: "auto", block: "start" });
+      sectionHeaderRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [activeTab]);
 
   const loadProfile = useCallback(async () => {
@@ -319,6 +343,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             id="company-dashboard-content"
             className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6"
           >
+            {activeTab !== "overview" && companySectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Company workspace" title={companySectionDetails[activeTab].title} description={companySectionDetails[activeTab].description} icon={companySectionDetails[activeTab].icon} status={companyProfileComplete ? { label: "Company profile complete", tone: "green" } : { label: "Profile setup required", tone: "amber" }} />}
             {activeTab === "overview" && (
               <div className="mx-auto w-full max-w-6xl space-y-5">
                 <div><p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Company workspace</p><h2 className="mt-1 text-2xl font-bold">Manage your hiring operation</h2><p className="mt-1 text-sm text-muted-foreground">Use these cards or the side menu to open any company workspace.</p></div>
@@ -356,9 +381,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                   canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
                 />
               ) : (
-                <div className="py-20 text-center text-muted-foreground">
-                  Loading your company profile…
-                </div>
+                <Card className="rounded-2xl" aria-label="Loading company profile"><CardHeader><Skeleton className="h-6 w-48" /><Skeleton className="h-4 w-72 max-w-full" /></CardHeader><CardContent className="grid gap-5 sm:grid-cols-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></CardContent></Card>
               ))}
             {showLegacyProfile && activeTab === "profile" && (
               <>

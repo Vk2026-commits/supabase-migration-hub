@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Award, Video, User, Briefcase, Clock, Upload, FileText, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock, ArrowRight, Images, MessageCircle, Search, ClipboardList, Settings } from "lucide-react";
+import { Award, Video, User, Briefcase, Clock, Upload, FileText, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock, ArrowRight, Images, MessageCircle, Search, ClipboardList, Settings, type LucideIcon } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { OfficerPhotos } from "./OfficerPhotos";
@@ -31,6 +31,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { formatUsPhone } from "@/lib/phone";
 import { AccountSettings } from "./AccountSettings";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { DashboardSectionHeader } from "./DashboardSectionHeader";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -39,24 +40,20 @@ interface OfficerDashboardProps {
 
 const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "interview-history", "videos", "find-jobs", "messages", "account"]);
 
-const guidedSections: Record<string, { title: string; description: string; step: number }> = {
-  profile: { title: "Your professional profile", description: "Keep your contact details and professional introduction current.", step: 2 },
-  availability: { title: "Your availability", description: "Choose the work types, shifts, and weekly hours employers can rely on.", step: 3 },
-  photos: { title: "Your professional photos", description: "Manage the same private photos included with your hiring application.", step: 4 },
-  certifications: { title: "Licenses and certifications", description: "Manage the same secure documents included with your hiring application.", step: 5 },
-  "work-history": { title: "Your work history", description: "Review or update the experience saved from your hiring application.", step: 6 },
+const officerSectionDetails: Record<string, { title: string; description: string; icon: LucideIcon }> = {
+  "hiring-application": { title: "Hiring application", description: "Review the application and information you submitted to employers.", icon: ClipboardList },
+  "employee-onboarding": { title: "Employee onboarding", description: "Complete and review your new-hire paperwork.", icon: ClipboardCheck },
+  profile: { title: "Professional profile", description: "Update the information employers use to evaluate you.", icon: User },
+  availability: { title: "Availability", description: "Keep your preferred shifts and work hours current.", icon: Clock },
+  photos: { title: "Professional photos", description: "Manage the photos shared with employers.", icon: Images },
+  certifications: { title: "Licenses and certificates", description: "Keep credentials and training records current.", icon: Award },
+  "work-history": { title: "Work history", description: "Review and update your employment experience.", icon: Briefcase },
+  "interview-history": { title: "Interview history", description: "Review past interviews and attendance records.", icon: CalendarClock },
+  videos: { title: "Video interviews", description: "Record and manage videos requested by employers.", icon: Video },
+  "find-jobs": { title: "Find a job", description: "Explore security opportunities that match your experience.", icon: Search },
+  messages: { title: "Messages", description: "Continue conversations with potential employers.", icon: MessageCircle },
+  account: { title: "Account settings", description: "Update your name, username, profile picture, or password.", icon: Settings },
 };
-
-function GuidedSectionHeader({ section, completed }: { section: { title: string; description: string; step: number }; completed: boolean }) {
-  return <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
-    <div className="flex items-center gap-4 px-5 py-5 sm:px-8 sm:py-7">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-lg font-bold text-primary-foreground">{section.step}</div>
-      <div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Officer onboarding record</p><h1 className="text-2xl font-bold sm:text-3xl">{section.title}</h1><p className="mt-1 text-sm text-muted-foreground sm:text-base">{section.description}</p></div>
-      <span className={`hidden rounded-full px-3 py-1 text-xs font-semibold sm:block ${completed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"}`}>{completed ? "Complete" : "Needs attention"}</span>
-    </div>
-    <div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((section.step / 6) * 100)}%` }} /></div>
-  </div>;
-}
 
 const getPrivateFilePath = (value: string | null | undefined, bucket: string) => {
   if (!value) return null;
@@ -73,6 +70,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const requestedTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(requestedTab && officerTabs.has(requestedTab) ? requestedTab : initialTab);
   const dashboardTopRef = useRef<HTMLDivElement>(null);
+  const sectionHeaderRef = useRef<HTMLDivElement>(null);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -131,8 +129,25 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     setActiveTab(tab);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", tab);
-    setSearchParams(nextParams, { replace: true });
+    setSearchParams(nextParams);
   };
+
+  useEffect(() => {
+    const nextTab = requestedTab && officerTabs.has(requestedTab) ? requestedTab : initialTab;
+    setActiveTab((current) => current === nextTab ? current : nextTab);
+  }, [initialTab, requestedTab]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      if (activeTab === "overview") {
+        dashboardTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+        return;
+      }
+      sectionHeaderRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+      sectionHeaderRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab]);
 
   useEffect(() => {
     loadProfile();
@@ -609,10 +624,6 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
       return;
     }
     selectTab(tab);
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "auto" });
-      dashboardTopRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
-    });
   };
 
   const onboardingChecklist = (compact = false) => (
@@ -694,14 +705,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             <div className="mb-4">
               <SidebarTrigger />
             </div>
-            <button type="button" onClick={() => selectTab("account")} className={`mb-4 flex items-center gap-3 rounded-xl text-left transition-opacity hover:opacity-80 ${activeTab === "hiring-application" || activeTab === "employee-onboarding" || guidedSections[activeTab] ? "sr-only" : ""}`} aria-label="Open account settings">
+            <button type="button" onClick={() => handleTabChange("account")} className={`mb-4 items-center gap-3 rounded-xl text-left transition-opacity hover:opacity-80 ${activeTab === "overview" ? "flex" : "hidden"}`} aria-label="Open account settings">
               <ProfileAvatar name={profile?.full_name} email={profile?.email} src={profile?.avatar_url} className="h-11 w-11" />
               <span><span className="block text-2xl font-bold sm:text-3xl">Welcome, {profile?.full_name || profile?.email}</span><span className="block text-sm text-muted-foreground">View account settings</span></span>
             </button>
 
-            {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
+            {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
 
-            {(employmentConfirmedAt || (onboardingComplete && activeTab !== "hiring-application" && activeTab !== "employee-onboarding")) && (
+            {activeTab === "overview" && (employmentConfirmedAt || onboardingComplete) && (
               <div className={`mb-6 flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-sm sm:flex-row sm:items-center ${employmentConfirmedAt ? "border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background" : "border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background"}`}>
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />

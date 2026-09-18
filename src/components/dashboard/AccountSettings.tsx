@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type AccountProfile = {
   email: string | null;
@@ -170,21 +171,34 @@ export function AccountSettings({ userId, onProfileUpdated }: AccountSettingsPro
   };
 
   if (loading)
-    return <div className="py-16 text-center text-muted-foreground">Loading account settings…</div>;
+    return (
+      <div className="mx-auto w-full max-w-4xl space-y-6" aria-label="Loading account settings">
+        <Card className="overflow-hidden rounded-2xl">
+          <CardHeader className="border-b bg-muted/30">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </CardHeader>
+          <CardContent className="space-y-6 p-6">
+            <div className="flex items-center gap-5">
+              <Skeleton className="h-24 w-24 rounded-full" />
+              <div className="space-y-3">
+                <Skeleton className="h-10 w-36" />
+                <Skeleton className="h-4 w-56" />
+              </div>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full sm:col-span-2" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   if (!profile) return null;
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">
-          Account settings
-        </p>
-        <h2 className="mt-1 text-2xl font-bold">Your platform profile</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Manage the identity people see across We Find Guards.
-        </p>
-      </div>
-
       <Card className="overflow-hidden rounded-2xl">
         <CardHeader className="border-b bg-muted/30">
           <CardTitle className="flex items-center gap-2">

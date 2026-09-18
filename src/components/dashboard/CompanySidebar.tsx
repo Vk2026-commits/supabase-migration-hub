@@ -38,7 +38,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete }: Comp
 
   const getNavCls = (value: string) =>
     activeTab === value
-      ? "bg-accent text-accent-foreground font-medium"
+      ? "relative bg-primary/10 text-primary font-semibold ring-1 ring-inset ring-primary/20 before:absolute before:inset-y-1 before:left-0 before:w-1 before:rounded-r-full before:bg-primary"
       : "hover:bg-muted/50";
 
   return (
@@ -63,6 +63,8 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete }: Comp
                   ) : (
                     <SidebarMenuButton
                       onClick={() => onTabChange(item.value)}
+                      aria-current={activeTab === item.value ? "page" : undefined}
+                      isActive={activeTab === item.value}
                       className={getNavCls(item.value)}
                     >
                       {item.value === "profile" && profileComplete ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <item.icon className="h-4 w-4" />}

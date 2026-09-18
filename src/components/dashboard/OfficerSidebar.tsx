@@ -45,18 +45,19 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
   ];
 
   const getNavCls = (value: string) => {
+    const activeIndicator = activeTab === value ? "relative font-semibold ring-1 ring-inset ring-primary/20 before:absolute before:inset-y-1 before:left-0 before:w-1 before:rounded-r-full before:bg-current" : "";
     // Messages and Find a Job tabs don't need completion status
     if (value === 'hiring-application') {
-      if (employmentConfirmed) return activeTab === value ? "font-semibold bg-green-600 text-white hover:bg-green-700" : "font-semibold bg-green-50 text-green-700 hover:bg-green-100";
-      return activeTab === value ? "font-semibold bg-primary text-primary-foreground hover:bg-primary/90" : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
+      if (employmentConfirmed) return activeTab === value ? `${activeIndicator} bg-green-600 text-white hover:bg-green-700` : "font-semibold bg-green-50 text-green-700 hover:bg-green-100";
+      return activeTab === value ? `${activeIndicator} bg-primary text-primary-foreground hover:bg-primary/90` : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
     }
     if (value === 'overview' || value === 'account' || value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'employee-onboarding') {
-      return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
+      return activeTab === value ? `${activeIndicator} bg-primary/10 text-primary` : "hover:bg-muted/50";
     }
     
     const completionKey = completionKeyFor(value);
     const isComplete = completionStatus?.[completionKey as keyof typeof completionStatus];
-    const baseClasses = activeTab === value ? "font-medium" : "hover:bg-muted/50";
+    const baseClasses = activeTab === value ? activeIndicator : "hover:bg-muted/50";
     const statusColor = isComplete ? "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20" : "bg-red-500/10 text-red-600 hover:bg-red-500/20";
     return `${baseClasses} ${statusColor}`;
   };
@@ -82,6 +83,8 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
                   <SidebarMenuButton
                     onClick={() => item.value !== "employee-onboarding" || !onboardingOfferLoaded || onboardingAvailable ? onTabChange(item.value) : undefined}
                     aria-disabled={item.value === "employee-onboarding" && onboardingOfferLoaded && !onboardingAvailable}
+                    aria-current={activeTab === item.value ? "page" : undefined}
+                    isActive={activeTab === item.value}
                     className={`h-auto min-h-9 py-2 ${getNavCls(item.value)} ${item.value === "employee-onboarding" && onboardingOfferLoaded && !onboardingAvailable ? "cursor-not-allowed opacity-60" : ""}`}
                   >
                     <div className="flex min-w-0 w-full items-start gap-2">
