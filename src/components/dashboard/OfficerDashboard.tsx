@@ -86,6 +86,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [employeeOnboardingSubmitted, setEmployeeOnboardingSubmitted] = useState(false);
   const [completedOnboardingRecord, setCompletedOnboardingRecord] = useState<any>(null);
   const [employmentConfirmedAt, setEmploymentConfirmedAt] = useState<string | null>(null);
+  const [onboardingReviewedAt, setOnboardingReviewedAt] = useState<string | null>(null);
   const [onboardingOfferAvailable, setOnboardingOfferAvailable] = useState(false);
   const [onboardingOfferLoaded, setOnboardingOfferLoaded] = useState(false);
   const [pendingEmploymentOffer, setPendingEmploymentOffer] = useState<any>(null);
@@ -152,6 +153,27 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   useEffect(() => {
     loadProfile();
   }, [userId]);
+
+  useEffect(() => {
+    if (!officerProfile?.id) return;
+
+    const channel = supabase
+      .channel(`officer-hire-status-${officerProfile.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "hires", filter: `officer_id=eq.${officerProfile.id}` },
+        (payload) => {
+          const updatedHire = payload.new as { employment_confirmed_at?: string | null; onboarding_reviewed_at?: string | null };
+          if (updatedHire.employment_confirmed_at) setEmploymentConfirmedAt(updatedHire.employment_confirmed_at);
+          setOnboardingReviewedAt(updatedHire.onboarding_reviewed_at || null);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [officerProfile?.id]);
 
   useEffect(() => {
     if (pendingEmploymentOffer?.id) setShowOfferPrompt(true);
@@ -276,7 +298,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at,employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
-          supabase.from("hires").select("employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("employment_confirmed_at", "is", null).order("employment_confirmed_at", { ascending: false }).limit(1).maybeSingle(),
+          (supabase as any).from("hires").select("employment_confirmed_at,onboarding_reviewed_at").eq("officer_id", data.id).eq("status", "active").not("employment_confirmed_at", "is", null).order("employment_confirmed_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).rpc("get_my_upcoming_interview"),
@@ -298,6 +320,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
         if (confirmedHireResult.error) console.error("Failed to load confirmed employment status", confirmedHireResult.error);
         setEmploymentConfirmedAt((confirmedHireResult.data as any)?.employment_confirmed_at || null);
+        setOnboardingReviewedAt((confirmedHireResult.data as any)?.onboarding_reviewed_at || null);
         if (pendingOfferResult.error) console.error("Failed to load pending employment offer", pendingOfferResult.error);
         setPendingEmploymentOffer(pendingOfferResult.data || null);
         setAcceptedEmploymentOffer(acceptedOfferResult.data || null);
@@ -712,7 +735,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
             {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
 
-            {activeTab === "overview" && (employmentConfirmedAt || onboardingComplete) && (
+            {activeTab === "overview" && !onboardingReviewedAt && (employmentConfirmedAt || onboardingComplete) && (
               <div className={`mb-6 flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-sm sm:flex-row sm:items-center ${employmentConfirmedAt ? "border-green-200 bg-gradient-to-r from-green-50 via-emerald-50/70 to-background" : "border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background"}`}>
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />

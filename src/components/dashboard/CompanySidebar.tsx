@@ -17,9 +17,10 @@ interface CompanySidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   profileComplete: boolean;
+  pendingOnboardingReviews?: number;
 }
 
-export function CompanySidebar({ activeTab, onTabChange, profileComplete }: CompanySidebarProps) {
+export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendingOnboardingReviews = 0 }: CompanySidebarProps) {
   const { open } = useSidebar();
 
   const items = [
@@ -68,7 +69,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete }: Comp
                       className={getNavCls(item.value)}
                     >
                       {item.value === "profile" && profileComplete ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <item.icon className="h-4 w-4" />}
-                      {open && <span className="flex min-w-0 flex-1 items-center justify-between gap-2"><span>{item.title}</span>{item.value === "profile" && profileComplete && <span className="text-xs font-semibold text-emerald-600">Complete</span>}</span>}
+                      {open && <span className="flex min-w-0 flex-1 items-center justify-between gap-2"><span>{item.title}</span>{item.value === "profile" && profileComplete && <span className="text-xs font-semibold text-emerald-600">Complete</span>}{item.value === "employment" && pendingOnboardingReviews > 0 && <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white" aria-label={`${pendingOnboardingReviews} onboarding reviews pending`}>{pendingOnboardingReviews}</span>}</span>}
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>

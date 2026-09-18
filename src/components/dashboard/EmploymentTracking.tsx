@@ -7,18 +7,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound, ArrowRight } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 import { createZip } from "@/lib/createZip";
 import { ProfileAvatar } from "./ProfileAvatar";
 
 interface EmploymentTrackingProps {
   companyId: string;
+  onPendingReviewCountChange?: (count: number) => void;
 }
 
-const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
+const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: EmploymentTrackingProps) => {
   const [hires, setHires] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvaluation, setSelectedEvaluation] = useState<any>(null);
@@ -31,6 +33,8 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const [downloadingDocuments, setDownloadingDocuments] = useState(false);
   const [downloadingOfferId, setDownloadingOfferId] = useState<string | null>(null);
   const [expandedHireId, setExpandedHireId] = useState<string | null>(null);
+  const [onboardingReviewHire, setOnboardingReviewHire] = useState<any>(null);
+  const [completingOnboarding, setCompletingOnboarding] = useState(false);
   const [showManualUpdate, setShowManualUpdate] = useState(false);
   const [hireSearch, setHireSearch] = useState("");
   const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string }>>([]);
@@ -60,7 +64,9 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       const progressResult = await (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId });
       if (progressResult.error) throw progressResult.error;
       const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
-      setHires((data || []).map((hire: any) => ({ ...hire, onboarding_progress: progressByHire.get(hire.id) || null })));
+      const loadedHires = (data || []).map((hire: any) => ({ ...hire, onboarding_progress: progressByHire.get(hire.id) || null }));
+      setHires(loadedHires);
+      onPendingReviewCountChange?.(loadedHires.filter((hire: any) => hire.onboarding_progress?.status === "submitted" && !hire.onboarding_reviewed_at).length);
     } catch (error) {
       console.error("Error loading hires:", error);
       toast.error("Failed to load employment data");
@@ -192,9 +198,26 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
   const onboardingStatus = (hire: any) => {
     const progress = hire.onboarding_progress;
     if (!progress || progress.status === "not_started") return { label: "Onboarding not started", detail: "The officer accepted the offer but has not started the onboarding packet.", percent: 0 };
-    if (progress.status === "submitted") return { label: "Onboarding complete", detail: "The complete onboarding packet has been submitted.", percent: 100 };
+    if (hire.onboarding_reviewed_at) return { label: "Onboarding finalized", detail: `Company review completed ${new Date(hire.onboarding_reviewed_at).toLocaleDateString()}.`, percent: 100 };
+    if (progress.status === "submitted") return { label: "Ready for company review", detail: "The officer submitted the complete onboarding packet.", percent: 100 };
     const step = Math.max(0, Math.min(7, Number(progress.current_step || 0)));
     return { label: `Onboarding: step ${step + 1} of 8`, detail: onboardingSteps[step], percent: Math.round(((step + 1) / 8) * 100) };
+  };
+
+  const completeOnboarding = async () => {
+    if (!onboardingReviewHire?.id) return;
+    setCompletingOnboarding(true);
+    try {
+      const { error } = await (supabase as any).rpc("complete_officer_onboarding", { _hire_id: onboardingReviewHire.id });
+      if (error) throw error;
+      toast.success("Onboarding marked complete. The officer status banner has been cleared.");
+      setOnboardingReviewHire(null);
+      await loadHires();
+    } catch (error: any) {
+      toast.error(error.message || "Onboarding could not be marked complete");
+    } finally {
+      setCompletingOnboarding(false);
+    }
   };
 
   const handleSubmitUpdate = async () => {
@@ -260,6 +283,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(search));
   });
+  const pendingReviewHires = hires.filter((hire) => hire.onboarding_progress?.status === "submitted" && !hire.onboarding_reviewed_at);
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -273,6 +297,12 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
         </div>
         <Button onClick={() => setShowManualUpdate(true)}><Plus className="mr-2 h-4 w-4" />Add update</Button>
       </div>
+
+      {pendingReviewHires.length > 0 && <button type="button" onClick={() => setExpandedHireId(pendingReviewHires[0].id)} className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors hover:bg-amber-100/70">
+        <ClipboardCheck className="h-5 w-5 shrink-0 text-amber-700" />
+        <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-amber-950">{pendingReviewHires.length} onboarding {pendingReviewHires.length === 1 ? "packet needs" : "packets need"} final review</span><span className="block text-xs text-amber-900/70">Select an officer, review the documents, then mark onboarding complete.</span></span>
+        <ArrowRight className="h-4 w-4 text-amber-700" />
+      </button>}
 
       {hires.length > 4 && <div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={hireSearch} onChange={(event) => setHireSearch(event.target.value)} placeholder="Search hired officers" /></div>}
 
@@ -288,7 +318,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
               <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-expanded={expanded}>
                 <ProfileAvatar name={name} email={hire.officer_profiles?.profiles?.email} src={hire.officer_profiles?.profiles?.avatar_url || hire.officer_profiles?.avatar_url} />
                 <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{name}</span><span className="block truncate text-xs text-muted-foreground">{hire.position_title || "Security Officer"} · Hired {new Date(hire.hire_date).toLocaleDateString()}</span></span>
-                <span className="hidden items-center gap-2 md:flex"><Badge variant="outline" className={onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}>{onboarding.percent === 100 ? "Onboarding complete" : `${onboarding.percent}% onboarding`}</Badge>{nextEvaluation ? <Badge variant="secondary">Next: {periodNames[nextEvaluation.evaluation_period]} · {new Date(nextEvaluation.due_date).toLocaleDateString()}</Badge> : <Badge variant="secondary">Evaluations complete</Badge>}</span>
+                <span className="hidden items-center gap-2 md:flex"><Badge variant="outline" className={hire.onboarding_reviewed_at ? "border-green-200 bg-green-50 text-green-800" : onboarding.percent === 100 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-blue-200 bg-blue-50 text-blue-800"}>{hire.onboarding_reviewed_at ? "Onboarding finalized" : onboarding.percent === 100 ? "Review onboarding" : `${onboarding.percent}% onboarding`}</Badge>{nextEvaluation ? <Badge variant="secondary">Next: {periodNames[nextEvaluation.evaluation_period]} · {new Date(nextEvaluation.due_date).toLocaleDateString()}</Badge> : <Badge variant="secondary">Evaluations complete</Badge>}</span>
               </button>
               <Badge variant={hire.status === "active" ? "default" : "secondary"} className="hidden capitalize sm:inline-flex">{hire.status}</Badge>
               <Button type="button" size="icon" variant="ghost" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-label={expanded ? "Close employee details" : "Open employee details"}><ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} /></Button>
@@ -300,7 +330,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
                 <div className="rounded-xl border bg-background p-3"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><ClipboardCheck className={`h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-600" : "text-primary"}`} /><div className="min-w-0"><p className="truncate text-sm font-semibold">{onboarding.label}</p><p className="truncate text-xs text-muted-foreground">{onboarding.detail}</p></div></div><Badge variant="outline">{onboarding.percent}%</Badge></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div></div>
               </div>
 
-              <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={!hire.onboarding_progress?.packet_id} onClick={() => void openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Onboarding documents</Button><Button type="button" size="sm" variant="outline" onClick={() => { setSelectedHire(hire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add note or update</Button></div>
+              <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={!hire.onboarding_progress?.packet_id} onClick={() => void openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Onboarding documents</Button>{hire.onboarding_progress?.status === "submitted" && !hire.onboarding_reviewed_at && <Button type="button" size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setOnboardingReviewHire(hire)}><CheckCircle className="mr-2 h-4 w-4" />Mark onboarding complete</Button>}<Button type="button" size="sm" variant="outline" onClick={() => { setSelectedHire(hire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add note or update</Button></div>
 
               {evaluations.length > 0 && <div><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Performance evaluations</h4><div className="grid gap-2 lg:grid-cols-3">{evaluations.map((evaluation: any) => { const status = getEvaluationStatus(evaluation); const StatusIcon = status.icon; return <div key={evaluation.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3"><div className="flex min-w-0 items-center gap-2"><StatusIcon className="h-4 w-4 shrink-0 text-muted-foreground" /><div><p className="text-sm font-medium">{periodNames[evaluation.evaluation_period]}</p><p className="text-xs text-muted-foreground">Due {new Date(evaluation.due_date).toLocaleDateString()}</p></div></div><div className="flex items-center gap-1"><Badge className={status.color}>{status.label}</Badge>{!evaluation.completed_date && <Button size="sm" variant="ghost" onClick={() => setSelectedEvaluation(evaluation)}>Open</Button>}</div></div>; })}</div></div>}
 
@@ -315,6 +345,12 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
       <Dialog open={showManualUpdate} onOpenChange={setShowManualUpdate}>
         <DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Add employment update</DialogTitle><DialogDescription>Record a note, status, incident, commendation, or performance review.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label>Select employee</Label><Select value={selectedHire} onValueChange={setSelectedHire}><SelectTrigger><SelectValue placeholder="Choose an employee" /></SelectTrigger><SelectContent>{hires.map((hire) => <SelectItem key={hire.id} value={hire.id}>{hire.officer_profiles?.profiles?.full_name || "Unknown"} — {hire.position_title}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Update type</Label><Select value={updateType} onValueChange={setUpdateType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="performance_review">Performance review</SelectItem><SelectItem value="status_update">Status update</SelectItem><SelectItem value="incident_report">Incident report</SelectItem><SelectItem value="commendation">Commendation</SelectItem></SelectContent></Select></div>{updateType === "performance_review" && <div className="space-y-2"><Label>Performance rating</Label><div className="flex gap-2">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none"><Star className={`h-6 w-6 ${star <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`} /></button>)}</div></div>}<div className="space-y-2"><Label>Notes</Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Add details about this update…" rows={4} /></div><Button className="w-full" onClick={() => void handleSubmitUpdate()}>Save update</Button></div></DialogContent>
       </Dialog>
+      <AlertDialog open={Boolean(onboardingReviewHire)} onOpenChange={(open) => !open && setOnboardingReviewHire(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Mark this officer's onboarding complete?</AlertDialogTitle><AlertDialogDescription>Confirm that your company reviewed the submitted packet for {onboardingReviewHire?.officer_profiles?.profiles?.full_name || "this officer"}. This removes the temporary onboarding banner from the officer portal while keeping all signed records and audit history available.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel disabled={completingOnboarding}>Keep pending</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void completeOnboarding(); }} disabled={completingOnboarding}>{completingOnboarding ? "Saving…" : "Mark complete"}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={Boolean(complianceHire)} onOpenChange={(open) => !open && setComplianceHire(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} onboarding documents</DialogTitle><DialogDescription>Review and download the forms this officer completed. Signed records are retained by version and protected by expiring links.</DialogDescription></DialogHeader>

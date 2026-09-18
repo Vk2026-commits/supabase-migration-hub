@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, BellRing, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
@@ -76,6 +76,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
   const [accountProfile, setAccountProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [pendingOnboardingReviews, setPendingOnboardingReviews] = useState(0);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(
     requestedTab && companyTabs.has(requestedTab) ? requestedTab : "overview",
@@ -227,6 +228,25 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   }, [loadProfile]);
 
   useEffect(() => {
+    if (!companyProfile?.id) return;
+
+    const loadPendingReviews = async () => {
+      const { data, error } = await (supabase as any).rpc("get_company_pending_onboarding_reviews", {
+        _company_id: companyProfile.id,
+      });
+      if (error) {
+        if (error.code !== "42883") console.error("Failed to load pending onboarding reviews", error);
+        return;
+      }
+      setPendingOnboardingReviews(Array.isArray(data) ? data.length : 0);
+    };
+
+    void loadPendingReviews();
+    const refresh = window.setInterval(() => void loadPendingReviews(), 15000);
+    return () => window.clearInterval(refresh);
+  }, [companyProfile?.id]);
+
+  useEffect(() => {
     void supabase.from("profiles").select("email,full_name,username,avatar_url,role").eq("id", userId).maybeSingle().then(({ data }) => setAccountProfile(data));
   }, [userId]);
 
@@ -326,6 +346,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
           activeTab={activeTab}
           onTabChange={selectTab}
           profileComplete={companyProfileComplete}
+          pendingOnboardingReviews={pendingOnboardingReviews}
         />
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -347,6 +368,11 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             {activeTab === "overview" && (
               <div className="mx-auto w-full max-w-6xl space-y-5">
                 <div><p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Company workspace</p><h2 className="mt-1 text-2xl font-bold">Manage your hiring operation</h2><p className="mt-1 text-sm text-muted-foreground">Use these cards or the side menu to open any company workspace.</p></div>
+                {pendingOnboardingReviews > 0 && <button type="button" onClick={() => selectTab("employment")} className="group flex w-full items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left shadow-sm transition-all hover:border-amber-300 hover:shadow-md">
+                  <span className="rounded-xl bg-amber-100 p-3 text-amber-700"><BellRing className="h-5 w-5" /></span>
+                  <span className="min-w-0 flex-1"><span className="block font-semibold text-amber-950">{pendingOnboardingReviews} onboarding {pendingOnboardingReviews === 1 ? "packet is" : "packets are"} ready for review</span><span className="mt-0.5 block text-sm text-amber-900/75">Open Hired officers, review the submitted records, and mark onboarding complete.</span></span>
+                  <ArrowRight className="h-5 w-5 shrink-0 text-amber-700 transition-transform group-hover:translate-x-1" />
+                </button>}
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {([
                     ["profile", "Company profile", companyProfileComplete ? "Complete" : "Finish your company details", Building2],
@@ -969,7 +995,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             )}
 
             {activeTab === "employment" && companyProfile && (
-              <EmploymentTracking companyId={companyProfile.id} />
+              <EmploymentTracking companyId={companyProfile.id} onPendingReviewCountChange={setPendingOnboardingReviews} />
             )}
 
             {activeTab === "team" && companyProfile && (
