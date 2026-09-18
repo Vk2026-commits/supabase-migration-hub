@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Lock, User, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, Loader2, UserCheck, ShieldCheck, StickyNote } from "lucide-react";
+import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, Loader2, UserCheck, ShieldCheck, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -13,6 +13,7 @@ import { InterviewScheduler } from "./InterviewScheduler";
 import { OnboardingDocumentsDialog } from "./OnboardingDocumentsDialog";
 import { PreEmploymentScreeningDialog } from "./PreEmploymentScreeningDialog";
 import { ApplicantNotesDialog } from "./ApplicantNotesDialog";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface JobApplicantsProps {
   companyId: string;
@@ -115,7 +116,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     // Get display names and non-sensitive onboarding progress for accepted offers.
     const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
     const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, notesResult, unreadResult] = await Promise.all([
-      officerUserIds.length ? supabase.from("profiles").select("id, full_name, email").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
+      officerUserIds.length ? supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
       (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
       (supabase as any).from("hires").select("id,employment_confirmed_at").eq("company_id", companyId).eq("status", "active"),
       (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
@@ -155,6 +156,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         hiring_application: hiringApplications,
         offerHiringApplicationId: offerApplication?.id || null,
         officerName: profile?.full_name || applicationSnapshot.applicantName || "Unknown",
+        officerAvatar: profile?.avatar_url || null,
         officerEmail: applicationSnapshot.email || profile?.email || "",
         officerPhone: applicationSnapshot.phone || app.officer?.phone || "",
         hireId,
@@ -241,7 +243,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                 <div className={viewMode === "cards" ? "mb-3" : "mb-3 min-w-0 xl:mb-0"}>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 text-xs font-bold text-primary ring-1 ring-primary/10">{app.officerName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase() || <User className="h-4 w-4" />}</span>
+                      <ProfileAvatar name={app.officerName} email={app.officerEmail} src={app.officerAvatar} />
                       <div className="min-w-0">
                         <span className="block truncate font-semibold leading-tight text-foreground">{isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}</span>
                         <span className="mt-1 block truncate text-xs text-muted-foreground">{app.job_posting?.title || "Security Officer"}</span>

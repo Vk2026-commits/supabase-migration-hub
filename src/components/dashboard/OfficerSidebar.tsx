@@ -1,5 +1,5 @@
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
-import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole, CalendarClock, LayoutDashboard } from "lucide-react";
+import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole, CalendarClock, LayoutDashboard, Settings } from "lucide-react";
 
 interface OfficerSidebarProps {
   activeTab: string;
@@ -41,6 +41,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
     { title: "Video Interviews", value: "videos", icon: Video },
     { title: "Find a Job", value: "find-jobs", icon: Search },
     { title: "Messages", value: "messages", icon: MessageCircle },
+    { title: "Account Settings", value: "account", icon: Settings },
   ];
 
   const getNavCls = (value: string) => {
@@ -49,7 +50,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
       if (employmentConfirmed) return activeTab === value ? "font-semibold bg-green-600 text-white hover:bg-green-700" : "font-semibold bg-green-50 text-green-700 hover:bg-green-100";
       return activeTab === value ? "font-semibold bg-primary text-primary-foreground hover:bg-primary/90" : "font-semibold bg-primary/10 text-primary hover:bg-primary/15";
     }
-    if (value === 'overview' || value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'employee-onboarding') {
+    if (value === 'overview' || value === 'account' || value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'employee-onboarding') {
       return activeTab === value ? "font-medium bg-accent text-accent-foreground" : "hover:bg-muted/50";
     }
     
@@ -61,7 +62,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
   };
 
   const isTabComplete = (value: string) => {
-    if (value === 'overview' || value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'hiring-application') return false;
+    if (value === 'overview' || value === 'account' || value === 'messages' || value === 'find-jobs' || value === 'videos' || value === 'interview-history' || value === 'hiring-application') return false;
     const completionKey = completionKeyFor(value);
     return completionStatus?.[completionKey as keyof typeof completionStatus];
   };

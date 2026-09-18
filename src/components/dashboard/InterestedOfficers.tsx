@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Lock, Mail, MessageCircle } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface InterestedOfficersProps {
   companyId: string;
@@ -36,6 +37,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
               location,
               availability_status,
               years_experience,
+              avatar_url,
               profiles (full_name, email)
             )
           `)
@@ -144,9 +146,12 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
             <Card key={interest.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div>
+                  <div className="flex items-center gap-3">
+                    <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} />
+                    <div>
                     <CardTitle>{interest.officer_profiles?.profiles?.full_name}</CardTitle>
                     <CardDescription>{interest.officer_profiles?.title}</CardDescription>
+                    </div>
                   </div>
                   <Badge variant="secondary">{interest.officer_profiles?.availability_status}</Badge>
                 </div>

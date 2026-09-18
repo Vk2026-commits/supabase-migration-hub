@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, UserCheck, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
@@ -29,6 +29,8 @@ import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileW
 import CompanyTeam from "./CompanyTeam";
 import ClientSites from "./ClientSites";
 import type { Database } from "@/integrations/supabase/types";
+import { AccountSettings } from "./AccountSettings";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface CompanyDashboardProps {
   userId: string;
@@ -45,6 +47,7 @@ const companyTabs = new Set([
   "employment",
   "team",
   "subscriptions",
+  "account",
 ]);
 
 type CompanyProfile = Database["public"]["Tables"]["company_profiles"]["Row"];
@@ -57,6 +60,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const requestedTab = searchParams.get("tab");
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
+  const [accountProfile, setAccountProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(
@@ -108,7 +112,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   );
 
   const selectTab = (tab: string) => {
-    if (!companyProfileComplete && tab !== "overview" && tab !== "profile" && tab !== "subscriptions") {
+    if (!companyProfileComplete && tab !== "overview" && tab !== "profile" && tab !== "subscriptions" && tab !== "account") {
       toast.error(
         "Complete your company profile, including your hiring contact mobile number, before using the hiring workspace",
       );
@@ -197,6 +201,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  useEffect(() => {
+    void supabase.from("profiles").select("email,full_name,username,avatar_url,role").eq("id", userId).maybeSingle().then(({ data }) => setAccountProfile(data));
+  }, [userId]);
 
   const handleLogoUpload = async (file: File) => {
     setUploadingLogo(true);
@@ -300,14 +308,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
           <div className="border-b bg-background sticky top-0 z-10">
             <div className="flex h-16 items-center px-4 gap-4">
               <SidebarTrigger />
-              {formData.logo_url && (
-                <img
-                  src={formData.logo_url}
-                  alt={formData.company_name}
-                  className="h-10 w-10 object-contain rounded"
-                />
-              )}
-              <h1 className="text-2xl font-bold">Welcome, {formData.company_name || userName}</h1>
+              <button type="button" onClick={() => selectTab("account")} className="flex min-w-0 items-center gap-3 rounded-xl text-left transition-opacity hover:opacity-80" aria-label="Open account settings">
+                <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-10 w-10" />
+                <span className="min-w-0"><span className="block truncate text-xl font-bold">Welcome, {accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-muted-foreground">{formData.company_name || "Company representative"}</span></span>
+              </button>
             </div>
           </div>
 
@@ -328,6 +332,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                     ["employment", "Hired officers", "Access records, documents, and evaluations", Users],
                     ["team", "Company team", "Manage staff access and roles", UsersRound],
                     ["subscriptions", "Subscription", companyProfile?.subscription_tier ? `${companyProfile.subscription_tier} plan` : "View plans and access", CreditCard],
+                    ["account", "Account settings", "Update your name, username, photo, or password", Settings],
                   ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => selectTab(tab)} className="group flex min-h-28 items-start gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
                     <span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                   </button>)}
@@ -955,6 +960,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                   toast.success(`Upgrading to ${tier}...`);
                 }}
               />
+            )}
+
+            {activeTab === "account" && (
+              <AccountSettings userId={userId} onProfileUpdated={setAccountProfile} />
             )}
           </div>
         </div>

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Link } from "@/lib/router-compat";
 import { ChatDialog } from "@/components/dashboard/ChatDialog";
+import { ProfileAvatar } from "@/components/dashboard/ProfileAvatar";
 import {
   Dialog,
   DialogContent,
@@ -587,7 +588,9 @@ const Browse = () => {
               <Card key={officer.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div>
+                    <div className="flex items-center gap-3">
+                      <ProfileAvatar name={officer.profiles?.full_name} src={officer.profiles?.avatar_url} />
+                      <div>
                       <CardTitle className="text-xl">
                         {isFreeTier && officer.profiles?.full_name
                           ? `${officer.profiles.full_name.split(" ")[0]} ${officer.profiles.full_name
@@ -600,6 +603,7 @@ const Browse = () => {
                       <CardDescription className="mt-1">
                         {officer.title || "Security Officer"}
                       </CardDescription>
+                      </div>
                     </div>
                     {officer.availability_status === "available" && (
                       <Badge
@@ -653,7 +657,7 @@ const Browse = () => {
       <Dialog open={!!selectedOfficer} onOpenChange={(open) => !open && setSelectedOfficer(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl">
+            <div className="flex items-center gap-3"><ProfileAvatar name={selectedOfficer?.profiles?.full_name} src={selectedOfficer?.profiles?.avatar_url} className="h-14 w-14" /><div><DialogTitle className="text-2xl">
               {isFreeTier && selectedOfficer?.profiles?.full_name
                 ? `${selectedOfficer.profiles.full_name.split(" ")[0]} ${selectedOfficer.profiles.full_name
                     .split(" ")
@@ -662,7 +666,7 @@ const Browse = () => {
                     .join("")}.`
                 : selectedOfficer?.profiles?.full_name || "Officer Profile"}
             </DialogTitle>
-            <DialogDescription>{selectedOfficer?.title || "Security Officer"}</DialogDescription>
+            <DialogDescription>{selectedOfficer?.title || "Security Officer"}</DialogDescription></div></div>
           </DialogHeader>
 
           {selectedOfficer && (

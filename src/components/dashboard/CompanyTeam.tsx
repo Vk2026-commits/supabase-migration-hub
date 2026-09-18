@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Crown, Mail, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Mail, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 type TeamRole = "owner" | "admin" | "hiring_manager" | "reviewer";
 type TeamMember = {
@@ -35,6 +36,7 @@ type TeamMember = {
   status: string;
   invited_at: string;
   joined_at: string | null;
+  avatar_url?: string | null;
 };
 
 const roleLabels: Record<TeamRole, string> = {
@@ -91,7 +93,13 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
     setLoading(true);
     try {
       const data = await invoke({ action: "list" });
-      setMembers(data.members || []);
+      const listedMembers = (data.members || []) as TeamMember[];
+      const userIds = listedMembers.map((member) => member.user_id).filter(Boolean);
+      const { data: identities } = userIds.length
+        ? await supabase.from("profiles").select("id,avatar_url").in("id", userIds)
+        : { data: [] };
+      const avatarByUser = new Map((identities || []).map((identity) => [identity.id, identity.avatar_url]));
+      setMembers(listedMembers.map((member) => ({ ...member, avatar_url: avatarByUser.get(member.user_id) || null })));
       setCanManage(Boolean(data.can_manage));
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Company team could not be loaded"));
@@ -233,13 +241,7 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
                 key={member.id}
                 className="flex flex-wrap items-center gap-4 rounded-xl border p-4"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  {member.role === "owner" ? (
-                    <Crown className="h-5 w-5" />
-                  ) : (
-                    <ShieldCheck className="h-5 w-5" />
-                  )}
-                </div>
+                <ProfileAvatar name={member.full_name} email={member.email} src={member.avatar_url} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{member.full_name || member.email}</p>
                   <p className="truncate text-sm text-muted-foreground">{member.email}</p>

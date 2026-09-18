@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { Award, Video, User, Briefcase, Clock, Upload, FileText, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock, ArrowRight, Images, MessageCircle, Search, ClipboardList } from "lucide-react";
+import { Award, Video, User, Briefcase, Clock, Upload, FileText, Info, CheckCircle2, Circle, ClipboardCheck, LockKeyhole, CalendarPlus, MapPin, CalendarClock, ArrowRight, Images, MessageCircle, Search, ClipboardList, Settings } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CertificationsManager } from "./CertificationsManager";
 import { OfficerPhotos } from "./OfficerPhotos";
@@ -29,13 +29,15 @@ import { OfficerOfferReview } from "./OfficerOfferReview";
 import { useSearchParams } from "@/lib/router-compat";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatUsPhone } from "@/lib/phone";
+import { AccountSettings } from "./AccountSettings";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface OfficerDashboardProps {
   userId: string;
   initialTab?: string;
 }
 
-const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "interview-history", "videos", "find-jobs", "messages"]);
+const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "interview-history", "videos", "find-jobs", "messages", "account"]);
 
 const guidedSections: Record<string, { title: string; description: string; step: number }> = {
   profile: { title: "Your professional profile", description: "Keep your contact details and professional introduction current.", step: 2 },
@@ -692,9 +694,10 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             <div className="mb-4">
               <SidebarTrigger />
             </div>
-            <h1 className={`text-2xl font-bold mb-4 sm:text-3xl ${activeTab === "hiring-application" || activeTab === "employee-onboarding" || guidedSections[activeTab] ? "sr-only" : ""}`}>
-              Welcome, {profile?.full_name || profile?.email}
-            </h1>
+            <button type="button" onClick={() => selectTab("account")} className={`mb-4 flex items-center gap-3 rounded-xl text-left transition-opacity hover:opacity-80 ${activeTab === "hiring-application" || activeTab === "employee-onboarding" || guidedSections[activeTab] ? "sr-only" : ""}`} aria-label="Open account settings">
+              <ProfileAvatar name={profile?.full_name} email={profile?.email} src={profile?.avatar_url} className="h-11 w-11" />
+              <span><span className="block text-2xl font-bold sm:text-3xl">Welcome, {profile?.full_name || profile?.email}</span><span className="block text-sm text-muted-foreground">View account settings</span></span>
+            </button>
 
             {!onboardingComplete && guidedSections[activeTab] && <GuidedSectionHeader section={guidedSections[activeTab]} completed={Boolean(completionStatus[activeTab === "work-history" ? "workHistory" : activeTab as keyof typeof completionStatus])} />}
 
@@ -766,6 +769,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                     ["videos", "Video interviews", `${videoInterviewCount} uploaded`, Video],
                     ["find-jobs", "Find a job", "Browse open security positions", Search],
                     ["messages", "Messages", "Chat with potential employers", MessageCircle],
+                    ["account", "Account settings", "Update your name, username, photo, or password", Settings],
                   ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => handleTabChange(tab)} className="group flex min-h-28 items-start gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
                     <span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold">{title as string}</span><span className="mt-1 block text-sm text-muted-foreground">{description as string}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                   </button>)}
@@ -1323,6 +1327,10 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                 officerId={officerProfile?.id || ""} 
                 officerName={profile?.full_name || profile?.email || "Officer"}
               />
+            )}
+
+            {activeTab === "account" && (
+              <AccountSettings userId={userId} onProfileUpdated={(nextProfile) => setProfile((current: any) => ({ ...current, ...nextProfile }))} />
             )}
           </div>
           </div>

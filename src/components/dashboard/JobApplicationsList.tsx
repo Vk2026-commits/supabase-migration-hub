@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Briefcase } from "lucide-react";
 import { ChatDialog } from "./ChatDialog";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface JobApplicationsListProps {
   companyId: string;
@@ -134,13 +135,7 @@ export default function JobApplicationsList({ companyId }: JobApplicationsListPr
                 <CardHeader>
                   <div className="flex justify-between items-start">
                     <div className="flex items-start gap-4">
-                      {application.officer_profiles?.avatar_url && (
-                        <img 
-                          src={application.officer_profiles.avatar_url} 
-                          alt="Avatar"
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      )}
+                      <ProfileAvatar name={application.officer_profiles?.profiles?.full_name} email={application.officer_profiles?.profiles?.email} src={application.officer_profiles?.avatar_url} className="h-12 w-12" />
                       <div>
                         <CardTitle className="text-lg">
                           {application.officer_profiles?.profiles?.full_name || "Officer"}

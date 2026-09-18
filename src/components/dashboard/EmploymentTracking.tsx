@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 import { createZip } from "@/lib/createZip";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface EmploymentTrackingProps {
   companyId: string;
@@ -46,7 +47,7 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
         .from("hires")
         .select(`
           *,
-          officer_profiles(*, profiles(full_name)),
+          officer_profiles(*, profiles(full_name,email,avatar_url)),
           company_profiles(company_name,contact_person_name,contact_person_title),
           evaluations(*),
           employment_updates(*)
@@ -281,12 +282,11 @@ const EmploymentTracking = ({ companyId }: EmploymentTrackingProps) => {
           const evaluations = [...(hire.evaluations || [])].sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
           const nextEvaluation = evaluations.find((evaluation: any) => !evaluation.completed_date);
           const name = hire.officer_profiles?.profiles?.full_name || "Unknown officer";
-          const initials = name.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase();
           const expanded = expandedHireId === hire.id;
           return <Card key={hire.id} className={`overflow-hidden transition-shadow ${expanded ? "shadow-md ring-1 ring-primary/10" : "shadow-sm hover:shadow-md"}`}>
             <div className="flex items-center gap-2 p-3 sm:p-4">
               <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-expanded={expanded}>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-bold text-primary">{initials}</span>
+                <ProfileAvatar name={name} email={hire.officer_profiles?.profiles?.email} src={hire.officer_profiles?.profiles?.avatar_url || hire.officer_profiles?.avatar_url} />
                 <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{name}</span><span className="block truncate text-xs text-muted-foreground">{hire.position_title || "Security Officer"} · Hired {new Date(hire.hire_date).toLocaleDateString()}</span></span>
                 <span className="hidden items-center gap-2 md:flex"><Badge variant="outline" className={onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}>{onboarding.percent === 100 ? "Onboarding complete" : `${onboarding.percent}% onboarding`}</Badge>{nextEvaluation ? <Badge variant="secondary">Next: {periodNames[nextEvaluation.evaluation_period]} · {new Date(nextEvaluation.due_date).toLocaleDateString()}</Badge> : <Badge variant="secondary">Evaluations complete</Badge>}</span>
               </button>
