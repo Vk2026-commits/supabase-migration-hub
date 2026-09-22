@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Eye, EyeOff, FileCheck2, IdCard, LockKeyhole, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, Cloud, Eye, EyeOff, FileCheck2, IdCard, LockKeyhole, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -800,9 +800,9 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   };
 
   const uploadIdentityDocument = async (documentType: string, documentLabel: string, file: File) => {
-    const acceptedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
-    if (!acceptedTypes.includes(file.type)) {
-      toast.error("Upload a JPG, PNG, WebP, or PDF file");
+    const acceptedType = file.type.startsWith("image/") || file.type === "application/pdf";
+    if (!acceptedType) {
+      toast.error("Take a photo or upload an image or PDF file");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -1260,15 +1260,22 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                       ].map(([documentType, label]) => {
                         const uploaded = data.identityDocuments?.[documentType];
                         const inputId = `identity-upload-${documentType}`;
+                        const cameraInputId = `identity-camera-${documentType}`;
                         return <div key={documentType} className={`rounded-xl border p-4 ${uploaded ? "border-green-300 bg-green-50" : "bg-background"}`}>
                           <div className="flex items-start justify-between gap-2">
                             <div><p className="text-sm font-semibold">{label}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{uploaded ? `${uploaded.fileName} · ${new Date(uploaded.uploadedAt).toLocaleString()}` : "JPG, PNG, WebP, or PDF · up to 10 MB"}</p></div>
                             {uploaded && <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />}
                           </div>
-                          <input id={inputId} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadIdentityDocument(documentType, label, file); event.currentTarget.value = ""; }} />
-                          <Button type="button" variant={uploaded ? "outline" : "default"} size="sm" className="mt-4 w-full" disabled={uploadingIdentityDocument === documentType} onClick={() => document.getElementById(inputId)?.click()}>
-                            <Upload className="mr-2 h-4 w-4" />{uploadingIdentityDocument === documentType ? "Uploading…" : uploaded ? "Replace file" : "Choose file"}
-                          </Button>
+                          <input id={cameraInputId} className="sr-only" type="file" accept="image/*" capture="environment" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadIdentityDocument(documentType, label, file); event.currentTarget.value = ""; }} />
+                          <input id={inputId} className="sr-only" type="file" accept="image/*,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadIdentityDocument(documentType, label, file); event.currentTarget.value = ""; }} />
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <Button type="button" size="sm" disabled={uploadingIdentityDocument === documentType} onClick={() => document.getElementById(cameraInputId)?.click()}>
+                              <Camera className="mr-2 h-4 w-4" />{uploadingIdentityDocument === documentType ? "Uploading…" : "Take photo"}
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" disabled={uploadingIdentityDocument === documentType} onClick={() => document.getElementById(inputId)?.click()}>
+                              <Upload className="mr-2 h-4 w-4" />{uploaded ? "Replace" : "Upload"}
+                            </Button>
+                          </div>
                         </div>;
                       })}
                     </div>
