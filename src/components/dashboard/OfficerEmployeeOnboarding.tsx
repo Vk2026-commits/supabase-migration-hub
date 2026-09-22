@@ -342,6 +342,11 @@ const steps = [
   ["Review and sign", "Submit your onboarding packet"],
 ] as const;
 
+const currentLocalDate = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+};
+
 const initialData: OnboardingData = {
   employerName: "Hiring company",
   legalFirstName: "",
@@ -1005,8 +1010,18 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     setData((current) => {
       const existing = current.policyAcknowledgements[key];
       if (existing) {
-        if (existing.viewedAt) return current;
-        return { ...current, policyAcknowledgements: { ...current.policyAcknowledgements, [key]: { ...existing, viewedAt: new Date().toISOString() } } };
+        if (existing.viewedAt && existing.signatureDate) return current;
+        return {
+          ...current,
+          policyAcknowledgements: {
+            ...current.policyAcknowledgements,
+            [key]: {
+              ...existing,
+              viewedAt: existing.viewedAt || new Date().toISOString(),
+              signatureDate: existing.signatureDate || currentLocalDate(),
+            },
+          },
+        };
       }
       return {
         ...current,
@@ -1016,7 +1031,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             viewedAt: new Date().toISOString(),
             printedName: [current.legalFirstName, current.middleInitial, current.legalLastName].filter(Boolean).join(" "),
             employeeTitle: current.offeredPosition || "Security Officer",
-            signatureDate: "",
+            signatureDate: currentLocalDate(),
             signatureImage: "",
             accepted: false,
             notes: "",
@@ -1491,22 +1506,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     </div>
                     <p className="mt-4 text-sm font-medium">{completedPolicyCount} of {policyItems.length} policy sections completed</p>
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary/10"><div className="h-full bg-primary transition-all" style={{ width: `${Math.round((completedPolicyCount / policyItems.length) * 100)}%` }} /></div>
-                  </div>
-                  <div className="grid gap-5 rounded-2xl border p-5 md:grid-cols-2">
-                    {data.offerPreparedAt ? (
-                      <div className="md:col-span-2 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-950">
-                        <strong className="block">Company-prepared offer</strong>
-                        {data.employerName} approved these terms. You already reviewed and accepted the archived employment offer before onboarding was unlocked.
-                      </div>
-                    ) : (
-                      <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><strong className="block">Waiting for prepared offer</strong>Your hiring company has not prepared the offer terms yet.</div>
-                    )}
-                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Position</span><strong className="block">{data.offeredPosition || "Not provided"}</strong></div>
-                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Pay</span><strong className="block">{data.hourlyRate ? `$${Number(data.hourlyRate).toFixed(2)} per hour` : "Not provided"}</strong></div>
-                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Start date</span><strong className="block">{data.startDate || "Not provided"}</strong></div>
-                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Supervisor</span><strong className="block">{data.supervisorName || "Not provided"}</strong></div>
-                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Assignment</span><strong className="block">{data.scheduledPost || "Not provided"}</strong></div>
-                    <div className="rounded-xl border p-4"><span className="text-xs text-muted-foreground">Expected shift</span><strong className="block">{data.scheduledShift || "Not provided"}</strong></div>
                   </div>
                   {policyItems.filter(([key]) => key === activePolicyKey).map(([key, label]) => {
                     const policyIndex = policyItems.findIndex(([itemKey]) => itemKey === key);
