@@ -1041,11 +1041,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       };
     });
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const tab = document.getElementById(`policy-tab-${key}`);
-      const scroller = document.getElementById("policy-tabs-scroll");
-      if (tab && scroller) {
-        scroller.scrollTo({ left: tab.offsetLeft - scroller.clientWidth / 2 + tab.clientWidth / 2, behavior: "smooth" });
-      }
       document.getElementById("policy-document-top")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }));
   };
@@ -1054,6 +1049,29 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     const nextPolicy = policyItems.find(([key]) => !isPolicyComplete(key)) || policyItems[0];
     openPolicy(nextPolicy[0]);
   }, [loaded, currentStep, activePolicyKey]);
+  useEffect(() => {
+    if (currentStep !== 5 || !activePolicyKey) return;
+    const frame = requestAnimationFrame(() => {
+      const desktopTab = document.getElementById(`policy-tab-${activePolicyKey}`);
+      const desktopScroller = document.getElementById("policy-tabs-scroll");
+      if (desktopTab && desktopScroller) {
+        desktopScroller.scrollTo({
+          top: desktopTab.offsetTop - desktopScroller.clientHeight / 2 + desktopTab.clientHeight / 2,
+          behavior: "smooth",
+        });
+      }
+
+      const mobileTab = document.getElementById(`policy-mobile-tab-${activePolicyKey}`);
+      const mobileScroller = document.getElementById("policy-mobile-tabs-scroll");
+      if (mobileTab && mobileScroller) {
+        mobileScroller.scrollTo({
+          left: mobileTab.offsetLeft - mobileScroller.clientWidth / 2 + mobileTab.clientWidth / 2,
+          behavior: "smooth",
+        });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [currentStep, activePolicyKey]);
   const updatePolicyAcknowledgement = (key: string, changes: Partial<PolicyAcknowledgement>) => {
     setData((current) => ({
       ...current,
@@ -1198,7 +1216,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           <nav className="sticky top-4 space-y-2 rounded-2xl border bg-zinc-100 p-3 shadow-inner">
             {steps.map((step, index) => (
               <div key={step[0]}>
-                <button type="button" onClick={() => go(index)} className={`group flex min-h-[84px] w-full items-center gap-3 rounded-lg border bg-white px-3 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${index === currentStep ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
+                <button type="button" aria-current={index === currentStep ? "step" : undefined} onClick={() => go(index)} className={`group flex min-h-[84px] w-full items-center gap-3 rounded-lg border px-3 py-3 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${index === currentStep ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-border bg-white"}`}>
                   <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold ${index === currentStep ? "bg-primary text-primary-foreground" : completeStep(index) ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold">Page {index + 1}: {step[0]}</span>
@@ -1211,7 +1229,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     {policyItems.map(([key, label], policyIndex) => {
                       const complete = isPolicyComplete(key);
                       const selected = activePolicyKey === key;
-                      return <button key={key} id={`policy-tab-${key}`} type="button" role="tab" aria-selected={selected} onClick={() => openPolicy(key)} className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors ${selected ? "border-primary bg-primary text-primary-foreground shadow-sm" : complete ? "border-green-300 bg-green-50 text-green-800" : "bg-white hover:border-primary/50"}`}>
+                      return <button key={key} id={`policy-tab-${key}`} type="button" role="tab" aria-selected={selected} aria-current={selected ? "step" : undefined} onClick={() => openPolicy(key)} className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors ${selected ? "border-primary bg-primary text-primary-foreground shadow-sm" : complete ? "border-green-300 bg-green-50 text-green-800" : "bg-white hover:border-primary/50"}`}>
                         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-bold ${selected ? "bg-white/20" : complete ? "bg-green-600 text-white" : "bg-muted text-muted-foreground"}`}>{complete ? <Check className="h-3.5 w-3.5" /> : policyIndex + 1}</span>
                         <span className="line-clamp-2">{label}</span>
                       </button>;
@@ -1228,7 +1246,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
             <div className="flex gap-2 overflow-x-auto pb-2">
               {steps.map((step, index) => <button key={step[0]} type="button" onClick={() => go(index)} aria-label={`Open ${step[0]}`} className={`flex h-12 min-w-12 items-center justify-center rounded-lg border text-sm font-bold shadow-sm ${index === currentStep ? "border-primary bg-primary text-primary-foreground" : completeStep(index) ? "border-green-300 bg-green-50 text-green-700" : "bg-background text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</button>)}
             </div>
-            {currentStep === 5 && <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy documents">{policyItems.map(([key, label], index) => { const complete = isPolicyComplete(key); const selected = activePolicyKey === key; return <button key={key} type="button" role="tab" aria-selected={selected} onClick={() => openPolicy(key)} className={`flex min-w-[145px] items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold ${selected ? "border-primary bg-primary text-primary-foreground" : complete ? "border-green-300 bg-green-50 text-green-800" : "bg-background"}`}><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-black/5">{complete ? <Check className="h-3.5 w-3.5" /> : index + 1}</span><span className="line-clamp-2">{label}</span></button>; })}</div>}
+            {currentStep === 5 && <div id="policy-mobile-tabs-scroll" className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Company policy documents">{policyItems.map(([key, label], index) => { const complete = isPolicyComplete(key); const selected = activePolicyKey === key; return <button key={key} id={`policy-mobile-tab-${key}`} type="button" role="tab" aria-selected={selected} aria-current={selected ? "step" : undefined} onClick={() => openPolicy(key)} className={`flex min-w-[145px] items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold ${selected ? "border-primary bg-primary text-primary-foreground" : complete ? "border-green-300 bg-green-50 text-green-800" : "bg-background"}`}><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-black/5">{complete ? <Check className="h-3.5 w-3.5" /> : index + 1}</span><span className="line-clamp-2">{label}</span></button>; })}</div>}
           </div>
           <Card className="relative min-w-0 overflow-hidden rounded-lg border-zinc-300 bg-white shadow-[0_18px_50px_-24px_rgba(15,23,42,0.45)] ring-1 ring-black/5 before:absolute before:inset-y-0 before:left-0 before:w-1 before:bg-primary">
             <CardHeader className="border-b bg-zinc-50/70 px-5 py-6 sm:px-10">
