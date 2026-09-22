@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@/lib/router-compat";
+import { Link, useNavigate, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import { Shield, Languages } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,10 +14,12 @@ import {
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [accountRoles, setAccountRoles] = useState<string[]>([]);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -40,6 +42,7 @@ const Navbar = () => {
       } else {
         setIsAdmin(false);
         setUserRole(null);
+        setAccountRoles([]);
       }
     });
 
@@ -58,19 +61,31 @@ const Navbar = () => {
   };
 
   const getUserRole = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", userId)
-      .single();
-    
-    setUserRole(data?.role ?? null);
+    const [{ data: profile }, { data: roles }] = await Promise.all([
+      supabase.from("profiles").select("role").eq("id", userId).single(),
+      supabase.from("user_roles").select("role").eq("user_id", userId),
+    ]);
+
+    setUserRole(profile?.role ?? null);
+    setAccountRoles(
+      Array.from(new Set([profile?.role, ...(roles || []).map(({ role }) => role)]))
+        .filter((role): role is string => role === "officer" || role === "company"),
+    );
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/");
   };
+
+  const requestedRole = searchParams.get("viewAs");
+  const activeRole =
+    (requestedRole === "officer" || requestedRole === "company") &&
+    accountRoles.includes(requestedRole)
+      ? requestedRole
+      : userRole;
+  const hasOfficerAndCompanyAccess =
+    accountRoles.includes("officer") && accountRoles.includes("company");
 
   return (
     <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -102,7 +117,7 @@ const Navbar = () => {
           
           {user ? (
             <>
-              {userRole !== "officer" && (
+              {activeRole !== "officer" && (
                 <Button variant="ghost" asChild>
                   <Link to="/browse">{t('nav.browse')}</Link>
                 </Button>
@@ -133,7 +148,21 @@ const Navbar = () => {
                   </DropdownMenu>
                 </>
               )}
-              {userRole !== "officer" && (
+              {hasOfficerAndCompanyAccess ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">Switch account</Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
+                      Security Officer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=company")}>
+                      Company Team
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : activeRole !== "officer" && (
                 <Button variant="ghost" asChild>
                   <Link to="/auth?force=1">Switch account</Link>
                 </Button>

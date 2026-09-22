@@ -55,29 +55,31 @@ const Dashboard = () => {
             supabase
               .from("user_roles")
               .select("role")
-              .eq("user_id", session.user.id)
-              .eq("role", "admin")
-              .maybeSingle(),
+              .eq("user_id", session.user.id),
             supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
           ]);
 
         if (rolesError) throw rolesError;
         if (profileError) throw profileError;
 
-        const isAdmin = !!roles;
-        const previewRole =
-          isAdmin && (viewAs === "officer" || viewAs === "company") ? viewAs : null;
+        const accountRoles = new Set((roles || []).map(({ role }) => role));
+        const isAdmin = accountRoles.has("admin");
+        const requestedRole = viewAs === "officer" || viewAs === "company" ? viewAs : null;
+        const selectedRole =
+          requestedRole && (isAdmin || accountRoles.has(requestedRole)) ? requestedRole : null;
 
-        if (isAdmin && !previewRole) {
+        if (isAdmin && !selectedRole) {
           navigate("/admin");
           return;
         }
+
+        const effectiveRole = selectedRole || profileData?.role;
 
         // Legacy invitation emails authenticated the recipient and sent them
         // straight to the dashboard. A pending membership must create a
         // password before gaining workspace access, so route it to the
         // branded account-activation screen instead.
-        if (!previewRole && profileData?.role === "company") {
+        if (!selectedRole && effectiveRole === "company") {
           const { data: pendingMembership, error: membershipError } = await supabase
             .from("company_members")
             .select("id,status,password_created_at")
@@ -97,10 +99,10 @@ const Dashboard = () => {
           }
         }
 
-        setProfile(previewRole ? { ...profileData, role: previewRole } : profileData);
+        setProfile(profileData ? { ...profileData, role: effectiveRole } : profileData);
 
         // Check if this is a company with expired trial.
-        if (!previewRole && profileData?.role === "company") {
+        if (effectiveRole === "company") {
           const { data: companyData, error: companyError } = await supabase
             .from("company_profiles")
             .select("*")
