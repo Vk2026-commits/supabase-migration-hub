@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, ShieldCheck, StickyNote, Search, X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, ShieldCheck, StickyNote, Search, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -87,10 +88,12 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
 
   useEffect(() => {
-    void loadApplications();
+    void loadApplications(true);
     void loadCompanyProfile();
     const refresh = window.setInterval(() => void loadApplications(), 15000);
     return () => window.clearInterval(refresh);
@@ -105,81 +108,99 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
     setCompanyProfile(data);
   };
 
-  const loadApplications = async () => {
-    const { data, error } = await (supabase as any)
-      .from("job_applications")
-      .select(`
-        *,
-        job_posting:job_postings(title),
-        officer:officer_profiles(id, user_id, phone),
-        profile:officer_profiles(user_id),
-        hiring_application:guard_hiring_applications(id,application_data,status,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
-      `)
-      .eq("job_posting.company_id", companyId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Failed to load applications:", error);
-      return;
+  const loadApplications = async (showLoading = false) => {
+    if (showLoading) {
+      setInitialLoading(true);
+      setLoadError("");
     }
 
-    // Get display names and non-sensitive onboarding progress for accepted offers.
-    const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
-    const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, notesResult, unreadResult] = await Promise.all([
-      officerUserIds.length ? supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
-      (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
-      (supabase as any).from("hires").select("id,employment_confirmed_at,status").eq("company_id", companyId),
-      (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
-      (supabase as any).from("hire_screening_checks").select("*").eq("company_id", companyId).order("created_at"),
-      (supabase as any).from("interview_schedules").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-      (supabase as any).from("company_applicant_notes").select("id,job_application_id,note,updated_at").eq("company_id", companyId),
-      supabase.from("messages").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("sender_type", "officer").eq("is_read", false),
-    ]);
-    if (offersResult.error) console.error("Failed to match accepted offers", offersResult.error);
-    if (hiresResult.error) console.error("Failed to load hire confirmation state", hiresResult.error);
-    if (progressResult.error) console.error("Failed to load onboarding progress", progressResult.error);
-    if (screeningResult.error) console.error("Failed to load screening checks", screeningResult.error);
-    if (interviewsResult.error) console.error("Failed to load interviews", interviewsResult.error);
-    if (notesResult.error) console.error("Failed to load applicant notes", notesResult.error);
-    if (!unreadResult.error) setUnreadCount(unreadResult.count || 0);
-    const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
-    const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
-    const hireStateById = new Map((hiresResult.data || []).map((hire: any) => [hire.id, hire]));
-    const screeningByHire = new Map<string, any[]>();
-    for (const check of screeningResult.data || []) screeningByHire.set(check.hire_id, [...(screeningByHire.get(check.hire_id) || []), check]);
-    const interviewByApplication = new Map<string, any>();
-    for (const interview of interviewsResult.data || []) if (!interviewByApplication.has(interview.job_application_id)) interviewByApplication.set(interview.job_application_id, interview);
-    const noteByApplication = new Map((notesResult.data || []).map((note: any) => [note.job_application_id, note]));
-    const applicationRows = (data || []).map((app: any) => {
-      const hiringApplications = [...(app.hiring_application || [])].sort((left: any, right: any) => new Date(right.submitted_at || right.created_at || 0).getTime() - new Date(left.submitted_at || left.created_at || 0).getTime());
-      const offerApplication = hiringApplications.find((application: any) =>
-        application.status === "submitted"
-        || Boolean(application.submitted_at)
-        || application.evidence_snapshot_status === "complete"
-      ) || hiringApplications[0];
-      const profile = profilesResult.data?.find((entry: any) => entry.id === app.officer?.user_id);
-      const applicationSnapshot = hiringApplications[0]?.application_data || {};
-      const hireId = (hireByApplication.get(app.id) as string) || "";
-      const screeningChecks = screeningByHire.get(hireId) || [];
-      return {
-        ...app,
-        hiring_application: hiringApplications,
-        offerHiringApplicationId: offerApplication?.id || null,
-        officerName: profile?.full_name || applicationSnapshot.applicantName || "Unknown",
-        officerAvatar: profile?.avatar_url || null,
-        officerEmail: applicationSnapshot.email || profile?.email || "",
-        officerPhone: applicationSnapshot.phone || app.officer?.phone || "",
-        hireId,
-        employmentConfirmedAt: hireStateById.get(hireId)?.employment_confirmed_at || null,
-        hireStatus: hireStateById.get(hireId)?.status || null,
-        onboardingProgress: progressByHire.get(hireId) || null,
-        screeningChecks,
-        screeningReady: screeningChecks.length > 0 && screeningChecks.filter((check: any) => check.required).every((check: any) => check.status === "cleared"),
-        interview: interviewByApplication.get(app.id) || null,
-        companyNote: noteByApplication.get(app.id) || null,
-      };
-    });
-    setApplications(applicationRows.filter((app: any) => !app.employmentConfirmedAt && app.hireStatus !== "not_hired"));
+    try {
+      const { data, error } = await (supabase as any)
+        .from("job_applications")
+        .select(`
+          id,
+          created_at,
+          status,
+          job_posting_id,
+          officer_id,
+          message,
+          job_posting:job_postings(title),
+          officer:officer_profiles(id, user_id, phone),
+          hiring_application:guard_hiring_applications(id,status,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
+        `)
+        .eq("job_posting.company_id", companyId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Load the data needed to render applicant cards together. The unread-message
+      // count is non-blocking because it should not delay the applicants themselves.
+      const officerUserIds = data?.map((app: any) => app.officer?.user_id).filter(Boolean) || [];
+      const unreadPromise = supabase.from("messages").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("sender_type", "officer").eq("is_read", false);
+      const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, notesResult] = await Promise.all([
+        officerUserIds.length ? supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
+        (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
+        (supabase as any).from("hires").select("id,employment_confirmed_at,status").eq("company_id", companyId),
+        (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
+        (supabase as any).from("hire_screening_checks").select("*").eq("company_id", companyId).order("created_at"),
+        (supabase as any).from("interview_schedules").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+        (supabase as any).from("company_applicant_notes").select("id,job_application_id,note,updated_at").eq("company_id", companyId),
+      ]);
+      void unreadPromise.then((result) => {
+        if (!result.error) setUnreadCount(result.count || 0);
+      });
+      if (offersResult.error) console.error("Failed to match accepted offers", offersResult.error);
+      if (hiresResult.error) console.error("Failed to load hire confirmation state", hiresResult.error);
+      if (progressResult.error) console.error("Failed to load onboarding progress", progressResult.error);
+      if (screeningResult.error) console.error("Failed to load screening checks", screeningResult.error);
+      if (interviewsResult.error) console.error("Failed to load interviews", interviewsResult.error);
+      if (notesResult.error) console.error("Failed to load applicant notes", notesResult.error);
+
+      const profileById = new Map((profilesResult.data || []).map((entry: any) => [entry.id, entry]));
+      const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
+      const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
+      const hireStateById = new Map((hiresResult.data || []).map((hire: any) => [hire.id, hire]));
+      const screeningByHire = new Map<string, any[]>();
+      for (const check of screeningResult.data || []) screeningByHire.set(check.hire_id, [...(screeningByHire.get(check.hire_id) || []), check]);
+      const interviewByApplication = new Map<string, any>();
+      for (const interview of interviewsResult.data || []) if (!interviewByApplication.has(interview.job_application_id)) interviewByApplication.set(interview.job_application_id, interview);
+      const noteByApplication = new Map((notesResult.data || []).map((note: any) => [note.job_application_id, note]));
+      const applicationRows = (data || []).map((app: any) => {
+        const hiringApplications = [...(app.hiring_application || [])].sort((left: any, right: any) => new Date(right.submitted_at || right.created_at || 0).getTime() - new Date(left.submitted_at || left.created_at || 0).getTime());
+        const offerApplication = hiringApplications.find((application: any) =>
+          application.status === "submitted"
+          || Boolean(application.submitted_at)
+          || application.evidence_snapshot_status === "complete"
+        ) || hiringApplications[0];
+        const profile = profileById.get(app.officer?.user_id) as any;
+        const hireId = (hireByApplication.get(app.id) as string) || "";
+        const screeningChecks = screeningByHire.get(hireId) || [];
+        return {
+          ...app,
+          hiring_application: hiringApplications,
+          offerHiringApplicationId: offerApplication?.id || null,
+          officerName: profile?.full_name || "Unknown",
+          officerAvatar: profile?.avatar_url || null,
+          officerEmail: profile?.email || "",
+          officerPhone: app.officer?.phone || "",
+          hireId,
+          employmentConfirmedAt: hireStateById.get(hireId)?.employment_confirmed_at || null,
+          hireStatus: hireStateById.get(hireId)?.status || null,
+          onboardingProgress: progressByHire.get(hireId) || null,
+          screeningChecks,
+          screeningReady: screeningChecks.length > 0 && screeningChecks.filter((check: any) => check.required).every((check: any) => check.status === "cleared"),
+          interview: interviewByApplication.get(app.id) || null,
+          companyNote: noteByApplication.get(app.id) || null,
+        };
+      });
+      setApplications(applicationRows.filter((app: any) => !app.employmentConfirmedAt && app.hireStatus !== "not_hired"));
+      setLoadError("");
+    } catch (error) {
+      console.error("Failed to load applications:", error);
+      if (showLoading) setLoadError("Applicants could not be loaded. Please try again.");
+    } finally {
+      if (showLoading) setInitialLoading(false);
+    }
   };
 
   const getMaskedName = (fullName: string) => {
@@ -232,7 +253,11 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           </div>
         )}
 
-        {applications.length > 0 && <div className="mb-4 space-y-3 rounded-xl border bg-muted/20 p-3">
+        {initialLoading && <div className="mb-4 space-y-3 rounded-xl border bg-muted/20 p-3" aria-hidden="true">
+          <div className="flex flex-col gap-2 lg:flex-row"><Skeleton className="h-10 flex-1" /><Skeleton className="h-10 lg:w-52" /><Skeleton className="h-10 lg:w-52" /></div>
+          <div className="flex items-center justify-between"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-44" /></div>
+        </div>}
+        {!initialLoading && applications.length > 0 && <div className="mb-4 space-y-3 rounded-xl border bg-muted/20 p-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search applicants" className="bg-background pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name, email, phone, or position" /></div>
             <Select value={stageFilter} onValueChange={setStageFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter applicants by stage"><SelectValue placeholder="All stages" /></SelectTrigger><SelectContent><SelectItem value="all">All stages</SelectItem><SelectItem value="review">Needs review</SelectItem><SelectItem value="interview">Interview</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="onboarding">Onboarding</SelectItem><SelectItem value="screening">Screening / final review</SelectItem></SelectContent></Select>
@@ -242,7 +267,16 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Showing {filteredApplications.length} of {applications.length}</p><div className="inline-flex rounded-lg border bg-background p-1" aria-label="Applicant layout"><Button type="button" size="sm" variant={viewMode === "cards" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("cards")}><LayoutGrid className="mr-2 h-4 w-4" />Cards</Button><Button type="button" size="sm" variant={viewMode === "compact" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("compact")}><List className="mr-2 h-4 w-4" />Compact</Button></div></div>
         </div>}
         <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"}>
-          {applications.length === 0 ? (
+          {initialLoading ? (
+            <div className="col-span-full" role="status" aria-live="polite">
+              <p className="sr-only">Loading applicants</p>
+              <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"} aria-hidden="true">
+                {[0, 1, 2].map((item) => <div key={item} className="rounded-xl border border-t-2 border-t-slate-200 bg-card p-4"><div className="flex items-center gap-3"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-24" /></div></div><Skeleton className="mt-4 h-16 w-full rounded-lg" /><div className="mt-3 grid grid-cols-2 gap-2"><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /></div></div>)}
+              </div>
+            </div>
+          ) : loadError ? (
+            <div className="col-span-full rounded-xl border border-dashed px-6 py-10 text-center"><p className="font-medium text-foreground">We couldn't load applicants</p><p className="mt-1 text-sm text-muted-foreground">{loadError}</p><Button type="button" variant="outline" className="mt-4" onClick={() => void loadApplications(true)}><RefreshCw className="mr-2 h-4 w-4" />Try again</Button></div>
+          ) : applications.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
               No applications yet. Post jobs to attract security officers.
             </p>
