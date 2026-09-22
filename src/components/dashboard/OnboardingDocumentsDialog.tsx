@@ -25,6 +25,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application }: P
   const [packetUrl, setPacketUrl] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     if (!open || !application) return;
@@ -37,6 +38,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application }: P
       setPacketUrl("");
       setCurrentPage(1);
       setPageCount(0);
+      setLoadError("");
       try {
         const packetId = application.onboardingProgress?.packet_id;
         if (!packetId) throw new Error("This officer has not started an onboarding packet yet");
@@ -72,34 +74,70 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application }: P
 
         const merged = await PDFDocument.create();
         const prepared: DocumentRecord[] = [];
+        const failedLabels: string[] = [];
         let nextPage = 1;
         for (const entry of entries) {
-          const url = urls.get(entry.storage_path) as string | undefined;
-          if (!url) continue;
-          const response = await fetch(url);
-          if (!response.ok) continue;
-          const source = await PDFDocument.load(await response.arrayBuffer());
-          const sourcePages = await merged.copyPages(source, source.getPageIndices());
-          sourcePages.forEach(page => merged.addPage(page));
-          prepared.push({
-            id: entry.id,
-            label: entry.document_label,
-            version: entry.version,
-            submittedAt: entry.submitted_at,
-            filename: `${entry.document_type}${entry.version ? `-v${entry.version}` : ""}.pdf`,
-            pageStart: nextPage,
-            pageCount: sourcePages.length,
-          });
-          nextPage += sourcePages.length;
-          void (supabase as any).rpc("log_sensitive_access", {
-            _action: "view",
-            _table_name: "officer_compliance_documents",
-            _record_id: entry.id,
-            _details: { document_type: entry.document_type, officer_id: application.officer?.id },
-          });
+          try {
+            const url = urls.get(entry.storage_path) as string | undefined;
+            if (!url) throw new Error("A secure document link was not returned");
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Document download failed (${response.status})`);
+            const bytes = await response.arrayBuffer();
+            const contentType = (response.headers.get("content-type") || "").toLowerCase();
+            const path = String(entry.storage_path || "").toLowerCase();
+            const isJpeg = contentType.includes("image/jpeg") || /\.(jpe?g)$/.test(path);
+            const isPng = contentType.includes("image/png") || /\.png$/.test(path);
+            let documentPageCount = 0;
+
+            if (isJpeg || isPng) {
+              const image = isPng ? await merged.embedPng(bytes) : await merged.embedJpg(bytes);
+              const page = merged.addPage([612, 792]);
+              const margin = 36;
+              const scale = Math.min(
+                (page.getWidth() - margin * 2) / image.width,
+                (page.getHeight() - margin * 2) / image.height,
+              );
+              const width = image.width * scale;
+              const height = image.height * scale;
+              page.drawImage(image, {
+                x: (page.getWidth() - width) / 2,
+                y: (page.getHeight() - height) / 2,
+                width,
+                height,
+              });
+              documentPageCount = 1;
+            } else {
+              const source = await PDFDocument.load(bytes);
+              const sourcePages = await merged.copyPages(source, source.getPageIndices());
+              sourcePages.forEach(page => merged.addPage(page));
+              documentPageCount = sourcePages.length;
+            }
+
+            if (!documentPageCount) throw new Error("The document did not contain a viewable page");
+            prepared.push({
+              id: entry.id,
+              label: entry.document_label,
+              version: entry.version,
+              submittedAt: entry.submitted_at,
+              filename: `${entry.document_type}${entry.version ? `-v${entry.version}` : ""}.pdf`,
+              pageStart: nextPage,
+              pageCount: documentPageCount,
+            });
+            nextPage += documentPageCount;
+            void (supabase as any).rpc("log_sensitive_access", {
+              _action: "view",
+              _table_name: "officer_compliance_documents",
+              _record_id: entry.id,
+              _details: { document_type: entry.document_type, officer_id: application.officer?.id },
+            });
+          } catch (error) {
+            console.error(`Could not prepare ${entry.document_label}`, error);
+            failedLabels.push(entry.document_label);
+          }
         }
 
         if (!prepared.length) throw new Error("No completed onboarding documents are available yet");
+        if (failedLabels.length) toast.warning(`${failedLabels.length} document${failedLabels.length === 1 ? "" : "s"} could not be added to the preview`);
         const bytes = await merged.save();
         createdPacketUrl = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
         if (active) {
@@ -108,7 +146,9 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application }: P
           setPacketUrl(createdPacketUrl);
         }
       } catch (error: any) {
-        toast.error(error.message || "The onboarding packet could not be prepared");
+        const message = error.message || "The onboarding packet could not be prepared";
+        setLoadError(message);
+        toast.error(message);
       } finally {
         if (active) setLoading(false);
       }
@@ -164,6 +204,8 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application }: P
               <iframe key={currentPage} src={`${packetUrl}#page=${currentPage}&toolbar=1&navpanes=0&view=FitH`} title={`${application?.officerName || "Officer"} onboarding print preview`} className="min-h-0 flex-1 bg-zinc-700" />
             </section>
           </div>
+        ) : loadError ? (
+          <div className="m-5 rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-950"><strong className="block">The submitted packet could not be displayed</strong>{loadError}</div>
         ) : (
           <div className="m-5 rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong className="block">No completed documents are available yet</strong>Documents will appear here as the officer completes the onboarding packet.</div>
         )}
