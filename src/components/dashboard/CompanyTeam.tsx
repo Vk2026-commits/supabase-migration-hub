@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Mail, Trash2, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Mail, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -56,15 +56,40 @@ const roleDescriptions: Record<Exclude<TeamRole, "owner">, string> = {
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-export default function CompanyTeam({ companyId }: { companyId: string }) {
+const withTimeout = <T,>(promise: Promise<T>, milliseconds: number) =>
+  new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error("The company team request timed out. Please try again.")),
+      milliseconds,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
+type CompanyTeamProps = {
+  companyId: string;
+  allowInvites?: boolean;
+};
+
+export default function CompanyTeam({ companyId, allowInvites = false }: CompanyTeamProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [canManage, setCanManage] = useState(false);
+  const [serverCanManage, setServerCanManage] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Exclude<TeamRole, "owner">>("hiring_manager");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const canManage = allowInvites || serverCanManage;
 
   const invoke = useCallback(
     async (body: Record<string, unknown>) => {
@@ -91,8 +116,9 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
-      const data = await invoke({ action: "list" });
+      const data = await withTimeout(invoke({ action: "list" }), 12000);
       const listedMembers = (data.members || []) as TeamMember[];
       const userIds = listedMembers.map((member) => member.user_id).filter(Boolean);
       const { data: identities } = userIds.length
@@ -100,9 +126,11 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
         : { data: [] };
       const avatarByUser = new Map((identities || []).map((identity) => [identity.id, identity.avatar_url]));
       setMembers(listedMembers.map((member) => ({ ...member, avatar_url: avatarByUser.get(member.user_id) || null })));
-      setCanManage(Boolean(data.can_manage));
+      setServerCanManage(Boolean(data.can_manage));
     } catch (error: unknown) {
-      toast.error(errorMessage(error, "Company team could not be loaded"));
+      const message = errorMessage(error, "Company team could not be loaded");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -235,6 +263,15 @@ export default function CompanyTeam({ companyId }: { companyId: string }) {
         <CardContent className="space-y-3">
           {loading ? (
             <p className="py-6 text-center text-muted-foreground">Loading company team…</p>
+          ) : loadError ? (
+            <div className="flex flex-col items-center rounded-xl border border-amber-200 bg-amber-50 px-5 py-8 text-center">
+              <AlertCircle className="h-6 w-6 text-amber-700" />
+              <p className="mt-2 font-medium text-amber-950">The team roster could not be loaded</p>
+              <p className="mt-1 text-sm text-amber-900/75">{loadError}</p>
+              <Button type="button" variant="outline" size="sm" className="mt-4 bg-background" onClick={() => void load()}>
+                <RefreshCw className="mr-2 h-4 w-4" />Retry
+              </Button>
+            </div>
           ) : (
             members.map((member) => (
               <div

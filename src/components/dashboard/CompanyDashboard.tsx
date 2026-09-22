@@ -1021,7 +1021,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             )}
 
             {activeTab === "team" && companyProfile && (
-              <CompanyTeam companyId={companyProfile.id} />
+              <CompanyTeam
+                companyId={companyProfile.id}
+                allowInvites={companyTeamRole === "owner" || companyTeamRole === "admin"}
+              />
             )}
 
             {activeTab === "subscriptions" && companyProfile && (
