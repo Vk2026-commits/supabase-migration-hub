@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, BellRing, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, UserX, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, BellRing, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, UserPlus, UserX, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
@@ -396,20 +396,34 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             )}
             {activeTab === "profile" &&
               (profileLoaded ? (
-                <CompanyProfileWizard
-                  formData={formData}
-                  setFormData={setFormData}
-                  logoFile={logoFile}
-                  setLogoFile={setLogoFile}
-                  loading={loading}
-                  uploadingLogo={uploadingLogo}
-                  isComplete={companyProfileComplete}
-                  onSave={() => handleSubmit(undefined, false)}
-                  onBrowse={() => {
-                    window.location.href = "/browse";
-                  }}
-                  canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
-                />
+                <div className="space-y-5">
+                  <CompanyProfileWizard
+                    formData={formData}
+                    setFormData={setFormData}
+                    logoFile={logoFile}
+                    setLogoFile={setLogoFile}
+                    loading={loading}
+                    uploadingLogo={uploadingLogo}
+                    isComplete={companyProfileComplete}
+                    onSave={() => handleSubmit(undefined, false)}
+                    onBrowse={() => {
+                      window.location.href = "/browse";
+                    }}
+                    canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
+                  />
+                  <Card className="rounded-2xl border-primary/20 bg-primary/[0.03]">
+                    <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-start gap-3">
+                        <span className="rounded-xl bg-primary/10 p-3 text-primary"><UsersRound className="h-5 w-5" /></span>
+                        <div><h3 className="font-semibold">Company team</h3><p className="mt-1 text-sm text-muted-foreground">Invite staff and assign administrator, hiring manager, or reviewer access.</p></div>
+                      </div>
+                      <Button type="button" onClick={() => selectTab("team")} className="shrink-0">
+                        {companyTeamRole === "owner" || companyTeamRole === "admin" ? <UserPlus className="mr-2 h-4 w-4" /> : <UsersRound className="mr-2 h-4 w-4" />}
+                        {companyTeamRole === "owner" || companyTeamRole === "admin" ? "Add team member" : "View team"}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
               ) : (
                 <Card className="rounded-2xl" aria-label="Loading company profile"><CardHeader><Skeleton className="h-6 w-48" /><Skeleton className="h-4 w-72 max-w-full" /></CardHeader><CardContent className="grid gap-5 sm:grid-cols-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></CardContent></Card>
               ))}
