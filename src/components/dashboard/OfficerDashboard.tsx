@@ -313,11 +313,12 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setVideoInterviewCount(videosResult.count || 0);
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
         const storedApplications = Array.isArray(applicationResult.data) ? applicationResult.data : [];
-        setApplicationSubmitted(storedApplications.some((application: any) =>
+        const hasSubmittedApplication = storedApplications.some((application: any) =>
           application.status === "submitted"
           || Boolean(application.submitted_at)
           || (application.application_type === "employer_copy" && application.evidence_snapshot_status === "complete")
-        ));
+        );
+        setApplicationSubmitted(hasSubmittedApplication);
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
         if (confirmedHireResult.error) console.error("Failed to load confirmed employment status", confirmedHireResult.error);
@@ -339,11 +340,45 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
         if (!choseInitialExperience.current) {
           choseInitialExperience.current = true;
-          if (!requestedTab && (initialTab === "overview" || initialTab === "profile") && applicationResult.data?.status !== "submitted" && !confirmedHireResult.data?.employment_confirmed_at) selectTab("hiring-application");
+          if (!requestedTab && pendingOfferResult.data?.id) {
+            selectTab("employee-onboarding");
+          } else if (!requestedTab && (initialTab === "overview" || initialTab === "profile") && !hasSubmittedApplication && !confirmedHireResult.data?.employment_confirmed_at) {
+            selectTab("hiring-application");
+          }
         }
       }
     }
   };
+
+  useEffect(() => {
+    if (!officerProfile?.id) return;
+
+    const refreshOffers = () => {
+      void loadProfile();
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshOffers();
+    };
+    const channel = supabase
+      .channel(`officer-offers-${officerProfile.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "employment_offers", filter: `officer_id=eq.${officerProfile.id}` },
+        refreshOffers,
+      )
+      .subscribe();
+
+    window.addEventListener("focus", refreshOffers);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    const refreshTimer = window.setInterval(refreshWhenVisible, 15_000);
+
+    return () => {
+      window.removeEventListener("focus", refreshOffers);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.clearInterval(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [officerProfile?.id, userId]);
 
   const handleResumeUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
