@@ -188,7 +188,8 @@ Deno.serve(async (request) => {
     }
 
     const hasAccess = isOwner || actingMember?.status === "active";
-    const canManage = isOwner || actingMember?.role === "admin";
+    const canManage =
+      isOwner || actingMember?.role === "owner" || actingMember?.role === "admin";
     if (!hasAccess) return json({ error: "Company access denied" }, 403);
 
     if (action === "list") {
