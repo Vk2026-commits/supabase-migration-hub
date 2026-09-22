@@ -311,21 +311,6 @@ Deno.serve(async (request) => {
         invited = true;
       }
 
-      const { data: invitedProfile } = await admin
-        .from("profiles")
-        .select("role")
-        .eq("id", invitedUser.id)
-        .maybeSingle();
-      if (!invited && invitedProfile?.role !== "company") {
-        return json(
-          {
-            error:
-              "This email uses an officer account. Invite a separate company staff email so the officer profile remains protected.",
-          },
-          409,
-        );
-      }
-
       const { data: otherMembership } = await admin
         .from("company_members")
         .select("company_id")
