@@ -26,6 +26,24 @@ const usernameSchema = z
   .max(20, "Username must be less than 20 characters")
   .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores");
 
+const isTemporaryAuthFailure = (error: unknown) => {
+  const status = Number((error as { status?: number } | null)?.status || 0);
+  const message = error instanceof Error ? error.message : String(error || "");
+  return status >= 500 || /(?:http\s*)?5\d\d|gateway|timed?\s*out|failed to fetch|network request/i.test(message);
+};
+
+const signInWithRecovery = async (email: string, password: string) => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!error) return;
+    if (!isTemporaryAuthFailure(error)) throw error;
+    if (attempt === 1) {
+      throw new Error("The sign-in service is temporarily unavailable. Please try again in a moment.");
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 650));
+  }
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -161,12 +179,7 @@ const Auth = () => {
 
         if (isEmail) {
           // Sign in with email
-          const { error } = await supabase.auth.signInWithPassword({
-            email: emailOrUsername,
-            password,
-          });
-
-          if (error) throw error;
+          await signInWithRecovery(emailOrUsername, password);
         } else {
           // Sign in with username - first get email from profiles
           const { data: profile, error: profileError } = await supabase
@@ -179,12 +192,7 @@ const Auth = () => {
             throw new Error("Username not found");
           }
 
-          const { error } = await supabase.auth.signInWithPassword({
-            email: profile.email,
-            password,
-          });
-
-          if (error) throw error;
+          await signInWithRecovery(profile.email, password);
         }
 
         toast.success("Signed in successfully!");
