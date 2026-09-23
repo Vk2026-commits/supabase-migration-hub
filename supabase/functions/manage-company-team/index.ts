@@ -10,7 +10,8 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 const clean = (value: unknown) => String(value ?? "").trim();
-const roles = new Set(["admin", "hiring_manager", "reviewer"]);
+const inviteRoles = new Set(["admin", "hiring_manager", "reviewer"]);
+const teamRoles = new Set(["owner", "admin", "hiring_manager", "reviewer"]);
 const invitationSetupWindowMs = 7 * 24 * 60 * 60 * 1000;
 // Keep invitations on the We Find Guards domain. APP_URL supports a controlled
 // deployment override without trusting a client-provided redirect origin.
@@ -207,6 +208,8 @@ Deno.serve(async (request) => {
       return json({
         company_name: company.company_name,
         can_manage: canManage,
+        can_assign_owners: isOwner,
+        primary_owner_user_id: company.user_id,
         members: (members || []).map((member) => ({
           ...member,
           full_name: profileById.get(member.user_id)?.full_name || "",
@@ -227,7 +230,7 @@ Deno.serve(async (request) => {
       const hasValidEmailShape =
         atIndex > 0 && email.indexOf(".", atIndex + 2) > atIndex + 1 && !email.includes(" ");
       if (!hasValidEmailShape) return json({ error: "Enter a valid email address" }, 400);
-      if (!roles.has(role)) return json({ error: "Choose a valid team role" }, 400);
+      if (!inviteRoles.has(role)) return json({ error: "Choose a valid team role" }, 400);
 
       const { data: existingUserId, error: lookupError } = await admin.rpc(
         "find_company_team_user_by_email",
@@ -415,14 +418,20 @@ Deno.serve(async (request) => {
       .eq("company_id", companyId)
       .maybeSingle();
     if (!target) return json({ error: "Team member not found" }, 404);
-    if (target.role === "owner" || target.user_id === company.user_id)
-      return json({ error: "The company owner cannot be changed or removed" }, 409);
+    if (target.user_id === company.user_id)
+      return json({ error: "The primary company owner cannot be changed or removed" }, 409);
     if (target.user_id === authData.user.id)
       return json({ error: "You cannot remove or change your own administrator access" }, 409);
 
     if (action === "update_role") {
       const role = clean(body.role);
-      if (!roles.has(role)) return json({ error: "Choose a valid team role" }, 400);
+      if (!teamRoles.has(role)) return json({ error: "Choose a valid team role" }, 400);
+      if ((role === "owner" || target.role === "owner") && !isOwner) {
+        return json({ error: "Only the primary company owner can assign or change owners" }, 403);
+      }
+      if (role === "owner" && target.status !== "active") {
+        return json({ error: "Finish the team member’s account setup before making them an owner" }, 409);
+      }
       const { error } = await admin
         .from("company_members")
         .update({ role, updated_at: new Date().toISOString() })
@@ -431,6 +440,9 @@ Deno.serve(async (request) => {
       return json({ success: true });
     }
     if (action === "remove") {
+      if (target.role === "owner") {
+        return json({ error: "Change this owner to another role before removing access" }, 409);
+      }
       if (body.confirm_remove !== true) {
         return json({ error: "Confirm removal before revoking this team member’s access" }, 400);
       }

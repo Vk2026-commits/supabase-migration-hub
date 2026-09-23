@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Mail, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
+import { AlertCircle, Crown, Mail, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,8 @@ const roleLabels: Record<TeamRole, string> = {
   reviewer: "Reviewer",
 };
 
-const roleDescriptions: Record<Exclude<TeamRole, "owner">, string> = {
+const roleDescriptions: Record<TeamRole, string> = {
+  owner: "Full company access, including owner-level hiring and team management permissions.",
   admin: "Manage the company profile, team, jobs, applicants, offers, and onboarding.",
   hiring_manager: "Manage jobs, applicants, employment offers, and hiring progress.",
   reviewer:
@@ -82,11 +83,14 @@ type CompanyTeamProps = {
 export default function CompanyTeam({ companyId, allowInvites = false }: CompanyTeamProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [serverCanManage, setServerCanManage] = useState(false);
+  const [canAssignOwners, setCanAssignOwners] = useState(false);
+  const [primaryOwnerUserId, setPrimaryOwnerUserId] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Exclude<TeamRole, "owner">>("hiring_manager");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
+  const [memberToPromote, setMemberToPromote] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState(false);
   const [loadError, setLoadError] = useState("");
   const canManage = allowInvites || serverCanManage;
@@ -127,6 +131,8 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
       const avatarByUser = new Map((identities || []).map((identity) => [identity.id, identity.avatar_url]));
       setMembers(listedMembers.map((member) => ({ ...member, avatar_url: avatarByUser.get(member.user_id) || null })));
       setServerCanManage(Boolean(data.can_manage));
+      setCanAssignOwners(Boolean(data.can_assign_owners));
+      setPrimaryOwnerUserId(String(data.primary_owner_user_id || ""));
     } catch (error: unknown) {
       const message = errorMessage(error, "Company team could not be loaded");
       setLoadError(message);
@@ -158,7 +164,7 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
     }
   };
 
-  const updateRole = async (memberId: string, nextRole: Exclude<TeamRole, "owner">) => {
+  const updateRole = async (memberId: string, nextRole: TeamRole) => {
     try {
       await invoke({ action: "update_role", member_id: memberId, role: nextRole });
       toast.success("Team member role updated");
@@ -166,6 +172,21 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Role could not be updated"));
     }
+  };
+
+  const requestRoleChange = (member: TeamMember, nextRole: TeamRole) => {
+    if (nextRole === "owner") {
+      setMemberToPromote(member);
+      return;
+    }
+    void updateRole(member.id, nextRole);
+  };
+
+  const confirmOwnerPromotion = async () => {
+    if (!memberToPromote) return;
+    const member = memberToPromote;
+    setMemberToPromote(null);
+    await updateRole(member.id, "owner");
   };
 
   const remove = async (member: TeamMember) => {
@@ -290,19 +311,22 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
                       ? "Account setup in progress"
                       : "Active"}
                 </Badge>
-                {member.role === "owner" ? (
-                  <Badge>{roleLabels.owner}</Badge>
+                {member.user_id === primaryOwnerUserId || (member.role === "owner" && !canAssignOwners) ? (
+                  <Badge className="gap-1"><Crown className="h-3 w-3" />{roleLabels.owner}</Badge>
                 ) : canManage ? (
                   <Select
                     value={member.role}
                     onValueChange={(value) =>
-                      updateRole(member.id, value as Exclude<TeamRole, "owner">)
+                      requestRoleChange(member, value as TeamRole)
                     }
                   >
                     <SelectTrigger className="w-44">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      {canAssignOwners && member.status === "active" && (
+                        <SelectItem value="owner">Owner</SelectItem>
+                      )}
                       <SelectItem value="admin">Administrator</SelectItem>
                       <SelectItem value="hiring_manager">Hiring manager</SelectItem>
                       <SelectItem value="reviewer">Reviewer</SelectItem>
@@ -362,6 +386,29 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
                 : memberToRemove?.status === "invited"
                   ? "Cancel invitation"
                   : "Remove access"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(memberToPromote)}
+        onOpenChange={(open) => {
+          if (!open) setMemberToPromote(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Make this person an owner?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {memberToPromote?.full_name || memberToPromote?.email} will receive full owner-level
+              access to this company workspace. Their access to any other company remains unchanged.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmOwnerPromotion()}>
+              Make owner
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
