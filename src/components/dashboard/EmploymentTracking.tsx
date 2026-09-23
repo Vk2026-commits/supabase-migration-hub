@@ -69,16 +69,51 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      const [progressResult, screeningResult] = await Promise.all([
+      const officerIds = Array.from(new Set((data || []).map((hire: any) => hire.officer_id).filter(Boolean)));
+      const [progressResult, screeningResult, safeOfficerResult] = await Promise.all([
         (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
         (supabase as any).from("hire_screening_checks").select("*").eq("company_id", companyId).order("created_at"),
+        officerIds.length
+          ? (supabase as any).from("officer_profiles_safe").select("id,user_id,title,avatar_url").in("id", officerIds)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (progressResult.error) throw progressResult.error;
       if (screeningResult.error) throw screeningResult.error;
+      if (safeOfficerResult.error) throw safeOfficerResult.error;
+
+      const safeOfficers = safeOfficerResult.data || [];
+      const officerUserIds = Array.from(new Set(safeOfficers.map((officer: any) => officer.user_id).filter(Boolean)));
+      const publicProfileResult = officerUserIds.length
+        ? await (supabase as any).from("public_profiles").select("id,full_name,avatar_url").in("id", officerUserIds)
+        : { data: [], error: null };
+      if (publicProfileResult.error) throw publicProfileResult.error;
+
+      const safeOfficerById = new Map(safeOfficers.map((officer: any) => [officer.id, officer]));
+      const publicProfileById = new Map((publicProfileResult.data || []).map((profile: any) => [profile.id, profile]));
       const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
       const screeningByHire = new Map<string, any[]>();
       for (const check of screeningResult.data || []) screeningByHire.set(check.hire_id, [...(screeningByHire.get(check.hire_id) || []), check]);
-      const loadedHires = (data || []).map((hire: any) => ({ ...hire, onboarding_progress: progressByHire.get(hire.id) || null, screening_checks: screeningByHire.get(hire.id) || [] }));
+      const loadedHires = (data || []).map((hire: any) => {
+        const safeOfficer: any = safeOfficerById.get(hire.officer_id);
+        const publicProfile: any = safeOfficer ? publicProfileById.get(safeOfficer.user_id) : null;
+        const privateOfficer = hire.officer_profiles || {};
+        const privateProfile = privateOfficer.profiles || {};
+        return {
+          ...hire,
+          officer_profiles: {
+            ...safeOfficer,
+            ...privateOfficer,
+            avatar_url: privateOfficer.avatar_url || safeOfficer?.avatar_url || publicProfile?.avatar_url || null,
+            profiles: {
+              ...privateProfile,
+              full_name: privateProfile.full_name || publicProfile?.full_name || "",
+              avatar_url: privateProfile.avatar_url || publicProfile?.avatar_url || safeOfficer?.avatar_url || null,
+            },
+          },
+          onboarding_progress: progressByHire.get(hire.id) || null,
+          screening_checks: screeningByHire.get(hire.id) || [],
+        };
+      });
       setHires(loadedHires);
       onPendingReviewCountChange?.(loadedHires.filter((hire: any) => hire.onboarding_progress?.status === "submitted" && !hire.onboarding_reviewed_at).length);
     } catch (error) {
