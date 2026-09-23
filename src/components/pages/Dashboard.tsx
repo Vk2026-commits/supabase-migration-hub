@@ -8,7 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 import CompanyDashboard from "@/components/dashboard/CompanyDashboard";
 import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
-import { loadCompanyWorkspaces, selectCompanyWorkspace } from "@/lib/company-workspaces";
+import {
+  loadCompanyWorkspaces,
+  selectCompanyWorkspace,
+  type CompanyWorkspace,
+} from "@/lib/company-workspaces";
 
 type AccountProfile = {
   role?: string | null;
@@ -34,6 +38,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showExpiredTrialDialog, setShowExpiredTrialDialog] = useState(false);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
+  const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
 
   useEffect(() => {
     const getProfile = async () => {
@@ -108,7 +113,9 @@ const Dashboard = () => {
         // Check if this is a company with expired trial.
         if (effectiveRole === "company") {
           const workspaces = await loadCompanyWorkspaces(session.user.id);
-          const companyData = selectCompanyWorkspace(workspaces, requestedCompanyId)?.company || null;
+          const selectedWorkspace = selectCompanyWorkspace(workspaces, requestedCompanyId);
+          const companyData = selectedWorkspace?.company || null;
+          setCompanyWorkspaces(workspaces);
           if (companyData) {
             setCompanyProfile(companyData);
 
@@ -116,9 +123,7 @@ const Dashboard = () => {
               companyData.trial_end_date && new Date(companyData.trial_end_date) < new Date();
             const isFreeTier = companyData.subscription_tier === "free";
 
-            if (trialExpired && isFreeTier) {
-              setShowExpiredTrialDialog(true);
-            }
+            setShowExpiredTrialDialog(Boolean(trialExpired && isFreeTier));
           }
         }
       } catch (error) {
@@ -168,6 +173,11 @@ const Dashboard = () => {
     }
   };
 
+  const handleSwitchCompanyWorkspace = (companyId: string) => {
+    setShowExpiredTrialDialog(false);
+    navigate(`/dashboard?viewAs=company&companyId=${encodeURIComponent(companyId)}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -182,9 +192,18 @@ const Dashboard = () => {
             {showExpiredTrialDialog && companyProfile && (
               <ExpiredTrialDialog
                 open={showExpiredTrialDialog}
+                companyId={String(companyProfile.id)}
                 companyName={companyProfile.company_name || "your company"}
                 companyPhone={companyProfile.company_phone || "N/A"}
                 email={user?.email || "N/A"}
+                otherWorkspaces={companyWorkspaces
+                  .filter((workspace) => workspace.company.id !== companyProfile.id)
+                  .map((workspace) => ({
+                    id: workspace.company.id,
+                    name: workspace.company.company_name,
+                    role: workspace.role,
+                  }))}
+                onSwitchWorkspace={handleSwitchCompanyWorkspace}
                 onUpgrade={handleUpgradeComplete}
               />
             )}

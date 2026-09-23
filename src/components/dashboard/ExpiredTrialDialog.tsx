@@ -2,19 +2,31 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Crown, Users } from "lucide-react";
+import { Building2, CheckCircle2, Crown, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface ExpiredTrialDialogProps {
   open: boolean;
+  companyId: string;
   companyName: string;
   companyPhone: string;
   email: string;
+  otherWorkspaces?: Array<{ id: string; name: string; role: string }>;
+  onSwitchWorkspace?: (companyId: string) => void;
   onUpgrade: () => void;
 }
 
-const ExpiredTrialDialog = ({ open, companyName, companyPhone, email, onUpgrade }: ExpiredTrialDialogProps) => {
+const ExpiredTrialDialog = ({
+  open,
+  companyId,
+  companyName,
+  companyPhone,
+  email,
+  otherWorkspaces = [],
+  onSwitchWorkspace,
+  onUpgrade,
+}: ExpiredTrialDialogProps) => {
   const [loading, setLoading] = useState(false);
 
   const handleUpgrade = async (tier: "professional" | "premium") => {
@@ -26,7 +38,7 @@ const ExpiredTrialDialog = ({ open, companyName, companyPhone, email, onUpgrade 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify({ company_id: companyId, tier }),
       });
 
       if (!response.ok) throw new Error('Upgrade failed');
@@ -59,6 +71,32 @@ const ExpiredTrialDialog = ({ open, companyName, companyPhone, email, onUpgrade 
               <strong>Email:</strong> {email}
             </p>
           </div>
+
+          {otherWorkspaces.length > 0 && onSwitchWorkspace ? (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-start gap-3">
+                <Building2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Need a different company workspace?</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Subscription access is separate for every company. Open another company without changing this company or its plan.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {otherWorkspaces.map((workspace) => (
+                      <Button
+                        key={workspace.id}
+                        type="button"
+                        variant="outline"
+                        onClick={() => onSwitchWorkspace(workspace.id)}
+                      >
+                        Open {workspace.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid md:grid-cols-2 gap-6 mt-6">
             <Card className="border-2 border-primary relative">

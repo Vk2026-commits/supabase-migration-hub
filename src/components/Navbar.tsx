@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import { useTranslation } from "react-i18next";
+import { loadCompanyWorkspaces, type CompanyWorkspace } from "@/lib/company-workspaces";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +21,7 @@ const Navbar = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [accountRoles, setAccountRoles] = useState<string[]>([]);
+  const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -43,6 +45,7 @@ const Navbar = () => {
         setIsAdmin(false);
         setUserRole(null);
         setAccountRoles([]);
+        setCompanyWorkspaces([]);
       }
     });
 
@@ -66,11 +69,21 @@ const Navbar = () => {
       supabase.from("user_roles").select("role").eq("user_id", userId),
     ]);
 
+    const nextRoles = Array.from(new Set([profile?.role, ...(roles || []).map(({ role }) => role)]))
+      .filter((role): role is string => role === "officer" || role === "company");
+
     setUserRole(profile?.role ?? null);
-    setAccountRoles(
-      Array.from(new Set([profile?.role, ...(roles || []).map(({ role }) => role)]))
-        .filter((role): role is string => role === "officer" || role === "company"),
-    );
+    setAccountRoles(nextRoles);
+    if (nextRoles.includes("company")) {
+      try {
+        setCompanyWorkspaces(await loadCompanyWorkspaces(userId));
+      } catch (error) {
+        console.error("Failed to load company workspace navigation", error);
+        setCompanyWorkspaces([]);
+      }
+    } else {
+      setCompanyWorkspaces([]);
+    }
   };
 
   const handleSignOut = async () => {
@@ -93,6 +106,15 @@ const Navbar = () => {
       : userRole;
   const hasOfficerAndCompanyAccess =
     accountRoles.includes("officer") && accountRoles.includes("company");
+  const companyWorkspaceItems = companyWorkspaces.map((workspace) => (
+    <DropdownMenuItem
+      key={workspace.company.id}
+      onClick={() => navigate(`/dashboard?viewAs=company&companyId=${encodeURIComponent(workspace.company.id)}`)}
+    >
+      {workspace.company.company_name}
+      {workspace.owned || workspace.role === "owner" ? " (Owner)" : ""}
+    </DropdownMenuItem>
+  ));
 
   return (
     <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -156,9 +178,11 @@ const Navbar = () => {
                       <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
                         Security Officer
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
-                        Company
-                      </DropdownMenuItem>
+                      {companyWorkspaceItems.length > 0 ? companyWorkspaceItems : (
+                        <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
+                          Company
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => navigate("/admin")}>
                         Admin
                       </DropdownMenuItem>
@@ -175,9 +199,11 @@ const Navbar = () => {
                     <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
                       Security Officer
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
-                      Company Team
-                    </DropdownMenuItem>
+                    {companyWorkspaceItems.length > 0 ? companyWorkspaceItems : (
+                      <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
+                        Company Team
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : activeRole !== "officer" && (
