@@ -10,11 +10,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, Archive, Loader2, ChevronDown, Plus, Search, UsersRound, ArrowRight, ShieldCheck, UserX, X } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, ChevronDown, Plus, Search, UsersRound, ArrowRight, ShieldCheck, UserX, X } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
-import { createZip } from "@/lib/createZip";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { PreEmploymentScreeningDialog } from "./PreEmploymentScreeningDialog";
+import { OnboardingDocumentsDialog } from "./OnboardingDocumentsDialog";
 
 interface EmploymentTrackingProps {
   companyId: string;
@@ -29,9 +29,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
   const [updateType, setUpdateType] = useState("performance_review");
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState(5);
-  const [complianceHire, setComplianceHire] = useState<any>(null);
-  const [complianceLoading, setComplianceLoading] = useState(false);
-  const [downloadingDocuments, setDownloadingDocuments] = useState(false);
+  const [onboardingDocumentsApplication, setOnboardingDocumentsApplication] = useState<any>(null);
   const [downloadingOfferId, setDownloadingOfferId] = useState<string | null>(null);
   const [expandedHireId, setExpandedHireId] = useState<string | null>(null);
   const [onboardingReviewHire, setOnboardingReviewHire] = useState<any>(null);
@@ -45,7 +43,6 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
   const [hireStatusFilter, setHireStatusFilter] = useState("all");
   const [hirePositionFilter, setHirePositionFilter] = useState("all");
   const deferredHireSearch = useDeferredValue(hireSearch.trim().toLowerCase());
-  const [complianceDocuments, setComplianceDocuments] = useState<Array<{ id: string; label: string; version: number | null; submittedAt: string; sha256: string | null; url: string; filename: string }>>([]);
 
   useEffect(() => {
     void loadHires();
@@ -151,76 +148,6 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
       toast.error(error.message || "The accepted offer could not be downloaded");
     } finally {
       setDownloadingOfferId(null);
-    }
-  };
-
-  const openComplianceFile = async (hire: any) => {
-    setComplianceHire(hire);
-    setComplianceLoading(true);
-    setComplianceDocuments([]);
-    try {
-      const packetId = hire.onboarding_progress?.packet_id;
-      if (!packetId) throw new Error("This officer does not have an onboarding packet yet");
-      const [result, packetResult] = await Promise.all([
-        (supabase as any).from("officer_compliance_documents").select("id,document_label,version,submitted_at,sha256,storage_path,document_type").eq("packet_id", packetId).order("submitted_at", { ascending: false }),
-        (supabase as any).from("officer_onboarding_packets").select("id,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at").eq("id", packetId).maybeSingle(),
-      ]);
-      if (result.error) throw result.error;
-      if (packetResult.error) throw packetResult.error;
-      const entries = (result.data || []).map((document: any) => ({ ...document, legacy: false }));
-      if (!entries.some((document: any) => document.document_type === "form-i9") && packetResult.data?.i9_document_path && packetResult.data?.i9_submitted_at) entries.push({ id: `legacy-i9-${packetId}`, document_label: "Signed Form I-9", version: null, submitted_at: packetResult.data.i9_submitted_at, sha256: null, storage_path: packetResult.data.i9_document_path, document_type: "form-i9", legacy: true });
-      if (!entries.some((document: any) => document.document_type === "form-w4") && packetResult.data?.w4_document_path && packetResult.data?.w4_submitted_at) entries.push({ id: `legacy-w4-${packetId}`, document_label: "Signed Form W-4", version: null, submitted_at: packetResult.data.w4_submitted_at, sha256: null, storage_path: packetResult.data.w4_document_path, document_type: "form-w4", legacy: true });
-      const paths = entries.map((document: any) => document.storage_path);
-      const signedResult = paths.length ? await supabase.storage.from("onboarding-documents").createSignedUrls(paths, 3600) : { data: [], error: null };
-      if (signedResult.error) throw signedResult.error;
-      const urls = new Map((signedResult.data || []).map((item: any) => [item.path, item.signedUrl]));
-      const documents = (await Promise.all(entries.map(async (document: any) => {
-        await (supabase as any).rpc("log_sensitive_access", { _action: "view", _table_name: "officer_compliance_documents", _record_id: document.id, _details: { document_type: document.document_type, officer_id: hire.officer_id } });
-        const url = urls.get(document.storage_path);
-        if (!url) return null;
-        return { id: document.id, label: document.document_label, version: document.version, submittedAt: document.submitted_at, sha256: document.sha256, url, filename: `${document.document_type}${document.version ? `-v${document.version}` : ""}.pdf` };
-      }))).filter(Boolean);
-      setComplianceDocuments(documents);
-    } catch (error) {
-      console.error("Compliance file failed to load", error);
-      toast.error("The officer compliance file could not be loaded");
-    } finally {
-      setComplianceLoading(false);
-    }
-  };
-
-  const downloadDocument = async (file: typeof complianceDocuments[number]) => {
-    const response = await fetch(file.url);
-    if (!response.ok) throw new Error(`Could not download ${file.label}`);
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadAllDocuments = async () => {
-    if (!complianceDocuments.length) return;
-    setDownloadingDocuments(true);
-    try {
-      const files = await Promise.all(complianceDocuments.map(async (document) => {
-        const response = await fetch(document.url);
-        if (!response.ok) throw new Error(`Could not download ${document.label}`);
-        return { name: document.filename, data: await response.blob() };
-      }));
-      const archive = await createZip(files);
-      const url = URL.createObjectURL(archive);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${(complianceHire?.officer_profiles?.profiles?.full_name || "officer").replace(/[^a-z0-9]+/gi, "-")}-onboarding-documents.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
-      toast.success("Onboarding documents downloaded");
-    } catch (error: any) {
-      toast.error(error.message || "The onboarding documents could not be downloaded");
-    } finally {
-      setDownloadingDocuments(false);
     }
   };
 
@@ -418,7 +345,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
 
               <div className="rounded-xl border bg-background p-3"><div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /><p className="text-sm font-semibold">Pre-employment screening</p></div><Badge variant="outline" className={screeningFailed ? "border-red-200 bg-red-50 text-red-800" : screeningReady ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}>{screeningFailed ? "Failed result" : screeningReady ? "Required checks cleared" : "Action required"}</Badge></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{(hire.screening_checks || []).map((check: any) => <div key={check.id} className="rounded-lg border px-3 py-2"><p className="text-xs font-medium capitalize">{String(check.check_type).replace(/_/g, " ")}</p><p className={`mt-0.5 text-xs font-semibold ${check.status === "cleared" || check.status === "not_required" ? "text-green-700" : check.status === "failed" ? "text-red-700" : "text-amber-700"}`}>{String(check.status).replace(/_/g, " ")}</p></div>)}</div></div>
 
-              <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={!hire.onboarding_progress?.packet_id} onClick={() => void openComplianceFile(hire)}><FileCheck2 className="mr-2 h-4 w-4" />Onboarding documents</Button>{!finalized && <Button type="button" size="sm" variant="outline" className="border-orange-200 bg-orange-50 text-orange-800" onClick={() => setScreeningHire({ ...hire, hireId: hire.id, officerName: name, screeningChecks: hire.screening_checks || [] })}><ShieldCheck className="mr-2 h-4 w-4" />Update screening</Button>}{hire.onboarding_progress?.status === "submitted" && !finalized && <Button type="button" size="sm" disabled={!screeningReady} title={!screeningReady ? "Clear every required screening check first" : undefined} className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setOnboardingReviewHire(hire)}><CheckCircle className="mr-2 h-4 w-4" />Mark onboarding complete</Button>}{!finalized && <Button type="button" size="sm" variant="destructive" onClick={() => { setRejectingHire(hire); setRejectionReason(""); }}><UserX className="mr-2 h-4 w-4" />Move to Not Hired</Button>}<Button type="button" size="sm" variant="outline" onClick={() => { setSelectedHire(hire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add note or update</Button></div>
+              <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={!hire.onboarding_progress?.packet_id} onClick={() => setOnboardingDocumentsApplication({ officerName: name, officer: { id: hire.officer_id }, onboardingProgress: hire.onboarding_progress })}><FileCheck2 className="mr-2 h-4 w-4" />View complete onboarding packet</Button>{!finalized && <Button type="button" size="sm" variant="outline" className="border-orange-200 bg-orange-50 text-orange-800" onClick={() => setScreeningHire({ ...hire, hireId: hire.id, officerName: name, screeningChecks: hire.screening_checks || [] })}><ShieldCheck className="mr-2 h-4 w-4" />Update screening</Button>}{hire.onboarding_progress?.status === "submitted" && !finalized && <Button type="button" size="sm" disabled={!screeningReady} title={!screeningReady ? "Clear every required screening check first" : undefined} className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setOnboardingReviewHire(hire)}><CheckCircle className="mr-2 h-4 w-4" />Mark onboarding complete</Button>}{!finalized && <Button type="button" size="sm" variant="destructive" onClick={() => { setRejectingHire(hire); setRejectionReason(""); }}><UserX className="mr-2 h-4 w-4" />Move to Not Hired</Button>}<Button type="button" size="sm" variant="outline" onClick={() => { setSelectedHire(hire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add note or update</Button></div>
 
               {finalized && evaluations.length > 0 && <div><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Performance evaluations</h4><div className="grid gap-2 lg:grid-cols-3">{evaluations.map((evaluation: any) => { const status = getEvaluationStatus(evaluation); const StatusIcon = status.icon; return <div key={evaluation.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3"><div className="flex min-w-0 items-center gap-2"><StatusIcon className="h-4 w-4 shrink-0 text-muted-foreground" /><div><p className="text-sm font-medium">{periodNames[evaluation.evaluation_period]}</p><p className="text-xs text-muted-foreground">Due {new Date(evaluation.due_date).toLocaleDateString()}</p></div></div><div className="flex items-center gap-1"><Badge className={status.color}>{status.label}</Badge>{!evaluation.completed_date && <Button size="sm" variant="ghost" onClick={() => setSelectedEvaluation(evaluation)}>Open</Button>}</div></div>; })}</div></div>}
 
@@ -443,19 +370,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
       <Dialog open={Boolean(rejectingHire)} onOpenChange={(open) => { if (!open && !savingRejection) { setRejectingHire(null); setRejectionReason(""); } }}>
         <DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Move {rejectingHire?.officer_profiles?.profiles?.full_name || "officer"} to Not Hired?</DialogTitle><DialogDescription>This closes the pending hire while retaining the application, offer, screening, and onboarding records for company history.</DialogDescription></DialogHeader><div className="space-y-2"><Label htmlFor="not-hired-reason">Reason *</Label><Textarea id="not-hired-reason" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Example: Required drug screening was not passed" rows={4} /></div><DialogFooter><Button type="button" variant="outline" onClick={() => setRejectingHire(null)} disabled={savingRejection}>Cancel</Button><Button type="button" variant="destructive" onClick={() => void rejectPendingHire()} disabled={savingRejection || !rejectionReason.trim()}>{savingRejection ? "Moving…" : "Move to Not Hired"}</Button></DialogFooter></DialogContent>
       </Dialog>
-      <Dialog open={Boolean(complianceHire)} onOpenChange={(open) => !open && setComplianceHire(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
-          <DialogHeader><DialogTitle>{complianceHire?.officer_profiles?.profiles?.full_name || "Officer"} onboarding documents</DialogTitle><DialogDescription>Review and download the forms this officer completed. Signed records are retained by version and protected by expiring links.</DialogDescription></DialogHeader>
-          {complianceLoading ? <p className="flex items-center justify-center gap-2 py-8 text-center text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading onboarding documents...</p> : complianceDocuments.length ? (
-            <div className="space-y-4 py-4"><div className="flex items-center justify-between rounded-xl border border-green-200 bg-green-50 p-4"><div><strong className="block text-green-950">{complianceDocuments.length} completed document{complianceDocuments.length === 1 ? "" : "s"}</strong><span className="text-xs text-green-900/70">Ready for company records</span></div><Button type="button" onClick={() => void downloadAllDocuments()} disabled={downloadingDocuments}><Archive className="mr-2 h-4 w-4" />{downloadingDocuments ? "Preparing ZIP…" : "Download all"}</Button></div>{complianceDocuments.map((document) => (
-              <div key={document.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
-                <div className="min-w-0"><strong className="block">{document.label} {document.version && <Badge variant="secondary">Version {document.version}</Badge>}</strong><span className="block text-xs text-muted-foreground">Submitted {new Date(document.submittedAt).toLocaleString()}</span>{document.sha256 && <span className="block truncate font-mono text-[10px] text-muted-foreground" title={document.sha256}>SHA-256: {document.sha256}</span>}</div>
-                <div className="flex gap-2"><Button type="button" size="sm" onClick={() => window.open(document.url, "_blank", "noopener,noreferrer")}><Eye className="mr-2 h-4 w-4" />View</Button><Button type="button" size="sm" variant="outline" onClick={() => void downloadDocument(document).catch(() => toast.error(`Could not download ${document.label}`))}><Download className="mr-2 h-4 w-4" />Download</Button></div>
-              </div>
-            ))}</div>
-          ) : <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950"><strong className="block">No archived compliance documents yet</strong>Documents will appear here as the officer verifies and saves each onboarding form.</div>}
-        </DialogContent>
-      </Dialog>
+      <OnboardingDocumentsDialog open={Boolean(onboardingDocumentsApplication)} onOpenChange={(open) => !open && setOnboardingDocumentsApplication(null)} application={onboardingDocumentsApplication} />
     </div>
   );
 };

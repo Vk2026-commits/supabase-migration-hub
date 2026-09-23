@@ -171,9 +171,9 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application }: P
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <DialogTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-primary" />{application?.officerName || "Officer"} onboarding packet</DialogTitle>
-              <DialogDescription>Preview every completed page here, then print or download the complete packet.</DialogDescription>
+              <DialogDescription>Review every completed document together in one print-style packet.</DialogDescription>
             </div>
-            {packetUrl && <Button asChild size="sm" variant="outline"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download packet PDF</a></Button>}
+            {packetUrl && <Button asChild size="sm"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download all as one PDF</a></Button>}
           </div>
         </DialogHeader>
 
