@@ -79,6 +79,13 @@ const Navbar = () => {
   };
 
   const requestedRole = searchParams.get("viewAs");
+  const selectedCompanyId = searchParams.get("companyId");
+  const companyQuery = selectedCompanyId
+    ? `&companyId=${encodeURIComponent(selectedCompanyId)}`
+    : "";
+  const browseHref = selectedCompanyId
+    ? `/browse?companyId=${encodeURIComponent(selectedCompanyId)}`
+    : "/browse";
   const activeRole =
     (requestedRole === "officer" || requestedRole === "company") &&
     accountRoles.includes(requestedRole)
@@ -119,7 +126,7 @@ const Navbar = () => {
             <>
               {activeRole !== "officer" && (
                 <Button variant="ghost" asChild>
-                  <Link to="/browse">{t('nav.browse')}</Link>
+                  <Link to={browseHref}>{t('nav.browse')}</Link>
                 </Button>
               )}
               <Button variant="ghost" asChild>
@@ -127,8 +134,10 @@ const Navbar = () => {
                   to={
                     hasOfficerAndCompanyAccess &&
                     (activeRole === "officer" || activeRole === "company")
-                      ? `/dashboard?viewAs=${activeRole}`
-                      : "/dashboard"
+                      ? `/dashboard?viewAs=${activeRole}${activeRole === "company" ? companyQuery : ""}`
+                      : selectedCompanyId
+                        ? `/dashboard?companyId=${encodeURIComponent(selectedCompanyId)}`
+                        : "/dashboard"
                   }
                 >
                   {t('nav.dashboard')}
@@ -147,7 +156,7 @@ const Navbar = () => {
                       <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
                         Security Officer
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=company")}>
+                      <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
                         Company
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => navigate("/admin")}>
@@ -166,7 +175,7 @@ const Navbar = () => {
                     <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
                       Security Officer
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=company")}>
+                    <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
                       Company Team
                     </DropdownMenuItem>
                   </DropdownMenuContent>

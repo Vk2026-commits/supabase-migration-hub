@@ -28,25 +28,43 @@ serve(async (req) => {
       });
     }
 
-    const { tier } = await req.json();
+    const { company_id: companyId, tier } = await req.json();
 
-    if (!["professional", "premium"].includes(tier)) {
+    if (!companyId || !["professional", "premium"].includes(tier)) {
       return new Response(JSON.stringify({ error: "Invalid tier" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Get company profile
+    // Resolve the explicitly selected workspace. Never infer an owned company
+    // when the user is acting as an administrator in another company.
     const { data: company, error: companyError } = await supabase
       .from("company_profiles")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("id", companyId)
       .single();
 
     if (companyError || !company) {
       return new Response(JSON.stringify({ error: "Company profile not found" }), {
         status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const isOwner = company.user_id === user.id;
+    const { data: membership, error: membershipError } = isOwner
+      ? { data: null, error: null }
+      : await supabase
+        .from("company_members")
+        .select("role,status")
+        .eq("company_id", company.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+    if (membershipError) throw membershipError;
+    if (!isOwner && (membership?.status !== "active" || !["owner", "admin"].includes(membership.role))) {
+      return new Response(JSON.stringify({ error: "Company administrator access is required" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -66,7 +84,7 @@ serve(async (req) => {
         trial_end_date: tier === "professional" ? trialEndDate.toISOString() : null,
         subscription_start_date: trialStartDate.toISOString(),
       })
-      .eq("user_id", user.id);
+      .eq("id", company.id);
 
     if (updateError) {
       throw updateError;

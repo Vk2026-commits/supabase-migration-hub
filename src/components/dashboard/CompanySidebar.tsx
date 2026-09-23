@@ -19,9 +19,10 @@ interface CompanySidebarProps {
   onTabChange: (tab: string) => void;
   profileComplete: boolean;
   pendingOnboardingReviews?: number;
+  companyId?: string;
 }
 
-export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendingOnboardingReviews = 0 }: CompanySidebarProps) {
+export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendingOnboardingReviews = 0, companyId }: CompanySidebarProps) {
   const { open } = useSidebar();
 
   const groups = [
@@ -79,7 +80,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
                     <SidebarMenuItem key={item.value}>
                       {item.value === "browse" ? (
                         <SidebarMenuButton asChild tooltip={item.title}>
-                          <NavLink to="/browse" className="flex items-center gap-2" aria-label="Find security officers">
+                          <NavLink to={companyId ? `/browse?companyId=${encodeURIComponent(companyId)}` : "/browse"} className="flex items-center gap-2" aria-label="Find security officers">
                             <item.icon className="h-4 w-4" />
                             {open && <span>{item.title}</span>}
                           </NavLink>

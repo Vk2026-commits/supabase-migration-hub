@@ -240,7 +240,7 @@ Deno.serve(async (request) => {
       if (invitedUser) {
         const { data: pendingMembership, error: membershipLookupError } = await admin
           .from("company_members")
-          .select("status")
+          .select("status,invite_accepted_at")
           .eq("company_id", companyId)
           .eq("user_id", invitedUser.id)
           .maybeSingle();
@@ -261,6 +261,26 @@ Deno.serve(async (request) => {
               {
                 error:
                   "This invitation link was already accepted and account setup is still in progress. The recipient must finish creating the account or wait for the setup window to expire before requesting a new invitation.",
+              },
+              409,
+            );
+          }
+          const { count: otherMembershipCount, error: otherMembershipError } = await admin
+            .from("company_members")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", invitedUser.id)
+            .neq("company_id", companyId);
+          if (otherMembershipError) throw otherMembershipError;
+          const { count: ownedCompanyCount, error: ownedCompanyError } = await admin
+            .from("company_profiles")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", invitedUser.id);
+          if (ownedCompanyError) throw ownedCompanyError;
+          if ((otherMembershipCount || 0) > 0 || (ownedCompanyCount || 0) > 0) {
+            return json(
+              {
+                error:
+                  "This account has another company invitation in progress. The recipient must finish that account setup before joining this team.",
               },
               409,
             );
@@ -288,12 +308,54 @@ Deno.serve(async (request) => {
             !existingUser?.last_sign_in_at;
 
           if (unusedInvitation) {
+            const [membershipResult, ownedCompanyResult] = await Promise.all([
+              admin
+                .from("company_members")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", invitedUser.id),
+              admin
+                .from("company_profiles")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", invitedUser.id),
+            ]);
+            if (membershipResult.error) throw membershipResult.error;
+            if (ownedCompanyResult.error) throw ownedCompanyResult.error;
+            if ((membershipResult.count || 0) > 0 || (ownedCompanyResult.count || 0) > 0) {
+              return json(
+                {
+                  error:
+                    "This account has a company invitation in progress. The recipient must finish creating the account before joining another company.",
+                },
+                409,
+              );
+            }
             const { error: deleteUnusedInviteError } = await admin.auth.admin.deleteUser(
               invitedUser.id,
             );
             if (deleteUnusedInviteError) throw deleteUnusedInviteError;
             invitedUser = null;
             renewedUnusedInvitation = true;
+          }
+        }
+
+        if (!pendingMembership && invitedUser) {
+          const { data: unfinishedMembership, error: unfinishedMembershipError } = await admin
+            .from("company_members")
+            .select("id")
+            .eq("user_id", invitedUser.id)
+            .neq("company_id", companyId)
+            .in("status", ["invited", "accepted"])
+            .limit(1)
+            .maybeSingle();
+          if (unfinishedMembershipError) throw unfinishedMembershipError;
+          if (unfinishedMembership) {
+            return json(
+              {
+                error:
+                  "This account has another company invitation in progress. The recipient must finish that account setup before joining this team.",
+              },
+              409,
+            );
           }
         }
       }
@@ -311,14 +373,6 @@ Deno.serve(async (request) => {
         invited = true;
       }
 
-      const { data: otherMembership } = await admin
-        .from("company_members")
-        .select("company_id")
-        .eq("user_id", invitedUser.id)
-        .neq("company_id", companyId)
-        .maybeSingle();
-      if (otherMembership)
-        return json({ error: "This account already belongs to another company team" }, 409);
       if (invitedUser.id === company.user_id)
         return json({ error: "The company owner is already on this team" }, 409);
 

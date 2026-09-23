@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "@/lib/router-compat";
+import { useNavigate, useSearchParams } from "@/lib/router-compat";
 import Navbar from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,9 +38,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import HireButton from "@/components/dashboard/HireButton";
 import { toast } from "sonner";
 import { ApplicantReviewDialog } from "@/components/dashboard/ApplicantReviewDialog";
+import { loadCompanyWorkspaces, selectCompanyWorkspace } from "@/lib/company-workspaces";
 
 const Browse = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedCompanyId = searchParams.get("companyId");
   const [officers, setOfficers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -81,8 +84,12 @@ const Browse = () => {
     );
 
   useEffect(() => {
-    checkAccess();
-  }, []);
+    void checkAccess().catch((error) => {
+      console.error("Failed to load company workspace", error);
+      toast.error("The selected company workspace could not be loaded");
+      setLoading(false);
+    });
+  }, [requestedCompanyId]);
 
   const checkAccess = async () => {
     const {
@@ -111,30 +118,14 @@ const Browse = () => {
       return;
     }
 
-    // Company owners use their own profile. Invited company team members use
-    // the active membership's company profile after their own setup completes.
-    const { data: ownedCompany } = await supabase
-      .from("company_profiles")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .maybeSingle();
+    const workspaces = await loadCompanyWorkspaces(session.user.id);
+    const selectedWorkspace = selectCompanyWorkspace(workspaces, requestedCompanyId);
+    const companyData = selectedWorkspace?.company || null;
 
-    let companyData = ownedCompany;
-    if (!companyData) {
-      const { data: membership } = await supabase
-        .from("company_members")
-        .select("company_id")
-        .eq("user_id", session.user.id)
-        .eq("status", "active")
-        .maybeSingle();
-      if (membership?.company_id) {
-        const { data: memberCompany } = await supabase
-          .from("company_profiles")
-          .select("*")
-          .eq("id", membership.company_id)
-          .maybeSingle();
-        companyData = memberCompany;
-      }
+    if (companyData && requestedCompanyId !== companyData.id) {
+      const nextParams = new URLSearchParams(window.location.search);
+      nextParams.set("companyId", companyData.id);
+      setSearchParams(nextParams, { replace: true });
     }
 
     if (!companyData || !companyProfileIsComplete(companyData)) {
@@ -149,21 +140,6 @@ const Browse = () => {
     setCompanyProfile(companyData);
     await loadOfficers();
     await loadOfficerInterests(companyData.id);
-  };
-
-  const loadUserProfile = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (session) {
-      setCurrentUser(session.user);
-      const { data } = await supabase
-        .from("company_profiles")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      setCompanyProfile(data);
-    }
   };
 
   const loadOfficerInterests = async (companyId: string) => {

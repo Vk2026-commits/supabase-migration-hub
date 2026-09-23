@@ -29,11 +29,16 @@ import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileWizard";
 import CompanyTeam from "./CompanyTeam";
 import ClientSites from "./ClientSites";
-import type { Database } from "@/integrations/supabase/types";
 import { AccountSettings } from "./AccountSettings";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { DashboardSectionHeader } from "./DashboardSectionHeader";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  loadCompanyWorkspaces,
+  selectCompanyWorkspace,
+  type CompanyProfile,
+  type CompanyWorkspace,
+} from "@/lib/company-workspaces";
 
 interface CompanyDashboardProps {
   userId: string;
@@ -54,8 +59,6 @@ const companyTabs = new Set([
   "account",
 ]);
 
-type CompanyProfile = Database["public"]["Tables"]["company_profiles"]["Row"];
-
 const companySectionDetails: Record<string, { title: string; description: string; icon: LucideIcon }> = {
   profile: { title: "Company profile", description: "Keep your company and hiring-contact information current.", icon: Building2 },
   jobs: { title: "Job postings", description: "Create and manage open security positions.", icon: Briefcase },
@@ -75,7 +78,9 @@ const errorMessage = (error: unknown, fallback: string) =>
 const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
+  const requestedCompanyId = searchParams.get("companyId");
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
+  const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
   const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
   const [accountProfile, setAccountProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -165,35 +170,22 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   }, [activeTab]);
 
   const loadProfile = useCallback(async () => {
-    const { data: ownedCompany } = await supabase
-      .from("company_profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    let data = ownedCompany;
-    let teamRole: string | null = ownedCompany ? "owner" : null;
-    if (!data) {
-      const { data: membership } = await supabase
-        .from("company_members")
-        .select("company_id,role,status")
-        .eq("user_id", userId)
-        .eq("status", "active")
-        .maybeSingle();
-      if (membership?.company_id) {
-        const { data: memberCompany } = await supabase
-          .from("company_profiles")
-          .select("*")
-          .eq("id", membership.company_id)
-          .maybeSingle();
-        data = memberCompany;
-        teamRole = membership.role;
-      }
-    }
-    setCompanyTeamRole(teamRole);
-
-    if (data) {
+    setProfileLoaded(false);
+    try {
+      const availableWorkspaces = await loadCompanyWorkspaces(userId);
+      const selectedWorkspace = selectCompanyWorkspace(availableWorkspaces, requestedCompanyId);
+      const data = selectedWorkspace?.company || null;
+      setCompanyWorkspaces(availableWorkspaces);
+      setCompanyTeamRole(selectedWorkspace?.role || null);
       setCompanyProfile(data);
+
+      if (data && requestedCompanyId !== data.id) {
+        const nextParams = new URLSearchParams(window.location.search);
+        nextParams.set("companyId", data.id);
+        setSearchParams(nextParams, { replace: true });
+      }
+
+      if (!data) return;
       setFormData({
         company_name: data.company_name || "",
         company_address: data.company_address || "",
@@ -222,13 +214,32 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         year_founded: data.year_founded?.toString() || "",
         logo_url: data.logo_url || "",
       });
+    } catch (error) {
+      console.error("Failed to load company workspaces", error);
+      toast.error(errorMessage(error, "Company workspaces could not be loaded"));
+      setCompanyProfile(null);
+      setCompanyWorkspaces([]);
+      setCompanyTeamRole(null);
+    } finally {
+      setProfileLoaded(true);
     }
-    setProfileLoaded(true);
-  }, [userId]);
+  }, [requestedCompanyId, setSearchParams, userId]);
 
   useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  const switchCompanyWorkspace = (companyId: string) => {
+    if (companyId === companyProfile?.id) return;
+    setProfileLoaded(false);
+    setCompanyProfile(null);
+    setPendingOnboardingReviews(0);
+    setActiveTab("overview");
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("companyId", companyId);
+    nextParams.set("tab", "overview");
+    setSearchParams(nextParams);
+  };
 
   useEffect(() => {
     if (!companyProfile?.id) return;
@@ -290,7 +301,6 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       }
 
       const profileData = {
-        user_id: userId,
         ...formData,
         logo_url: logoUrl,
         year_founded: formData.year_founded ? parseInt(formData.year_founded) : null,
@@ -304,7 +314,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("company_profiles").insert(profileData);
+        const { error } = await supabase.from("company_profiles").insert({
+          ...profileData,
+          user_id: userId,
+        });
 
         if (error) throw error;
       }
@@ -350,6 +363,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
           onTabChange={selectTab}
           profileComplete={companyProfileComplete}
           pendingOnboardingReviews={pendingOnboardingReviews}
+          companyId={companyProfile?.id || requestedCompanyId || undefined}
         />
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -360,6 +374,24 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                 <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-10 w-10" />
                 <span className="min-w-0"><span className="block truncate text-xl font-bold">Welcome, {accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-muted-foreground">{formData.company_name || "Company representative"}</span></span>
               </button>
+              {companyWorkspaces.length > 1 && companyProfile && (
+                <div className="ml-auto w-full max-w-[280px]">
+                  <label htmlFor="company-workspace" className="sr-only">Company workspace</label>
+                  <Select value={companyProfile.id} onValueChange={switchCompanyWorkspace}>
+                    <SelectTrigger id="company-workspace" className="bg-background" aria-label="Switch company workspace">
+                      <Building2 className="mr-2 h-4 w-4 shrink-0 text-primary" />
+                      <SelectValue placeholder="Choose a company" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {companyWorkspaces.map((workspace) => (
+                        <SelectItem key={workspace.company.id} value={workspace.company.id}>
+                          {workspace.company.company_name}{workspace.owned ? " (Owner)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
 
@@ -407,7 +439,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                     isComplete={companyProfileComplete}
                     onSave={() => handleSubmit(undefined, false)}
                     onBrowse={() => {
-                      window.location.href = "/browse";
+                      window.location.href = companyProfile
+                        ? `/browse?companyId=${encodeURIComponent(companyProfile.id)}`
+                        : "/browse";
                     }}
                     canEdit={companyTeamRole === "owner" || companyTeamRole === "admin"}
                   />
@@ -974,7 +1008,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                   </CardHeader>
                   <CardContent>
                     <Button asChild>
-                      <a href="/browse">Browse Professionals</a>
+                      <a href={companyProfile ? `/browse?companyId=${encodeURIComponent(companyProfile.id)}` : "/browse"}>Browse Professionals</a>
                     </Button>
                   </CardContent>
                 </Card>
@@ -1029,6 +1063,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
             {activeTab === "subscriptions" && companyProfile && (
               <SubscriptionManager
+                companyId={companyProfile.id}
                 currentTier={companyProfile.subscription_tier ?? "free"}
                 onUpgrade={(tier) => {
                   toast.success(`Upgrading to ${tier}...`);

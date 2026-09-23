@@ -5,11 +5,12 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface SubscriptionManagerProps {
+  companyId: string;
   currentTier: string;
   onUpgrade: (tier: string) => void;
 }
 
-const SubscriptionManager = ({ currentTier, onUpgrade }: SubscriptionManagerProps) => {
+const SubscriptionManager = ({ companyId, currentTier, onUpgrade }: SubscriptionManagerProps) => {
   const handleUpgrade = async (tier: string) => {
     try {
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upgrade-subscription`, {
@@ -18,7 +19,7 @@ const SubscriptionManager = ({ currentTier, onUpgrade }: SubscriptionManagerProp
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
-        body: JSON.stringify({ tier }),
+        body: JSON.stringify({ company_id: companyId, tier }),
       });
 
       if (!response.ok) throw new Error('Upgrade failed');

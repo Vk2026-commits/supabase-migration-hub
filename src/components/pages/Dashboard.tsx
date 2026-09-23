@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 import CompanyDashboard from "@/components/dashboard/CompanyDashboard";
 import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
+import { loadCompanyWorkspaces, selectCompanyWorkspace } from "@/lib/company-workspaces";
 
 type AccountProfile = {
   role?: string | null;
@@ -27,6 +28,7 @@ const Dashboard = () => {
   const [searchParams] = useSearchParams();
   const viewAs = searchParams.get("viewAs");
   const onboarding = searchParams.get("onboarding");
+  const requestedCompanyId = searchParams.get("companyId");
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<AccountProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,6 +87,8 @@ const Dashboard = () => {
             .select("id,status,password_created_at")
             .eq("user_id", session.user.id)
             .in("status", ["invited", "accepted"])
+            .order("invited_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (membershipError) throw membershipError;
@@ -103,13 +107,8 @@ const Dashboard = () => {
 
         // Check if this is a company with expired trial.
         if (effectiveRole === "company") {
-          const { data: companyData, error: companyError } = await supabase
-            .from("company_profiles")
-            .select("*")
-            .eq("user_id", session.user.id)
-            .maybeSingle();
-
-          if (companyError) throw companyError;
+          const workspaces = await loadCompanyWorkspaces(session.user.id);
+          const companyData = selectCompanyWorkspace(workspaces, requestedCompanyId)?.company || null;
           if (companyData) {
             setCompanyProfile(companyData);
 
@@ -130,7 +129,7 @@ const Dashboard = () => {
     };
 
     getProfile();
-  }, [navigate, viewAs]);
+  }, [navigate, requestedCompanyId, viewAs]);
 
   if (loading) {
     return (
@@ -161,12 +160,8 @@ const Dashboard = () => {
 
   const handleUpgradeComplete = async () => {
     setShowExpiredTrialDialog(false);
-    // Reload the profile data
-    const { data: companyData } = await supabase
-      .from("company_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+    const workspaces = await loadCompanyWorkspaces(user.id);
+    const companyData = selectCompanyWorkspace(workspaces, requestedCompanyId)?.company || null;
 
     if (companyData) {
       setCompanyProfile(companyData);
