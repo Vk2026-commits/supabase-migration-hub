@@ -354,6 +354,21 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     return "not_started";
   };
   const complete = useMemo(() => requiredSteps.every(stepRequirementsMet), [form, shared, acknowledged, selectedJobId, photosComplete, certificationComplete]);
+  const requiredStepLabels: Record<number, string> = {
+    0: "company and position",
+    1: "personal information",
+    2: "eligibility questions",
+    3: "qualifications",
+    6: "availability",
+    9: "review, consent, and signature",
+  };
+  const missingRequiredSteps = requiredSteps.filter((step) => !stepRequirementsMet(step));
+  const signatureChecklist = [
+    { label: "Consent checkbox", complete: acknowledged },
+    { label: "Printed legal name", complete: Boolean(form.signature.trim()) },
+    { label: "Signature", complete: Boolean(form.signatureImage) },
+    { label: "Date signed", complete: Boolean(form.signatureDate) },
+  ];
   const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
   const updatePhotoCompletion = (complete: boolean) => {
     setPhotosSaved(complete);
@@ -420,7 +435,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   const submit = async (event: React.FormEvent) => {
-    event.preventDefault(); if (!complete || !activeOfficerId) { toast.error("Complete every required application item before submitting"); return; }
+    event.preventDefault();
+    if (!activeOfficerId) { toast.error("Your officer profile is not ready yet. Refresh the page and try again."); return; }
+    if (!complete) {
+      const firstMissingStep = missingRequiredSteps[0];
+      const missingLabel = requiredStepLabels[firstMissingStep] || "required application information";
+      toast.error(`Still needed: ${missingLabel}. We are taking you to that section.`);
+      if (firstMissingStep !== undefined && firstMissingStep !== currentStep) await go(firstMissingStep);
+      return;
+    }
     setSubmitting(true);
     try {
       // Final submission must also persist application work history into the
@@ -601,9 +624,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
         {currentStep === 7 && <OfficerPhotos userId={userId} embedded optional onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
         {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={updateCertifications} />}
-        {currentStep === 9 && <div className="space-y-8"><section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">New-hire paperwork comes later</p><p className="mt-1">Form I-9, Form W-4, payroll, and company policies are completed only after you accept an employment offer.</p></section><section className="space-y-5"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Printed full legal name" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5"><SignaturePad value={form.signatureImage} suggestedName={form.signature || form.applicantName} onChange={value => update("signatureImage", value)} /></div><div className="rounded-xl bg-muted/40 p-4 text-sm"><p className="font-semibold">Application checklist</p><p>✓ Required application information &nbsp; {availabilityComplete ? "✓" : "○"} Availability &nbsp; {resumePath ? "✓ Resume" : "○ Resume optional"} &nbsp; {photosComplete ? "✓ Photos" : "○ Photos optional"} &nbsp; {certificationComplete ? "✓ Credentials" : "○ Credentials optional"}</p></div></section></div>}
+        {currentStep === 9 && <div className="space-y-8"><section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">New-hire paperwork comes later</p><p className="mt-1">Form I-9, Form W-4, payroll, and company policies are completed only after you accept an employment offer.</p></section><section className="space-y-5"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Printed full legal name" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5"><SignaturePad value={form.signatureImage} suggestedName={form.signature || form.applicantName} onChange={value => update("signatureImage", value)} /></div><div className={`rounded-xl border p-4 text-sm ${complete ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}><p className="font-semibold">Before you submit</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{signatureChecklist.map((item) => <p key={item.label} className={item.complete ? "text-green-800" : "font-semibold text-amber-900"}>{item.complete ? "✓" : "○"} {item.label}{item.complete ? " complete" : " required"}</p>)}</div>{missingRequiredSteps.some((step) => step !== 9) && <p className="mt-3 font-semibold text-amber-900">Also needed: {missingRequiredSteps.filter((step) => step !== 9).map((step) => requiredStepLabels[step]).join(", ")}.</p>}<p className="mt-3 text-muted-foreground">Resume, photos, and credentials are optional and do not prevent submission.</p></div></section></div>}
       </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={pdfApplication} resubmitting={editingSubmitted} optionalStep={(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete)} /></main></div>
-    <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"><Button type="button" variant="outline" size="lg" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="h-5 w-5" /></Button>{currentStep < 9 ? <Button type="button" size="lg" className="flex-1" onClick={next}>{(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete) ? "Skip for now" : "Continue"}<ArrowRight className="ml-2 h-5 w-5" /></Button> : <Button type="submit" size="lg" className="flex-1" disabled={submitting || !complete}><FileCheck2 className="mr-2 h-5 w-5" />{submitting ? "Submitting…" : editingSubmitted ? "Resubmit" : "Submit Application"}</Button>}</div>
+    <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"><Button type="button" variant="outline" size="lg" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="h-5 w-5" /></Button>{currentStep < 9 ? <Button type="button" size="lg" className="flex-1" onClick={next}>{(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete) ? "Skip for now" : "Continue"}<ArrowRight className="ml-2 h-5 w-5" /></Button> : <Button type="submit" size="lg" className="flex-1" disabled={submitting}><FileCheck2 className="mr-2 h-5 w-5" />{submitting ? "Submitting…" : editingSubmitted ? "Resubmit" : "Submit Application"}</Button>}</div>
   </form>;
 }
 
@@ -664,4 +687,4 @@ function TimeSelect({ label, value, placeholder, onChange }: { label: string; va
     : timeOptions;
   return <div className="space-y-2"><Label className="text-sm">{label}</Label><select aria-label={label} className="h-12 w-full rounded-lg border bg-background px-3 text-base" value={value} onChange={event => onChange(event.target.value)}><option value="">{placeholder}</option>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>;
 }
-function Actions({ current, go, next, submit, complete, form, resubmitting, optionalStep }: any) { return <div className="mt-5 hidden items-center justify-between lg:flex"><Button type="button" variant="outline" onClick={() => go(current - 1)} disabled={!current}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>{current < 9 ? <Button type="button" onClick={next}>{optionalStep ? "Skip for now" : "Continue"}<ArrowRight className="ml-2 h-4 w-4" /></Button> : <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(form)}><Download className="mr-2 h-4 w-4" />Preview PDF</Button><Button type="submit" disabled={submit || !complete}><FileCheck2 className="mr-2 h-4 w-4" />{submit ? "Submitting…" : resubmitting ? "Resubmit" : "Submit Application"}</Button></div>}</div>; }
+function Actions({ current, go, next, submit, form, resubmitting, optionalStep }: any) { return <div className="mt-5 hidden items-center justify-between lg:flex"><Button type="button" variant="outline" onClick={() => go(current - 1)} disabled={!current}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>{current < 9 ? <Button type="button" onClick={next}>{optionalStep ? "Skip for now" : "Continue"}<ArrowRight className="ml-2 h-4 w-4" /></Button> : <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(form)}><Download className="mr-2 h-4 w-4" />Preview PDF</Button><Button type="submit" disabled={submit}><FileCheck2 className="mr-2 h-4 w-4" />{submit ? "Submitting…" : resubmitting ? "Resubmit" : "Submit Application"}</Button></div>}</div>; }
