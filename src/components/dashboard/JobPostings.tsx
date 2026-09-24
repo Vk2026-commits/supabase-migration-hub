@@ -189,8 +189,8 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Job Postings</h3>
+      <div className="flex items-center justify-between border-b pb-3">
+        <div><h3 className="text-lg font-semibold">Job postings</h3><p className="text-sm text-muted-foreground">Manage open positions and candidate activity.</p></div>
         <Dialog open={showForm} onOpenChange={setShowForm}>
           <DialogTrigger asChild>
             <Button onClick={() => { resetForm(); setEditingJob(null); }}>
@@ -324,67 +324,21 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
         </Dialog>
       </div>
 
-      <div className="space-y-4">
+      <div className="overflow-hidden border bg-background">
         {jobs.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
+          <div className="py-10 text-center text-muted-foreground">
               No job postings yet. Create your first posting to attract security officers.
-            </CardContent>
-          </Card>
+          </div>
         ) : (
-          jobs.map((job) => (
-            <Card key={job.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <CardTitle className="flex items-center gap-2">
-                      <Briefcase className="h-5 w-5" />
-                      {job.title}
-                    </CardTitle>
-                    <CardDescription className="flex items-center gap-4 text-sm">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {job.location}
-                      </span>
-                      {job.hourly_rate_min && (
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="h-3 w-3" />
-                          ${job.hourly_rate_min}{job.hourly_rate_max && ` - $${job.hourly_rate_max}`}/hr
-                        </span>
-                      )}
-                    </CardDescription>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => void copyCandidateLink(job.id)}><Link2 className="mr-2 h-4 w-4" />Copy candidate link</Button>
-                    <Button variant="outline" size="sm" onClick={() => void openCandidateLeads(job)}><Users className="mr-2 h-4 w-4" />Leads ({leadCounts[job.id] || 0})</Button>
-                    <Badge variant={job.status === "active" ? "default" : "secondary"}>
-                      {job.status}
-                    </Badge>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {job.description && <p className="text-sm">{job.description}</p>}
-                <div className="flex flex-wrap gap-2">
-                  {job.employment_type?.map((type: string) => (
-                    <Badge key={type} variant="outline">
-                      {type}
-                    </Badge>
-                  ))}
-                  {job.shift_type?.map((shift: string) => (
-                    <Badge key={shift} variant="outline">
-                      {shift}
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t">
-                  <span className="text-sm text-muted-foreground">
-                    {job.job_applications?.[0]?.count || 0} interested officers
-                  </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(job)}>
-                      Edit
-                    </Button>
+          <><div className="hidden grid-cols-[minmax(240px,1.2fr)_minmax(180px,.8fr)_130px_150px_auto] gap-4 border-b bg-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid"><span>Position</span><span>Location / rate</span><span>Status</span><span>Activity</span><span className="text-right">Actions</span></div>{jobs.map((job) => (
+            <div key={job.id} className="grid gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-slate-50/70 lg:grid-cols-[minmax(240px,1.2fr)_minmax(180px,.8fr)_130px_150px_auto] lg:items-center lg:gap-4">
+              <div className="min-w-0"><p className="truncate font-semibold">{job.title}</p><p className="truncate text-xs text-muted-foreground">{(job.employment_type || []).join(", ") || "Employment type not set"} · {(job.shift_type || []).join(", ") || "Shift not set"}</p></div>
+              <div className="text-sm text-muted-foreground"><p className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.location}</p>{job.hourly_rate_min ? <p className="mt-1 flex items-center gap-1 text-xs"><DollarSign className="h-3 w-3" />${job.hourly_rate_min}{job.hourly_rate_max && `–$${job.hourly_rate_max}`}/hr</p> : null}</div>
+              <div><Badge variant={job.status === "active" ? "default" : "secondary"}>{job.status}</Badge></div>
+              <button type="button" onClick={() => void openCandidateLeads(job)} className="text-left text-sm font-medium text-primary hover:underline">{job.job_applications?.[0]?.count || 0} applicants · {leadCounts[job.id] || 0} leads</button>
+              <div className="flex flex-wrap gap-1.5 lg:justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => void copyCandidateLink(job.id)} title="Copy candidate link"><Link2 className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(job)}>Edit</Button>
                     <Button
                       variant={job.status === 'pending' ? 'default' : 'outline'}
                       size="sm"
@@ -420,11 +374,9 @@ const JobPostings = ({ companyId }: JobPostingsProps) => {
                     >
                       <X className="h-4 w-4" />
                     </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+              </div>
+            </div>
+          ))}</>
         )}
       </div>
 

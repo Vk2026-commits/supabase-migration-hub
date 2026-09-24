@@ -65,8 +65,8 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
 
   return (
     <Sidebar className={open ? "w-60" : "w-14"} collapsible="icon">
-      <div className="h-16 border-b flex items-center justify-center">
-        <span className={`font-semibold ${!open && "hidden"}`}>Menu</span>
+      <div className="flex h-14 items-center justify-center border-b bg-slate-950 text-white">
+        <span className={`text-sm font-semibold ${!open && "hidden"}`}>Company workspace</span>
       </div>
       <SidebarContent>
         {groups.map((group, groupIndex) => (

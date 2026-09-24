@@ -213,9 +213,9 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="rounded-2xl">
-        <CardHeader>
+    <div className="overflow-hidden border bg-background">
+      <Card className="rounded-none border-0 border-b bg-transparent shadow-none">
+        <CardHeader className="px-4 py-4 sm:px-5">
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
             Company team
@@ -225,8 +225,8 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
           </CardDescription>
         </CardHeader>
         {canManage && (
-          <CardContent>
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+          <CardContent className="px-4 pb-4 sm:px-5">
+            <div className="border-t bg-slate-50 p-4">
               <div className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-primary" />
                 <h3 className="font-semibold">Add a team member</h3>
@@ -273,15 +273,15 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
         )}
       </Card>
 
-      <Card className="rounded-2xl">
-        <CardHeader>
+      <Card className="rounded-none border-0 bg-transparent shadow-none">
+        <CardHeader className="border-b px-4 py-4 sm:px-5">
           <CardTitle>Team members</CardTitle>
           <CardDescription>
             {members.length} {members.length === 1 ? "person is" : "people are"} listed for this
             company. Only active members have access.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="p-0">
           {loading ? (
             <p className="py-6 text-center text-muted-foreground">Loading company team…</p>
           ) : loadError ? (
@@ -297,7 +297,7 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
             members.map((member) => (
               <div
                 key={member.id}
-                className="flex flex-wrap items-center gap-4 rounded-xl border p-4"
+                className="flex flex-wrap items-center gap-4 border-b px-4 py-3 last:border-b-0 hover:bg-slate-50/70 sm:px-5"
               >
                 <ProfileAvatar name={member.full_name} email={member.email} src={member.avatar_url} />
                 <div className="min-w-0 flex-1">

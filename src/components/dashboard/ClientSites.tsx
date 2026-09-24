@@ -188,7 +188,7 @@ export default function ClientSites({ companyId, canManage }: ClientSitesProps) 
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold">Client sites</h2>
@@ -231,24 +231,16 @@ export default function ClientSites({ companyId, canManage }: ClientSitesProps) 
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="overflow-hidden border bg-background">
+          <div className="hidden grid-cols-[minmax(220px,1fr)_minmax(260px,1.2fr)_minmax(220px,1fr)_auto] gap-4 border-b bg-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground lg:grid">
+            <span>Site</span><span>Address</span><span>Schedule</span><span>Actions</span>
+          </div>
           {sites.map((site) => (
-            <Card key={site.id} className={!site.is_active ? "opacity-65" : ""}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-lg">{site.site_name}</CardTitle>
-                    <CardDescription>{site.client_name}</CardDescription>
-                  </div>
-                  <Badge variant={site.is_active ? "default" : "secondary"}>
-                    {site.is_active ? "Available for offers" : "Archived"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <p className="flex items-start gap-2">
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span>
+            <div key={site.id} className={`grid gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-slate-50/70 lg:grid-cols-[minmax(220px,1fr)_minmax(260px,1.2fr)_minmax(220px,1fr)_auto] lg:items-center lg:gap-4 ${!site.is_active ? "opacity-65" : ""}`}>
+              <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="truncate font-semibold">{site.site_name}</p><Badge variant={site.is_active ? "default" : "secondary"}>{site.is_active ? "Active" : "Archived"}</Badge></div><p className="truncate text-sm text-muted-foreground">{site.client_name}</p></div>
+              <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="line-clamp-2">
                     {[
                       site.address_street,
                       site.address_unit,
@@ -259,26 +251,16 @@ export default function ClientSites({ companyId, canManage }: ClientSitesProps) 
                       .filter(Boolean)
                       .join(", ")}
                   </span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              </p>
+              <div className="text-sm text-muted-foreground"><p className="flex items-start gap-2"><Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     {(site.shift_days || []).map((day: string) => day.slice(0, 3)).join(", ")} ·{" "}
                     {timeLabel(site.shift_start_time)}–{timeLabel(site.shift_end_time)} ·{" "}
                     {Number(site.expected_weekly_hours)} hrs/week
                     {site.schedule_notes ? ` · ${site.schedule_notes}` : ""}
-                  </span>
-                </p>
-                <p className="flex items-start gap-2">
-                  <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <span>
-                    Supervisor: {site.supervisor_name}
-                    {site.site_contact_name ? ` · Site contact: ${site.site_contact_name}` : ""}
-                    {site.site_contact_phone ? ` (${site.site_contact_phone})` : ""}
-                  </span>
-                </p>
+                  </span></p><p className="mt-1 truncate text-xs">Supervisor: {site.supervisor_name}</p></div>
                 {canManage && (
-                  <div className="flex gap-2 border-t pt-3">
+                  <div className="flex gap-2 lg:justify-end">
                     <Button size="sm" variant="outline" onClick={() => startEdit(site)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
@@ -304,8 +286,7 @@ export default function ClientSites({ companyId, canManage }: ClientSitesProps) 
                     )}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </div>
           ))}
         </div>
       )}

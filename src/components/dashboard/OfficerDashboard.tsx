@@ -763,7 +763,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         />
         <div className="flex min-w-0 flex-1">
           <div className="min-w-0 flex-1">
-            <div className="flex h-12 items-center border-b bg-background px-4 sm:px-5">
+            <div className="flex h-12 items-center border-b border-slate-800 bg-slate-950 px-4 text-white sm:px-5">
               <SidebarTrigger />
             </div>
             <OperationsIdentityHeader

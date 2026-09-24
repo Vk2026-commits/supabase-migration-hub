@@ -1,4 +1,4 @@
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarSeparator, useSidebar } from "@/components/ui/sidebar";
 import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole, CalendarClock, LayoutDashboard, Settings } from "lucide-react";
 
 interface OfficerSidebarProps {
@@ -28,20 +28,12 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
     return value;
   };
 
-  const items = [
-    { title: "Dashboard", value: "overview", icon: LayoutDashboard },
-    { title: "Hiring Application", value: "hiring-application", icon: ClipboardList },
-    { title: "Employee Onboarding", value: "employee-onboarding", icon: ClipboardCheck },
-    { title: "Profile", value: "profile", icon: User },
-    { title: "Availability", value: "availability", icon: Clock },
-    { title: "Photos", value: "photos", icon: Images },
-    { title: "Certifications and Certificates", value: "certifications", icon: Award },
-    { title: "Work History", value: "work-history", icon: Briefcase },
-    { title: "Interview History", value: "interview-history", icon: CalendarClock },
-    { title: "Video Interviews", value: "videos", icon: Video },
-    { title: "Find a Job", value: "find-jobs", icon: Search },
-    { title: "Messages", value: "messages", icon: MessageCircle },
-    { title: "Account Settings", value: "account", icon: Settings },
+  const groups = [
+    { label: "Overview", items: [{ title: "Dashboard", value: "overview", icon: LayoutDashboard }] },
+    { label: "Hiring", items: [{ title: "Hiring Application", value: "hiring-application", icon: ClipboardList }, { title: "Employee Onboarding", value: "employee-onboarding", icon: ClipboardCheck }] },
+    { label: "Officer Record", items: [{ title: "Profile", value: "profile", icon: User }, { title: "Availability", value: "availability", icon: Clock }, { title: "Photos", value: "photos", icon: Images }, { title: "Licenses and Certificates", value: "certifications", icon: Award }, { title: "Work History", value: "work-history", icon: Briefcase }] },
+    { label: "Career", items: [{ title: "Interview History", value: "interview-history", icon: CalendarClock }, { title: "Video Interviews", value: "videos", icon: Video }, { title: "Find a Job", value: "find-jobs", icon: Search }, { title: "Messages", value: "messages", icon: MessageCircle }] },
+    { label: "Account", items: [{ title: "Account Settings", value: "account", icon: Settings }] },
   ];
 
   const getNavCls = (value: string) => {
@@ -70,15 +62,16 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
 
   return (
     <Sidebar className={open ? "w-60" : "w-14"} collapsible="icon">
-      <div className="h-16 border-b flex items-center justify-center">
-        <span className={`font-semibold ${!open && "hidden"}`}>Menu</span>
+      <div className="flex h-14 items-center justify-center border-b bg-slate-950 text-white">
+        <span className={`text-sm font-semibold ${!open && "hidden"}`}>Officer workspace</span>
       </div>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Officer</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
+        {groups.map((group, groupIndex) => <div key={group.label}>
+          {groupIndex > 0 && <SidebarSeparator className="mx-3 w-auto" />}
+          <SidebarGroup className="py-2">
+            <SidebarGroupLabel className="text-[11px] font-bold uppercase tracking-[0.12em]">{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>{group.items.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   <SidebarMenuButton
                     onClick={() => item.value !== "employee-onboarding" || !onboardingOfferLoaded || onboardingAvailable ? onTabChange(item.value) : undefined}
@@ -97,10 +90,10 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
                     </div>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+              ))}</SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </div>)}
       </SidebarContent>
     </Sidebar>
   );

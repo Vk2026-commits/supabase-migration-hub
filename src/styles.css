@@ -159,6 +159,11 @@
     border-radius: 0.625rem !important;
   }
 
+  .operations-workspace [data-slot="card"] {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
   .operations-workspace [data-radix-scroll-area-viewport] {
     scrollbar-gutter: stable;
   }
