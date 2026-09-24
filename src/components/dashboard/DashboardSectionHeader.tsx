@@ -23,17 +23,19 @@ export const DashboardSectionHeader = forwardRef<HTMLDivElement, DashboardSectio
     <div
       ref={ref}
       tabIndex={-1}
-      className="scroll-mt-24 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-background to-background px-5 py-4 outline-none ring-offset-background motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-300 focus-visible:ring-2 focus-visible:ring-primary sm:px-6"
+      className="scroll-mt-20 border-b bg-background px-4 py-3 outline-none ring-offset-background motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200 focus-visible:ring-2 focus-visible:ring-primary sm:px-5"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <Icon className="h-5 w-5" aria-hidden="true" />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Icon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">{eyebrow}</p>
-            <h1 className="mt-0.5 text-2xl font-bold tracking-tight">{title}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+              <p className="text-[11px] font-bold uppercase tracking-[.14em] text-primary">{eyebrow}</p>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
           </div>
         </div>
         {status ? (

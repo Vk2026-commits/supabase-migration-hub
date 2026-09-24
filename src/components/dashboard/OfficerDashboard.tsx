@@ -30,8 +30,8 @@ import { useSearchParams } from "@/lib/router-compat";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatUsPhone } from "@/lib/phone";
 import { AccountSettings } from "./AccountSettings";
-import { ProfileAvatar } from "./ProfileAvatar";
 import { DashboardSectionHeader } from "./DashboardSectionHeader";
+import { OperationsIdentityHeader } from "./OperationsWorkspace";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -699,7 +699,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
   return (
     <SidebarProvider>
-      <div ref={dashboardTopRef} className="flex w-full min-h-screen scroll-mt-0">
+      <div ref={dashboardTopRef} className="operations-workspace flex w-full min-h-screen scroll-mt-0 bg-slate-50/40">
         <Dialog open={showOfferPrompt && Boolean(pendingEmploymentOffer)} onOpenChange={setShowOfferPrompt}>
           <DialogContent className="max-w-md rounded-2xl">
             <DialogHeader>
@@ -762,14 +762,19 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           employmentConfirmed={Boolean(employmentConfirmedAt && onboardingReviewedAt)}
         />
         <div className="flex min-w-0 flex-1">
-          <div className={`min-w-0 flex-1 p-4 sm:p-6 ${activeTab === "employee-onboarding" ? "lg:px-6 lg:py-8" : "lg:p-8"}`}>
-            <div className="mb-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex h-12 items-center border-b bg-background px-4 sm:px-5">
               <SidebarTrigger />
             </div>
-            <button type="button" onClick={() => handleTabChange("account")} className={`mb-4 items-center gap-3 rounded-xl text-left transition-opacity hover:opacity-80 ${activeTab === "overview" ? "flex" : "hidden"}`} aria-label="Open account settings">
-              <ProfileAvatar name={profile?.full_name} email={profile?.email} src={profile?.avatar_url} className="h-11 w-11" />
-              <span><span className="block text-2xl font-bold sm:text-3xl">Welcome, {profile?.full_name || profile?.email}</span><span className="block text-sm text-muted-foreground">View account settings</span></span>
-            </button>
+            <OperationsIdentityHeader
+              name={profile?.full_name}
+              email={profile?.email}
+              phone={formData.phone}
+              title={formData.title || "Security Officer"}
+              avatarUrl={profile?.avatar_url}
+              status={hireDecisionStatus === "not_hired" ? "Application closed" : onboardingReviewedAt && employmentConfirmedAt ? "Hired" : onboardingComplete ? "Awaiting review" : "Officer profile"}
+              onOpenAccount={() => handleTabChange("account")}
+            />
 
             {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={hireDecisionStatus === "not_hired" ? { label: "Application closed", tone: "amber" } : onboardingReviewedAt && employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
 
@@ -824,11 +829,11 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               </Alert>
             )}
 
-          <div className={`${activeTab === "employee-onboarding" ? "w-full max-w-none" : "mx-auto max-w-6xl"} space-y-6 [&_input]:min-h-12 [&_textarea]:text-base [&_[role=combobox]]:min-h-12`}>
+          <div className={`${activeTab === "employee-onboarding" ? "w-full max-w-none" : "mx-auto max-w-7xl"} space-y-5 p-4 sm:p-5 [&_input]:min-h-11 [&_textarea]:text-base [&_[role=combobox]]:min-h-11`}>
             {activeTab === "overview" && (
               <div className="space-y-5">
-                <div><p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Officer workspace</p><h2 className="mt-1 text-2xl font-bold">What would you like to do?</h2><p className="mt-1 text-sm text-muted-foreground">Every dashboard card opens the same destination as the side menu.</p></div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="flex flex-col gap-1 border-b pb-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Officer workspace</p><h2 className="mt-1 text-xl font-bold">Tasks and profile</h2></div><p className="text-sm text-muted-foreground">Choose a row to continue.</p></div>
+                <div className="overflow-hidden rounded-lg border bg-background">
                   {([
                     ["hiring-application", "Hiring application", applicationSubmitted ? "Submitted" : "Complete and submit your application", ClipboardList],
                     ["employee-onboarding", "Employee onboarding", employeeOnboardingSubmitted ? "Submitted" : onboardingOfferAvailable ? "Continue your new-hire paperwork" : "Available after an accepted offer", ClipboardCheck],
@@ -842,8 +847,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                     ["find-jobs", "Find a job", "Browse open security positions", Search],
                     ["messages", "Messages", "Chat with potential employers", MessageCircle],
                     ["account", "Account settings", "Update your name, username, photo, or password", Settings],
-                  ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => handleTabChange(tab)} className="group flex min-h-28 items-start gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-                    <span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold">{title as string}</span><span className="mt-1 block text-sm text-muted-foreground">{description as string}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                  ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => handleTabChange(tab)} className="group flex min-h-16 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/40">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1 sm:grid sm:grid-cols-[minmax(180px,0.7fr)_minmax(240px,1.3fr)] sm:items-center sm:gap-4"><span className="block font-semibold">{title as string}</span><span className="mt-0.5 block text-sm text-muted-foreground sm:mt-0">{description as string}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                   </button>)}
                 </div>
               </div>

@@ -15,13 +15,18 @@ import EvaluationForm from "./EvaluationForm";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { PreEmploymentScreeningDialog } from "./PreEmploymentScreeningDialog";
 import { OnboardingDocumentsDialog } from "./OnboardingDocumentsDialog";
+import { OfficerRecordShell } from "./OperationsWorkspace";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface EmploymentTrackingProps {
   companyId: string;
   onPendingReviewCountChange?: (count: number) => void;
+  selectedOfficerId?: string | null;
+  onOpenOfficer?: (officerId: string) => void;
+  onCloseOfficer?: () => void;
 }
 
-const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: EmploymentTrackingProps) => {
+const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOfficerId, onOpenOfficer, onCloseOfficer }: EmploymentTrackingProps) => {
   const [hires, setHires] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvaluation, setSelectedEvaluation] = useState<any>(null);
@@ -294,6 +299,65 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
 
   const pendingReviewHires = hires.filter((hire) => hire.onboarding_progress?.status === "submitted" && !hire.onboarding_reviewed_at);
 
+  const activeHire = selectedOfficerId
+    ? hires.find((hire) => hire.officer_id === selectedOfficerId || hire.id === selectedOfficerId)
+    : null;
+
+  if (activeHire) {
+    const name = activeHire.officer_profiles?.profiles?.full_name || "Unknown officer";
+    const onboarding = onboardingStatus(activeHire);
+    const evaluations = [...(activeHire.evaluations || [])].sort((left: any, right: any) => new Date(left.due_date).getTime() - new Date(right.due_date).getTime());
+    const requiredChecks = (activeHire.screening_checks || []).filter((check: any) => check.required);
+    const screeningReady = (activeHire.screening_checks || []).length === 4 && requiredChecks.every((check: any) => check.status === "cleared");
+    const finalized = Boolean(activeHire.onboarding_reviewed_at);
+    const statusLabel = finalized ? "Hired" : onboarding.percent === 100 ? "Ready for review" : "Pending onboarding";
+    const openPacket = () => setOnboardingDocumentsApplication({ officerName: name, officer: { id: activeHire.officer_id }, onboardingProgress: activeHire.onboarding_progress, hireId: activeHire.id, offerId: activeHire.offer_id, hiringApplicationId: activeHire.hiring_application_id });
+
+    return (
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-lg border bg-background">
+        <OfficerRecordShell
+          context="hired"
+          backLabel="Back to hired officers"
+          onBack={() => onCloseOfficer?.()}
+          officer={{
+            id: activeHire.officer_id,
+            name,
+            title: activeHire.position_title || activeHire.officer_profiles?.title,
+            officerNumber: activeHire.officer_profiles?.officer_number,
+            avatarUrl: activeHire.officer_profiles?.profiles?.avatar_url || activeHire.officer_profiles?.avatar_url,
+            email: activeHire.officer_profiles?.profiles?.email,
+            phone: activeHire.officer_profiles?.phone,
+            location: activeHire.site_name || activeHire.location,
+            employmentStatus: statusLabel,
+          }}
+          actions={<>
+            <Button size="sm" variant="secondary" disabled={!activeHire.onboarding_progress?.packet_id} onClick={openPacket}><FileCheck2 className="mr-2 h-4 w-4" />Documents</Button>
+            {!finalized && <Button size="sm" variant="secondary" onClick={() => setScreeningHire({ ...activeHire, hireId: activeHire.id, officerName: name, screeningChecks: activeHire.screening_checks || [] })}><ShieldCheck className="mr-2 h-4 w-4" />Screening</Button>}
+            {activeHire.onboarding_progress?.status === "submitted" && !finalized && <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" disabled={!screeningReady} onClick={() => setOnboardingReviewHire(activeHire)}><CheckCircle className="mr-2 h-4 w-4" />Accept onboarding</Button>}
+            {!finalized && <Button size="sm" variant="destructive" onClick={() => { setRejectingHire(activeHire); setRejectionReason(""); }}><UserX className="mr-2 h-4 w-4" />Not hired</Button>}
+            <Button size="sm" variant="secondary" onClick={() => { setSelectedHire(activeHire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add update</Button>
+          </>}
+          tabs={[
+            { value: "overview", label: "Overview", content: <div className="grid gap-6 lg:grid-cols-2"><section><h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Employment</h2><dl className="mt-3 divide-y rounded-lg border"><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Position</dt><dd className="text-sm font-semibold">{activeHire.position_title || "Security Officer"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Hire date</dt><dd className="text-sm font-semibold">{activeHire.hire_date ? new Date(activeHire.hire_date).toLocaleDateString() : "Not recorded"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Status</dt><dd className="text-sm font-semibold">{statusLabel}</dd></div></dl></section><section><h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Onboarding</h2><div className="mt-3 rounded-lg border p-4"><div className="flex items-center justify-between gap-3"><div><p className="font-semibold">{onboarding.label}</p><p className="mt-1 text-sm text-muted-foreground">{onboarding.detail}</p></div><Badge variant="outline">{onboarding.percent}%</Badge></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"><div className={onboarding.percent === 100 ? "h-full bg-emerald-600" : "h-full bg-primary"} style={{ width: `${onboarding.percent}%` }} /></div></div></section></div> },
+            { value: "application", label: "Application", content: <div className="max-w-3xl"><h2 className="text-lg font-bold">Hiring application</h2><p className="mt-1 text-sm text-muted-foreground">The submitted application is retained with this employee’s onboarding record.</p><Button className="mt-4" variant="outline" disabled={!activeHire.onboarding_progress?.packet_id} onClick={openPacket}>Open combined record</Button></div> },
+            { value: "onboarding", label: "Onboarding", content: <div className="max-w-3xl"><div className="flex items-center justify-between gap-4"><div><h2 className="text-lg font-bold">{onboarding.label}</h2><p className="mt-1 text-sm text-muted-foreground">{onboarding.detail}</p></div><Badge variant="outline">{onboarding.percent}%</Badge></div><Button className="mt-5" onClick={openPacket} disabled={!activeHire.onboarding_progress?.packet_id}>Review onboarding packet</Button></div> },
+            { value: "screening", label: "Screening", content: <div><div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-bold">Pre-employment screening</h2><p className="text-sm text-muted-foreground">Required company checks and recorded results.</p></div>{!finalized && <Button variant="outline" onClick={() => setScreeningHire({ ...activeHire, hireId: activeHire.id, officerName: name, screeningChecks: activeHire.screening_checks || [] })}>Update checks</Button>}</div><div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead>Check</TableHead><TableHead>Status</TableHead><TableHead>Required</TableHead></TableRow></TableHeader><TableBody>{(activeHire.screening_checks || []).map((check: any) => <TableRow key={check.id}><TableCell className="font-medium capitalize">{String(check.check_type).replace(/_/g, " ")}</TableCell><TableCell className="capitalize">{String(check.status).replace(/_/g, " ")}</TableCell><TableCell>{check.required ? "Yes" : "No"}</TableCell></TableRow>)}</TableBody></Table></div></div> },
+            { value: "documents", label: "Documents", content: <div className="flex flex-wrap gap-3"><Button variant="outline" disabled={!activeHire.onboarding_progress?.packet_id} onClick={openPacket}><FileCheck2 className="mr-2 h-4 w-4" />Onboarding packet</Button><Button variant="outline" disabled={!activeHire.offer_id} onClick={() => void openAcceptedOffer(activeHire)}><Eye className="mr-2 h-4 w-4" />Accepted offer</Button><Button variant="outline" disabled={!activeHire.offer_id || downloadingOfferId === activeHire.offer_id} onClick={() => void downloadAcceptedOffer(activeHire)}><Download className="mr-2 h-4 w-4" />Download offer</Button></div> },
+            { value: "site", label: "Site and Schedule", content: <dl className="max-w-3xl divide-y rounded-lg border"><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Assigned site</dt><dd className="text-sm font-semibold">{activeHire.site_name || activeHire.assignment_name || "Not assigned"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Schedule</dt><dd className="text-sm font-semibold">{activeHire.expected_shift || activeHire.schedule || "Not recorded"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Start date</dt><dd className="text-sm font-semibold">{activeHire.start_date ? new Date(activeHire.start_date).toLocaleDateString() : "Not recorded"}</dd></div></dl> },
+            { value: "notes", label: "Notes", content: <div><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold">Employee notes</h2><Button size="sm" onClick={() => { setSelectedHire(activeHire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add update</Button></div><div className="divide-y rounded-lg border">{(activeHire.employment_updates || []).length ? activeHire.employment_updates.map((update: any) => <div key={update.id} className="p-4"><div className="flex justify-between gap-3"><p className="font-medium capitalize">{String(update.update_type).replace(/_/g, " ")}</p><time className="text-xs text-muted-foreground">{new Date(update.created_at).toLocaleDateString()}</time></div>{update.notes ? <p className="mt-1 text-sm text-muted-foreground">{update.notes}</p> : null}</div>) : <p className="p-6 text-sm text-muted-foreground">No updates recorded.</p>}</div></div> },
+            { value: "evaluations", label: "Evaluations", content: <div className="overflow-hidden rounded-lg border"><Table><TableHeader><TableRow><TableHead>Evaluation</TableHead><TableHead>Due</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader><TableBody>{evaluations.map((evaluation: any) => { const status = getEvaluationStatus(evaluation); return <TableRow key={evaluation.id}><TableCell className="font-medium">{periodNames[evaluation.evaluation_period]}</TableCell><TableCell>{new Date(evaluation.due_date).toLocaleDateString()}</TableCell><TableCell><Badge className={status.color}>{status.label}</Badge></TableCell><TableCell className="text-right">{!evaluation.completed_date ? <Button size="sm" variant="ghost" onClick={() => setSelectedEvaluation(evaluation)}>Open</Button> : "—"}</TableCell></TableRow>; })}</TableBody></Table></div> },
+            { value: "history", label: "History", content: <div className="divide-y rounded-lg border">{(activeHire.employment_updates || []).map((update: any) => <div key={update.id} className="grid gap-1 p-4 sm:grid-cols-[180px_1fr_auto]"><p className="font-medium capitalize">{String(update.update_type).replace(/_/g, " ")}</p><p className="text-sm text-muted-foreground">{update.notes || "No details"}</p><time className="text-xs text-muted-foreground">{new Date(update.created_at).toLocaleString()}</time></div>)}</div> },
+          ]}
+        />
+        <Dialog open={showManualUpdate} onOpenChange={setShowManualUpdate}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Add employment update</DialogTitle><DialogDescription>Record a note, status, incident, commendation, or performance review.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label>Update type</Label><Select value={updateType} onValueChange={setUpdateType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="performance_review">Performance review</SelectItem><SelectItem value="status_update">Status update</SelectItem><SelectItem value="incident_report">Incident report</SelectItem><SelectItem value="commendation">Commendation</SelectItem></SelectContent></Select></div><div className="space-y-2"><Label>Notes</Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} /></div><Button className="w-full" onClick={() => void handleSubmitUpdate()}>Save update</Button></div></DialogContent></Dialog>
+        <AlertDialog open={Boolean(onboardingReviewHire)} onOpenChange={(open) => !open && setOnboardingReviewHire(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Finalize onboarding and mark this officer hired?</AlertDialogTitle><AlertDialogDescription>Confirm that your company reviewed the submitted packet and cleared every required screening check.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={completingOnboarding}>Keep pending</AlertDialogCancel><AlertDialogAction onClick={(event) => { event.preventDefault(); void completeOnboarding(); }} disabled={completingOnboarding}>{completingOnboarding ? "Saving…" : "Mark complete"}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+        <PreEmploymentScreeningDialog open={Boolean(screeningHire)} onOpenChange={(open) => !open && setScreeningHire(null)} application={screeningHire} onChanged={loadHires} />
+        <Dialog open={Boolean(rejectingHire)} onOpenChange={(open) => { if (!open && !savingRejection) { setRejectingHire(null); setRejectionReason(""); } }}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Move {name} to Not Hired?</DialogTitle><DialogDescription>This closes the pending hire while retaining the application, offer, screening, and onboarding records.</DialogDescription></DialogHeader><div className="space-y-2"><Label htmlFor="record-not-hired-reason">Reason *</Label><Textarea id="record-not-hired-reason" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} rows={4} /></div><DialogFooter><Button variant="outline" onClick={() => setRejectingHire(null)}>Cancel</Button><Button variant="destructive" onClick={() => void rejectPendingHire()} disabled={savingRejection || !rejectionReason.trim()}>{savingRejection ? "Moving…" : "Move to Not Hired"}</Button></DialogFooter></DialogContent></Dialog>
+        <OnboardingDocumentsDialog open={Boolean(onboardingDocumentsApplication)} onOpenChange={(open) => !open && setOnboardingDocumentsApplication(null)} application={onboardingDocumentsApplication} onAccepted={loadHires} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -307,7 +371,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
         <Button onClick={() => setShowManualUpdate(true)}><Plus className="mr-2 h-4 w-4" />Add update</Button>
       </div>
 
-      {pendingReviewHires.length > 0 && <button type="button" onClick={() => setExpandedHireId(pendingReviewHires[0].id)} className="flex w-full items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors hover:bg-amber-100/70">
+      {pendingReviewHires.length > 0 && <button type="button" onClick={() => onOpenOfficer?.(pendingReviewHires[0].officer_id)} className="flex w-full items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left transition-colors hover:bg-amber-100/70">
         <ClipboardCheck className="h-5 w-5 shrink-0 text-amber-700" />
         <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-amber-950">{pendingReviewHires.length} onboarding {pendingReviewHires.length === 1 ? "packet needs" : "packets need"} final review</span><span className="block text-xs text-amber-900/70">Select an officer, review the documents, then mark onboarding complete.</span></span>
         <ArrowRight className="h-4 w-4 text-amber-700" />
@@ -315,7 +379,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
 
       {hires.length > 0 && <div className="space-y-3 rounded-xl border bg-muted/20 p-3"><div className="flex flex-col gap-2 lg:flex-row lg:items-center"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search hired officers" className="bg-background pl-9" value={hireSearch} onChange={(event) => setHireSearch(event.target.value)} placeholder="Search name, email, phone, or position" /></div><Select value={hireStatusFilter} onValueChange={setHireStatusFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter hired officers by status"><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="pending">Pending onboarding</SelectItem><SelectItem value="ready_review">Ready for final review</SelectItem><SelectItem value="screening_failed">Screening failed</SelectItem><SelectItem value="hired">Hired</SelectItem></SelectContent></Select><Select value={hirePositionFilter} onValueChange={setHirePositionFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter hired officers by position"><SelectValue placeholder="All positions" /></SelectTrigger><SelectContent><SelectItem value="all">All positions</SelectItem>{hirePositions.map((position) => <SelectItem key={position} value={position}>{position}</SelectItem>)}</SelectContent></Select>{hasActiveHireFilters && <Button type="button" variant="ghost" size="sm" onClick={() => { setHireSearch(""); setHireStatusFilter("all"); setHirePositionFilter("all"); }}><X className="mr-1.5 h-4 w-4" />Clear</Button>}</div><p className="text-xs text-muted-foreground">Showing {filteredHires.length} of {hires.length} officers</p></div>}
 
-      <div className="space-y-2">
+      <div className="overflow-hidden rounded-lg border bg-background">
         {filteredHires.map((hire) => {
           const onboarding = onboardingStatus(hire);
           const evaluations = [...(hire.evaluations || [])].sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
@@ -326,15 +390,15 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange }: Employmen
           const screeningReady = (hire.screening_checks || []).length === 4 && requiredChecks.every((check: any) => check.status === "cleared");
           const screeningFailed = requiredChecks.some((check: any) => check.status === "failed");
           const finalized = Boolean(hire.onboarding_reviewed_at);
-          return <Card key={hire.id} className={`overflow-hidden transition-shadow ${expanded ? "shadow-md ring-1 ring-primary/10" : "shadow-sm hover:shadow-md"}`}>
+          return <Card key={hire.id} className="overflow-hidden rounded-none border-0 border-b shadow-none last:border-b-0 hover:bg-muted/30">
             <div className="flex items-center gap-2 p-3 sm:p-4">
-              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-expanded={expanded}>
+              <button type="button" className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => onOpenOfficer?.(hire.officer_id)}>
                 <ProfileAvatar name={name} email={hire.officer_profiles?.profiles?.email} src={hire.officer_profiles?.profiles?.avatar_url || hire.officer_profiles?.avatar_url} />
                 <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{name}</span><span className="block truncate text-xs text-muted-foreground">{hire.position_title || "Security Officer"} · {finalized ? `Hired ${new Date(hire.hire_date).toLocaleDateString()}` : "Pending onboarding"}</span></span>
                 <span className="hidden items-center gap-2 md:flex"><Badge variant="outline" className={finalized ? "border-green-200 bg-green-50 text-green-800" : screeningFailed ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800"}>{finalized ? "Hired" : screeningFailed ? "Screening failed" : "Pending onboarding"}</Badge>{finalized && (nextEvaluation ? <Badge variant="secondary">Next: {periodNames[nextEvaluation.evaluation_period]} · {new Date(nextEvaluation.due_date).toLocaleDateString()}</Badge> : <Badge variant="secondary">Evaluations complete</Badge>)}</span>
               </button>
               <Badge variant={hire.status === "active" ? "default" : "secondary"} className="hidden capitalize sm:inline-flex">{hire.status}</Badge>
-              <Button type="button" size="icon" variant="ghost" onClick={() => setExpandedHireId(expanded ? null : hire.id)} aria-label={expanded ? "Close employee details" : "Open employee details"}><ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} /></Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => onOpenOfficer?.(hire.officer_id)} aria-label={`View ${name} employee record`}>View</Button>
             </div>
 
             {expanded && <div className="space-y-4 border-t bg-muted/10 p-4">

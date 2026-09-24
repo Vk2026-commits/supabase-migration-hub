@@ -123,7 +123,16 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
 
   const interestedOfficers = interests?.filter((i) => i.status === "interested") || [];
   const notInterestedOfficers = interests?.filter((i) => i.status === "not_interested") || [];
-  const availabilityOptions = useMemo(() => Array.from(new Set((interests || []).map((interest) => interest.officer_profiles?.availability_status).filter(Boolean))).sort(), [interests]);
+  const availabilityOptions = useMemo(
+    () => Array.from(
+      new Set(
+        (interests || [])
+          .map((interest) => interest.officer_profiles?.availability_status)
+          .filter((status): status is string => Boolean(status)),
+      ),
+    ).sort(),
+    [interests],
+  );
   const filterOfficers = (entries: typeof interestedOfficers) => entries.filter((interest) => {
     const officer = interest.officer_profiles;
     const matchesSearch = !deferredSearchQuery || [officer?.profiles?.full_name, officer?.profiles?.email, officer?.title, officer?.location]

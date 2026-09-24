@@ -79,6 +79,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const requestedCompanyId = searchParams.get("companyId");
+  const requestedOfficerId = searchParams.get("officerId");
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
   const [companyTeamRole, setCompanyTeamRole] = useState<string | null>(null);
@@ -149,6 +150,23 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     setActiveTab(tab);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", tab);
+    nextParams.delete("officerId");
+    nextParams.delete("officerSource");
+    setSearchParams(nextParams);
+  };
+
+  const openOfficerRecord = (officerId: string, source: "applicants" | "employment") => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", source);
+    nextParams.set("officerId", officerId);
+    nextParams.set("officerSource", source);
+    setSearchParams(nextParams);
+  };
+
+  const closeOfficerRecord = () => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("officerId");
+    nextParams.delete("officerSource");
     setSearchParams(nextParams);
   };
 
@@ -357,7 +375,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-[calc(100vh-4rem)] w-full">
+      <div className="operations-workspace flex min-h-[calc(100vh-4rem)] w-full bg-slate-50/40">
         <CompanySidebar
           activeTab={activeTab}
           onTabChange={selectTab}
@@ -367,12 +385,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="border-b bg-background sticky top-0 z-10">
-            <div className="flex h-16 items-center px-4 gap-4">
+          <div className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+            <div className="flex h-14 items-center gap-4 px-4">
               <SidebarTrigger />
               <button type="button" onClick={() => selectTab("account")} className="flex min-w-0 items-center gap-3 rounded-xl text-left transition-opacity hover:opacity-80" aria-label="Open account settings">
-                <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-10 w-10" />
-                <span className="min-w-0"><span className="block truncate text-xl font-bold">Welcome, {accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-muted-foreground">{formData.company_name || "Company representative"}</span></span>
+                <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-9 w-9 shadow-none" />
+                <span className="min-w-0"><span className="block truncate text-base font-bold">{accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-muted-foreground">{formData.company_name || "Company representative"}</span></span>
               </button>
               {companyWorkspaces.length > 1 && companyProfile && (
                 <div className="ml-auto w-full max-w-[280px]">
@@ -397,18 +415,18 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
           <div
             id="company-dashboard-content"
-            className="w-full scroll-mt-20 space-y-6 overflow-auto p-4 sm:p-6"
+            className="w-full scroll-mt-20 space-y-5 overflow-auto p-4 sm:p-5"
           >
             {activeTab !== "overview" && companySectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Company workspace" title={companySectionDetails[activeTab].title} description={companySectionDetails[activeTab].description} icon={companySectionDetails[activeTab].icon} status={companyProfileComplete ? { label: "Company profile complete", tone: "green" } : { label: "Profile setup required", tone: "amber" }} />}
             {activeTab === "overview" && (
-              <div className="mx-auto w-full max-w-6xl space-y-5">
-                <div><p className="text-xs font-bold uppercase tracking-[.18em] text-primary">Company workspace</p><h2 className="mt-1 text-2xl font-bold">Manage your hiring operation</h2><p className="mt-1 text-sm text-muted-foreground">Use these cards or the side menu to open any company workspace.</p></div>
-                {pendingOnboardingReviews > 0 && <button type="button" onClick={() => selectTab("employment")} className="group flex w-full items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left shadow-sm transition-all hover:border-amber-300 hover:shadow-md">
-                  <span className="rounded-xl bg-amber-100 p-3 text-amber-700"><BellRing className="h-5 w-5" /></span>
+              <div className="mx-auto w-full max-w-7xl space-y-4 p-4 sm:p-5">
+                <div className="border-b pb-3"><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Company workspace</p><h2 className="mt-1 text-xl font-bold">Hiring operations</h2><p className="mt-0.5 text-sm text-muted-foreground">Open a work queue to review and act on current records.</p></div>
+                {pendingOnboardingReviews > 0 && <button type="button" onClick={() => selectTab("employment")} className="group flex w-full items-center gap-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left transition-colors hover:bg-amber-100/70">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700"><BellRing className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1"><span className="block font-semibold text-amber-950">{pendingOnboardingReviews} onboarding {pendingOnboardingReviews === 1 ? "packet is" : "packets are"} ready for review</span><span className="mt-0.5 block text-sm text-amber-900/75">Open Hired officers, review the submitted records, and mark onboarding complete.</span></span>
                   <ArrowRight className="h-5 w-5 shrink-0 text-amber-700 transition-transform group-hover:translate-x-1" />
                 </button>}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="overflow-hidden rounded-lg border bg-background">
                   {([
                     ["profile", "Company profile", companyProfileComplete ? "Complete" : "Finish your company details", Building2],
                     ["jobs", "Job postings", "Create and manage open positions", Briefcase],
@@ -420,8 +438,8 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                     ["team", "Company team", "Manage staff access and roles", UsersRound],
                     ["subscriptions", "Subscription", companyProfile?.subscription_tier ? `${companyProfile.subscription_tier} plan` : "View plans and access", CreditCard],
                     ["account", "Account settings", "Update your name, username, photo, or password", Settings],
-                  ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => selectTab(tab)} className="group flex min-h-28 items-start gap-4 rounded-2xl border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-                    <span className="rounded-xl bg-primary/10 p-3 text-primary"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold">{title}</span><span className="mt-1 block text-sm text-muted-foreground">{description}</span></span><ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                  ] as const).map(([tab, title, description, Icon]) => <button key={tab} type="button" onClick={() => selectTab(tab)} className="group flex min-h-16 w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/40">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1 sm:grid sm:grid-cols-[minmax(180px,0.7fr)_minmax(240px,1.3fr)] sm:items-center sm:gap-4"><span className="block font-semibold">{title}</span><span className="mt-0.5 block text-sm text-muted-foreground sm:mt-0">{description}</span></span><ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
                   </button>)}
                 </div>
               </div>
@@ -1031,6 +1049,9 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                 companyId={companyProfile.id}
                 subscriptionTier={companyProfile.subscription_tier ?? "free"}
                 onNavigateToSubscriptions={() => selectTab("subscriptions")}
+                selectedOfficerId={requestedOfficerId}
+                onOpenOfficer={(officerId) => openOfficerRecord(officerId, "applicants")}
+                onCloseOfficer={closeOfficerRecord}
               />
             )}
 
@@ -1047,7 +1068,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             )}
 
             {activeTab === "employment" && companyProfile && (
-              <EmploymentTracking companyId={companyProfile.id} onPendingReviewCountChange={setPendingOnboardingReviews} />
+              <EmploymentTracking companyId={companyProfile.id} onPendingReviewCountChange={setPendingOnboardingReviews} selectedOfficerId={requestedOfficerId} onOpenOfficer={(officerId) => openOfficerRecord(officerId, "employment")} onCloseOfficer={closeOfficerRecord} />
             )}
 
             {activeTab === "not-hired" && companyProfile && (

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, LayoutGrid, List, ShieldCheck, StickyNote, Search, X, RefreshCw } from "lucide-react";
+import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, ShieldCheck, StickyNote, Search, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -16,11 +16,15 @@ import { OnboardingDocumentsDialog } from "./OnboardingDocumentsDialog";
 import { PreEmploymentScreeningDialog } from "./PreEmploymentScreeningDialog";
 import { ApplicantNotesDialog } from "./ApplicantNotesDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { OfficerRecordShell } from "./OperationsWorkspace";
 
 interface JobApplicantsProps {
   companyId: string;
   subscriptionTier: string;
   onNavigateToSubscriptions?: () => void;
+  selectedOfficerId?: string | null;
+  onOpenOfficer?: (officerId: string) => void;
+  onCloseOfficer?: () => void;
 }
 
 const onboardingSteps = ["Offer accepted", "Form I-9", "Form W-4", "Pay setup", "Emergency contact", "Company policies", "Uniform and schedule", "Review and sign"];
@@ -74,7 +78,7 @@ const getApplicantFilterStage = (app: any) => {
   return "review";
 };
 
-const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions }: JobApplicantsProps) => {
+const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions, selectedOfficerId, onOpenOfficer, onCloseOfficer }: JobApplicantsProps) => {
   const [applications, setApplications] = useState<any[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
@@ -83,7 +87,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   const [unreadCount, setUnreadCount] = useState(0);
   const [onboardingApplication, setOnboardingApplication] = useState<any>(null);
   const [screeningApplication, setScreeningApplication] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<"cards" | "compact">("cards");
+  const [viewMode] = useState<"cards" | "compact">("compact");
   const [notesApplication, setNotesApplication] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -226,6 +230,63 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
   }), [applications, deferredSearchQuery, positionFilter, stageFilter]);
   const hasActiveFilters = Boolean(searchQuery.trim()) || stageFilter !== "all" || positionFilter !== "all";
 
+  const activeApplication = selectedOfficerId
+    ? applications.find((application) => application.officer?.id === selectedOfficerId || application.id === selectedOfficerId)
+    : null;
+
+  if (activeApplication && isPaidSubscriber) {
+    const onboarding = getOnboardingStatus(activeApplication.onboardingProgress);
+    const nextStep = getNextStep(activeApplication, onboarding);
+    const openChat = () => {
+      setSelectedOfficer({ id: activeApplication.officer.id, name: activeApplication.officerName, jobApplicationId: activeApplication.id, jobTitle: activeApplication.job_posting?.title });
+      setChatOpen(true);
+    };
+
+    return (
+      <div className="mx-auto max-w-7xl overflow-hidden rounded-lg border bg-background">
+        <OfficerRecordShell
+          context="applicant"
+          backLabel="Back to applicants"
+          onBack={() => onCloseOfficer?.()}
+          officer={{
+            id: activeApplication.officer.id,
+            name: activeApplication.officerName,
+            title: activeApplication.job_posting?.title || "Security Officer",
+            officerNumber: activeApplication.officer?.officer_number,
+            avatarUrl: activeApplication.officerAvatar,
+            email: activeApplication.officerEmail,
+            phone: activeApplication.officerPhone,
+            location: activeApplication.officer?.location,
+            stage: getApplicantFilterStage(activeApplication),
+            employmentStatus: String(activeApplication.status || "submitted").replace(/_/g, " "),
+          }}
+          actions={<>
+            <Button size="sm" variant="secondary" onClick={() => setReviewApplication(activeApplication)}>Review application</Button>
+            <Button size="sm" variant="secondary" onClick={openChat}><MessageCircle className="mr-2 h-4 w-4" />Chat</Button>
+            <InterviewScheduler companyId={companyId} companyName={companyProfile?.company_name || "The company"} officerId={activeApplication.officer.id} officerName={activeApplication.officerName} jobApplicationId={activeApplication.id} jobTitle={activeApplication.job_posting?.title || "Security Officer"} applicationStatus={activeApplication.status} existingInterview={activeApplication.interview} onChanged={loadApplications} />
+            {activeApplication.offerHiringApplicationId && activeApplication.status !== "accepted" ? <HireButton officerId={activeApplication.officer.id} officerName={activeApplication.officerName} companyId={companyId} hiringApplicationId={activeApplication.offerHiringApplicationId} jobApplicationId={activeApplication.id} jobTitle={activeApplication.job_posting?.title} onChanged={loadApplications} /> : null}
+          </>}
+          tabs={[
+            { value: "overview", label: "Overview", content: <div className="grid gap-6 lg:grid-cols-2"><section><h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Current stage</h2><div className={`mt-3 rounded-lg border p-4 ${nextStep.tone}`}><p className="text-xs font-bold uppercase tracking-wide opacity-70">What happens next</p><p className="mt-1 font-semibold">{nextStep.label.replace(/^Next:\s*/, "")}</p></div></section><section><h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">Application details</h2><dl className="mt-3 divide-y rounded-lg border"><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Position</dt><dd className="text-sm font-semibold">{activeApplication.job_posting?.title || "Security Officer"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Applied</dt><dd className="text-sm font-semibold">{activeApplication.applied_at ? new Date(activeApplication.applied_at).toLocaleDateString() : "Not recorded"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Stage</dt><dd className="text-sm font-semibold capitalize">{getApplicantFilterStage(activeApplication)}</dd></div></dl></section></div> },
+            { value: "application", label: "Application", content: <div className="max-w-3xl"><h2 className="text-lg font-bold">Submitted hiring application</h2><p className="mt-1 text-sm text-muted-foreground">Review the officer’s submitted answers, work history, qualifications, availability, and signature.</p><Button className="mt-5" onClick={() => setReviewApplication(activeApplication)}>Open application</Button></div> },
+            { value: "onboarding", label: "Onboarding", content: <div className="max-w-3xl"><div className="flex items-start justify-between gap-4"><div><h2 className="text-lg font-bold">{onboarding.label}</h2><p className="mt-1 text-sm text-muted-foreground">{onboarding.detail}</p></div><Badge variant="outline">{onboarding.percent}%</Badge></div><div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted"><div className={onboarding.percent === 100 ? "h-full bg-emerald-600" : "h-full bg-primary"} style={{ width: `${onboarding.percent}%` }} /></div>{activeApplication.status === "accepted" && activeApplication.onboardingProgress?.packet_id ? <Button className="mt-5" variant="outline" onClick={() => setOnboardingApplication(activeApplication)}>Review onboarding</Button> : null}</div> },
+            { value: "screening", label: "Screening", content: <div><div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-bold">Pre-employment screening</h2><p className="text-sm text-muted-foreground">Review required checks after onboarding is submitted.</p></div>{activeApplication.hireId ? <Button variant="outline" onClick={() => setScreeningApplication(activeApplication)}>Review screening</Button> : null}</div><div className="divide-y rounded-lg border">{(activeApplication.screeningChecks || []).length ? activeApplication.screeningChecks.map((check: any) => <div key={check.id} className="flex items-center justify-between p-3"><span className="font-medium capitalize">{String(check.check_type).replace(/_/g, " ")}</span><Badge variant="outline" className="capitalize">{String(check.status).replace(/_/g, " ")}</Badge></div>) : <p className="p-6 text-sm text-muted-foreground">Screening checks have not been created.</p>}</div></div> },
+            { value: "documents", label: "Documents", content: <div className="flex flex-wrap gap-3"><Button variant="outline" onClick={() => setReviewApplication(activeApplication)}>Application</Button><Button variant="outline" disabled={!activeApplication.onboardingProgress?.packet_id} onClick={() => setOnboardingApplication(activeApplication)}><FileCheck2 className="mr-2 h-4 w-4" />Onboarding packet</Button></div> },
+            { value: "site", label: "Site and Schedule", content: <dl className="max-w-3xl divide-y rounded-lg border"><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Position</dt><dd className="text-sm font-semibold">{activeApplication.job_posting?.title || "Security Officer"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Location</dt><dd className="text-sm font-semibold">{activeApplication.job_posting?.location || activeApplication.officer?.location || "Not recorded"}</dd></div><div className="flex justify-between gap-4 p-3"><dt className="text-sm text-muted-foreground">Schedule</dt><dd className="text-sm font-semibold">{activeApplication.job_posting?.schedule || "Not recorded"}</dd></div></dl> },
+            { value: "notes", label: "Notes", content: <div className="max-w-3xl"><div className="flex items-center justify-between"><h2 className="text-lg font-bold">Company notes</h2><Button size="sm" onClick={() => setNotesApplication(activeApplication)}><StickyNote className="mr-2 h-4 w-4" />{activeApplication.companyNote?.note ? "Edit note" : "Add note"}</Button></div><div className="mt-4 rounded-lg border p-4 text-sm text-muted-foreground">{activeApplication.companyNote?.note || "No company notes recorded."}</div></div> },
+            { value: "evaluations", label: "Evaluations", content: <p className="text-sm text-muted-foreground">Performance evaluations become available after the officer is hired and onboarding is accepted.</p> },
+            { value: "history", label: "History", content: <div className="divide-y rounded-lg border"><div className="grid gap-1 p-4 sm:grid-cols-[180px_1fr_auto]"><p className="font-medium">Application</p><p className="text-sm text-muted-foreground">Application status changed to <span className="capitalize">{String(activeApplication.status || "submitted").replace(/_/g, " ")}</span>.</p><time className="text-xs text-muted-foreground">{activeApplication.updated_at ? new Date(activeApplication.updated_at).toLocaleString() : ""}</time></div>{activeApplication.interview ? <div className="grid gap-1 p-4 sm:grid-cols-[180px_1fr_auto]"><p className="font-medium">Interview</p><p className="text-sm text-muted-foreground capitalize">{String(activeApplication.interview.status || "scheduled").replace(/_/g, " ")}</p><time className="text-xs text-muted-foreground">{activeApplication.interview.scheduled_at ? new Date(activeApplication.interview.scheduled_at).toLocaleString() : ""}</time></div> : null}</div> },
+          ]}
+        />
+        {chatOpen && selectedOfficer && companyProfile ? <ChatDialog open={chatOpen} onOpenChange={setChatOpen} companyId={companyId} companyName={companyProfile.company_name} officerId={selectedOfficer.id} officerName={selectedOfficer.name} currentUserType="company" jobApplicationId={selectedOfficer.jobApplicationId} jobTitle={selectedOfficer.jobTitle} /> : null}
+        <ApplicantReviewDialog open={Boolean(reviewApplication)} onOpenChange={(open) => !open && setReviewApplication(null)} application={reviewApplication} />
+        <OnboardingDocumentsDialog open={Boolean(onboardingApplication)} onOpenChange={(open) => !open && setOnboardingApplication(null)} application={onboardingApplication} onAccepted={loadApplications} />
+        <PreEmploymentScreeningDialog open={Boolean(screeningApplication)} onOpenChange={(open) => !open && setScreeningApplication(null)} application={screeningApplication} onChanged={loadApplications} />
+        <ApplicantNotesDialog open={Boolean(notesApplication)} onOpenChange={(open) => !open && setNotesApplication(null)} companyId={companyId} application={notesApplication} onSaved={loadApplications} />
+      </div>
+    );
+  }
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-4">
@@ -267,7 +328,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
             <Select value={positionFilter} onValueChange={setPositionFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter applicants by position"><SelectValue placeholder="All positions" /></SelectTrigger><SelectContent><SelectItem value="all">All positions</SelectItem>{positions.map((position) => <SelectItem key={position} value={position}>{position}</SelectItem>)}</SelectContent></Select>
             {hasActiveFilters && <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setStageFilter("all"); setPositionFilter("all"); }}><X className="mr-1.5 h-4 w-4" />Clear</Button>}
           </div>
-          <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Showing {filteredApplications.length} of {applications.length}</p><div className="inline-flex rounded-lg border bg-background p-1" aria-label="Applicant layout"><Button type="button" size="sm" variant={viewMode === "cards" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("cards")}><LayoutGrid className="mr-2 h-4 w-4" />Cards</Button><Button type="button" size="sm" variant={viewMode === "compact" ? "default" : "ghost"} className="h-8" onClick={() => setViewMode("compact")}><List className="mr-2 h-4 w-4" />Compact</Button></div></div>
+          <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Showing {filteredApplications.length} of {applications.length}</p><span className="text-xs font-medium text-muted-foreground">Compact roster</span></div>
         </div>}
         <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"}>
           {initialLoading ? (
@@ -335,9 +396,9 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
                     <Button 
                       size="sm"
                       className="h-9 px-3 text-xs shadow-sm"
-                      onClick={() => setReviewApplication(app)}
+                      onClick={() => onOpenOfficer?.(app.officer.id)}
                     >
-                      Review Application
+                      View profile
                     </Button>
                     <Button 
                       size="sm" 

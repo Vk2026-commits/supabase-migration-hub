@@ -70,7 +70,7 @@ const Navbar = () => {
     ]);
 
     const nextRoles = Array.from(new Set([profile?.role, ...(roles || []).map(({ role }) => role)]))
-      .filter((role): role is string => role === "officer" || role === "company");
+      .filter((role) => role === "officer" || role === "company") as string[];
 
     setUserRole(profile?.role ?? null);
     setAccountRoles(nextRoles);

@@ -145,3 +145,21 @@
     color: var(--color-foreground);
   }
 }
+
+@layer components {
+  .operations-workspace .shadow,
+  .operations-workspace .shadow-sm,
+  .operations-workspace .shadow-md,
+  .operations-workspace .shadow-lg {
+    box-shadow: none !important;
+  }
+
+  .operations-workspace .rounded-2xl,
+  .operations-workspace .rounded-3xl {
+    border-radius: 0.625rem !important;
+  }
+
+  .operations-workspace [data-radix-scroll-area-viewport] {
+    scrollbar-gutter: stable;
+  }
+}

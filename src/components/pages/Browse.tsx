@@ -308,6 +308,13 @@ const Browse = () => {
   ];
 
   const handleViewProfile = async (officer: any) => {
+    if (searchParams.get("officerId") !== officer.id) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("officerId", officer.id);
+      nextParams.set("officerSource", "browse");
+      setSearchParams(nextParams, { replace: false });
+    }
+
     if (companyProfile && ["professional", "premium"].includes(companyProfile.subscription_tier)) {
       const { data: applicantRecord, error: applicantError } = await (supabase as any)
         .from("job_applications")
@@ -362,6 +369,27 @@ const Browse = () => {
       }
     }
   };
+
+  const closeOfficerRecord = () => {
+    setSelectedOfficer(null);
+    setSelectedApplication(null);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("officerId");
+    nextParams.delete("officerSource");
+    setSearchParams(nextParams, { replace: false });
+  };
+
+  useEffect(() => {
+    const requestedOfficerId = searchParams.get("officerId");
+    if (!requestedOfficerId) {
+      setSelectedOfficer(null);
+      setSelectedApplication(null);
+      return;
+    }
+    if (selectedOfficer?.id === requestedOfficerId || selectedApplication?.officer?.id === requestedOfficerId) return;
+    const officer = officers.find((entry) => entry.id === requestedOfficerId);
+    if (officer) void handleViewProfile(officer);
+  }, [officers, searchParams]);
 
   const handleInterest = async (officerId: string, status: "interested" | "not_interested") => {
     if (!companyProfile) {
@@ -427,19 +455,21 @@ const Browse = () => {
     companyProfile && ["professional", "premium"].includes(companyProfile.subscription_tier);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="operations-workspace min-h-screen bg-slate-50/70">
       <Navbar />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Browse Security Professionals</h1>
-          <p className="text-muted-foreground text-lg">
+      <div className="container mx-auto max-w-7xl px-4 py-5">
+        <div className="mb-5 border-b pb-4">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Recruiting workspace</p>
+          <h1 className="mt-1 text-2xl font-bold">Find officers</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Find qualified security officers for your needs
           </p>
         </div>
 
-        <div className="mb-6 space-y-4">
-          <div className="relative max-w-md">
+        <div className="mb-4 rounded-lg border bg-background p-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="relative min-w-72 flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by name, title, or location..."
@@ -449,7 +479,7 @@ const Browse = () => {
             />
           </div>
 
-          <div className="flex gap-4 overflow-x-auto pb-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             <div className="min-w-[180px]">
               <Select value={stateFilter} onValueChange={setStateFilter}>
                 <SelectTrigger>
@@ -533,21 +563,15 @@ const Browse = () => {
                 </SelectContent>
               </Select>
             </div>
-          </div>
+          </div></div>
         </div>
 
         {loading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader>
-                  <div className="h-6 bg-muted rounded w-3/4 mb-2" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                </CardHeader>
-                <CardContent>
-                  <div className="h-20 bg-muted rounded" />
-                </CardContent>
-              </Card>
+          <div className="overflow-hidden rounded-lg border bg-background" aria-label="Loading officer roster">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex animate-pulse items-center gap-3 border-b p-3 last:border-b-0">
+                <div className="h-10 w-10 rounded-full bg-muted" /><div className="flex-1 space-y-2"><div className="h-4 w-44 rounded bg-muted" /><div className="h-3 w-64 max-w-full rounded bg-muted" /></div><div className="h-8 w-20 rounded bg-muted" />
+              </div>
             ))}
           </div>
         ) : filteredOfficers.length === 0 ? (
@@ -559,15 +583,16 @@ const Browse = () => {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="overflow-hidden rounded-lg border bg-background">
+            <div className="hidden grid-cols-[minmax(260px,1.3fr)_minmax(160px,.8fr)_minmax(140px,.7fr)_110px] gap-4 border-b bg-slate-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+              <span>Officer</span><span>Experience</span><span>Status</span><span className="text-right">Action</span>
+            </div>
             {filteredOfficers.map((officer) => (
-              <Card key={officer.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <ProfileAvatar name={officer.profiles?.full_name} src={officer.profiles?.avatar_url} />
-                      <div>
-                      <CardTitle className="text-xl">
+              <div key={officer.id} className="grid gap-3 border-b px-4 py-3 transition-colors last:border-b-0 hover:bg-slate-50/80 md:grid-cols-[minmax(260px,1.3fr)_minmax(160px,.8fr)_minmax(140px,.7fr)_110px] md:items-center md:gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <ProfileAvatar name={officer.profiles?.full_name} src={officer.profiles?.avatar_url} className="h-10 w-10" />
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">
                         {isFreeTier && officer.profiles?.full_name
                           ? `${officer.profiles.full_name.split(" ")[0]} ${officer.profiles.full_name
                               .split(" ")
@@ -575,65 +600,24 @@ const Browse = () => {
                               .map((n: string) => n[0])
                               .join("")}.`
                           : officer.profiles?.full_name || "Anonymous"}
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        {officer.title || "Security Officer"}
-                      </CardDescription>
-                      </div>
-                    </div>
-                    {officer.availability_status === "available" && (
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
-                      >
-                        Available
-                      </Badge>
-                    )}
+                    </p>
+                    <p className="truncate text-sm text-muted-foreground">{officer.title || "Security Officer"}{officer.location ? ` · ${officer.location}` : ""}</p>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground line-clamp-3">
-                    {officer.bio || "No bio provided yet."}
-                  </p>
-
-                  <div className="space-y-2 text-sm">
-                    {officer.location && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        <span>{officer.location}</span>
-                      </div>
-                    )}
-
-                    {officer.years_experience && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Briefcase className="h-4 w-4" />
-                        <span>{officer.years_experience} years experience</span>
-                      </div>
-                    )}
-
-                    {officer.hourly_rate && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <DollarSign className="h-4 w-4" />
-                        <span>${officer.hourly_rate}/hour</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <Button className="w-full" onClick={() => handleViewProfile(officer)}>
-                    View Profile
-                  </Button>
-                </CardContent>
-              </Card>
+                </div>
+                <div className="text-sm text-muted-foreground">{officer.years_experience ? `${officer.years_experience} years` : "Not listed"}{officer.hourly_rate ? <span className="block text-xs">${officer.hourly_rate}/hour</span> : null}</div>
+                <div>{officer.availability_status === "available" ? <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Available</Badge> : <Badge variant="outline">View schedule</Badge>}</div>
+                <Button size="sm" className="w-full md:w-auto" onClick={() => handleViewProfile(officer)}>View</Button>
+              </div>
             ))}
           </div>
         )}
       </div>
 
       {/* Profile Detail Dialog */}
-      <Dialog open={!!selectedOfficer} onOpenChange={(open) => !open && setSelectedOfficer(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center gap-3"><ProfileAvatar name={selectedOfficer?.profiles?.full_name} src={selectedOfficer?.profiles?.avatar_url} className="h-14 w-14" /><div><DialogTitle className="text-2xl">
+      <Dialog open={!!selectedOfficer} onOpenChange={(open) => !open && closeOfficerRecord()}>
+        <DialogContent className="h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-0 sm:h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)]">
+          <DialogHeader className="sticky top-0 z-20 bg-slate-950 px-5 py-4 text-white shadow-sm">
+            <div className="flex items-center gap-4"><ProfileAvatar name={selectedOfficer?.profiles?.full_name} src={selectedOfficer?.profiles?.avatar_url} className="h-16 w-16 border-2 border-white/30" /><div><DialogTitle className="text-2xl text-white">
               {isFreeTier && selectedOfficer?.profiles?.full_name
                 ? `${selectedOfficer.profiles.full_name.split(" ")[0]} ${selectedOfficer.profiles.full_name
                     .split(" ")
@@ -642,11 +626,11 @@ const Browse = () => {
                     .join("")}.`
                 : selectedOfficer?.profiles?.full_name || "Officer Profile"}
             </DialogTitle>
-            <DialogDescription>{selectedOfficer?.title || "Security Officer"}</DialogDescription></div></div>
+            <DialogDescription className="text-slate-300">{selectedOfficer?.title || "Security Officer"}{selectedOfficer?.officer_number ? ` · Officer #${selectedOfficer.officer_number}` : ""}</DialogDescription></div></div>
           </DialogHeader>
 
           {selectedOfficer && (
-            <div className="space-y-4">
+            <div className="mx-auto w-full max-w-6xl space-y-4 p-5">
               {isFreeTier && (
                 <Alert>
                   <Lock className="h-4 w-4" />
@@ -924,7 +908,7 @@ const Browse = () => {
 
       <ApplicantReviewDialog
         open={Boolean(selectedApplication)}
-        onOpenChange={(open) => !open && setSelectedApplication(null)}
+        onOpenChange={(open) => !open && closeOfficerRecord()}
         application={selectedApplication}
       />
 
