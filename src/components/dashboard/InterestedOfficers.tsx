@@ -159,9 +159,9 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
         </TabsTrigger>
       </TabsList>
 
-      {(interests?.length || 0) > 0 && <div className="mt-4 space-y-3 rounded-xl border bg-muted/20 p-3"><div className="flex flex-col gap-2 md:flex-row md:items-center"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search interested officers" className="bg-background pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name, email, title, or location" /></div><Select value={availabilityFilter} onValueChange={setAvailabilityFilter}><SelectTrigger className="bg-background md:w-52" aria-label="Filter interested officers by availability"><SelectValue placeholder="All availability" /></SelectTrigger><SelectContent><SelectItem value="all">All availability</SelectItem>{availabilityOptions.map((availability) => <SelectItem key={availability} value={availability}>{String(availability).replace(/_/g, " ")}</SelectItem>)}</SelectContent></Select>{hasActiveFilters && <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setAvailabilityFilter("all"); }}><X className="mr-1.5 h-4 w-4" />Clear</Button>}</div></div>}
+      {(interests?.length || 0) > 0 && <div className="mt-3 border-y bg-muted/20 px-2 py-2"><div className="flex flex-col gap-2 md:flex-row md:items-center"><div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search interested officers" className="bg-background pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name, email, title, or location" /></div><Select value={availabilityFilter} onValueChange={setAvailabilityFilter}><SelectTrigger className="bg-background md:w-52" aria-label="Filter interested officers by availability"><SelectValue placeholder="All availability" /></SelectTrigger><SelectContent><SelectItem value="all">All availability</SelectItem>{availabilityOptions.map((availability) => <SelectItem key={availability} value={availability}>{String(availability).replace(/_/g, " ")}</SelectItem>)}</SelectContent></Select>{hasActiveFilters && <Button type="button" variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setAvailabilityFilter("all"); }}><X className="mr-1.5 h-4 w-4" />Clear</Button>}</div></div>}
 
-      <TabsContent value="interested" className="space-y-4">
+      <TabsContent value="interested" className="m-0">
         {filteredInterestedOfficers.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
@@ -169,30 +169,17 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
             </CardContent>
           </Card>
         ) : (
-          filteredInterestedOfficers.map((interest) => (
-            <Card key={interest.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
+          <div className="overflow-hidden border bg-background">{filteredInterestedOfficers.map((interest) => (
+            <div key={interest.id} className="grid gap-2 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70 lg:grid-cols-[minmax(250px,1fr)_minmax(180px,.7fr)_minmax(420px,auto)] lg:items-center lg:gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
                     <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} />
-                    <div>
-                    <CardTitle>{interest.officer_profiles?.profiles?.full_name}</CardTitle>
-                    <CardDescription>{interest.officer_profiles?.title}</CardDescription>
+                    <div className="min-w-0">
+                    <p className="truncate font-semibold">{interest.officer_profiles?.profiles?.full_name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{interest.officer_profiles?.title} · {interest.officer_profiles?.location || "Location not specified"}</p>
                     </div>
                   </div>
-                  <Badge variant="secondary">{interest.officer_profiles?.availability_status}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Location:</strong> {interest.officer_profiles?.location || "Not specified"}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Experience:</strong> {interest.officer_profiles?.years_experience || 0} years
-                  </p>
-                  <div className="flex flex-col gap-2 mt-4">
-                    <div className="flex gap-2">
+                  <div className="flex items-center gap-2"><Badge variant="secondary">{interest.officer_profiles?.availability_status}</Badge><span className="text-xs text-muted-foreground">{interest.officer_profiles?.years_experience || 0} years</span></div>
+                  <div className="flex items-center gap-1.5 overflow-x-auto lg:justify-end [&_button]:h-8 [&_button]:shrink-0 [&_button]:whitespace-nowrap [&_button]:px-2.5 [&_button]:text-xs">
                       <Button
                         variant="outline"
                         onClick={() =>
@@ -201,15 +188,9 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                       >
                         Move to Not Interested
                       </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => removeInterestMutation.mutate(interest.id)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
+                      <Button variant="destructive" onClick={() => removeInterestMutation.mutate(interest.id)}>Remove</Button>
                     {isFreeTier ? (
-                      <Button variant="outline" disabled className="w-full">
+                      <Button variant="outline" disabled>
                         <Lock className="w-4 h-4 mr-2" />
                         Send Interest Email (Premium Feature)
                       </Button>
@@ -217,7 +198,6 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                       <>
                         <Button 
                           variant="default" 
-                          className="w-full"
                           onClick={() => handleSendInterestEmail(interest.officer_profiles?.id)}
                         >
                           <Mail className="w-4 h-4 mr-2" />
@@ -225,7 +205,6 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                         </Button>
                         <Button 
                           variant="outline" 
-                          className="w-full"
                           onClick={() => {
                             setSelectedOfficer({
                               id: interest.officer_profiles?.id,
@@ -240,14 +219,12 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                       </>
                     )}
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
+            </div>
+          ))}</div>
         )}
       </TabsContent>
 
-      <TabsContent value="not_interested" className="space-y-4">
+      <TabsContent value="not_interested" className="m-0">
         {filteredNotInterestedOfficers.length === 0 ? (
           <Card>
             <CardContent className="pt-6">
@@ -255,18 +232,9 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
             </CardContent>
           </Card>
         ) : (
-          filteredNotInterestedOfficers.map((interest) => (
-            <Card key={interest.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>{interest.officer_profiles?.profiles?.full_name}</CardTitle>
-                    <CardDescription>{interest.officer_profiles?.title}</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
+          <div className="overflow-hidden border bg-background">{filteredNotInterestedOfficers.map((interest) => (
+            <div key={interest.id} className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70">
+                <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} /><div className="min-w-0 flex-1"><p className="truncate font-semibold">{interest.officer_profiles?.profiles?.full_name}</p><p className="truncate text-xs text-muted-foreground">{interest.officer_profiles?.title}</p></div><div className="flex shrink-0 gap-1.5 [&_button]:h-8 [&_button]:text-xs">
                   <Button
                     variant="outline"
                     onClick={() =>
@@ -282,9 +250,8 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                     Remove
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))
+            </div>
+          ))}</div>
         )}
       </TabsContent>
       {chatOpen && selectedOfficer && companyProfile && (

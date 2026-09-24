@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Lock, MessageCircle, ClipboardCheck, Mail, Phone, FileCheck2, ShieldCheck, StickyNote, Search, X, RefreshCw } from "lucide-react";
+import { Lock, MessageCircle, Mail, Phone, FileCheck2, ShieldCheck, StickyNote, Search, X, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { ChatDialog } from "./ChatDialog";
 import { ApplicantReviewDialog } from "./ApplicantReviewDialog";
@@ -87,7 +87,6 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
   const [unreadCount, setUnreadCount] = useState(0);
   const [onboardingApplication, setOnboardingApplication] = useState<any>(null);
   const [screeningApplication, setScreeningApplication] = useState<any>(null);
-  const [viewMode] = useState<"cards" | "compact">("compact");
   const [notesApplication, setNotesApplication] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -288,14 +287,14 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
   }
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-4">
+    <Card className="overflow-hidden border-0 bg-transparent shadow-none">
+      <CardHeader className="sr-only">
         <div className="flex flex-wrap items-center gap-3"><CardTitle>Applicants</CardTitle>{applications.length > 0 && <Badge variant="secondary" className="rounded-full">{applications.length} total</Badge>}{unreadCount > 0 && <Badge className="rounded-full">{unreadCount} new message{unreadCount === 1 ? "" : "s"}</Badge>}</div>
         <CardDescription>
           Officers who have expressed interest in your positions
         </CardDescription>
       </CardHeader>
-      <CardContent className="px-4 pb-4 sm:px-5 sm:pb-5">
+      <CardContent className="p-0">
         {!isPaidSubscriber && (
           <div className="mb-4 p-4 bg-muted rounded-lg">
             <div className="flex items-start gap-3 mb-3">
@@ -317,11 +316,11 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
           </div>
         )}
 
-        {initialLoading && <div className="mb-4 space-y-3 rounded-xl border bg-muted/20 p-3" aria-hidden="true">
+        {initialLoading && <div className="mb-2 space-y-2 border-y bg-muted/20 px-2 py-2" aria-hidden="true">
           <div className="flex flex-col gap-2 lg:flex-row"><Skeleton className="h-10 flex-1" /><Skeleton className="h-10 lg:w-52" /><Skeleton className="h-10 lg:w-52" /></div>
           <div className="flex items-center justify-between"><Skeleton className="h-4 w-28" /><Skeleton className="h-10 w-44" /></div>
         </div>}
-        {!initialLoading && applications.length > 0 && <div className="mb-4 space-y-3 rounded-xl border bg-muted/20 p-3">
+        {!initialLoading && applications.length > 0 && <div className="mb-2 space-y-2 border-y bg-muted/20 px-2 py-2">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <div className="relative min-w-0 flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search applicants" className="bg-background pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name, email, phone, or position" /></div>
             <Select value={stageFilter} onValueChange={setStageFilter}><SelectTrigger className="bg-background lg:w-52" aria-label="Filter applicants by stage"><SelectValue placeholder="All stages" /></SelectTrigger><SelectContent><SelectItem value="all">All stages</SelectItem><SelectItem value="review">Needs review</SelectItem><SelectItem value="interview">Interview</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="onboarding">Onboarding</SelectItem><SelectItem value="screening">Screening / final review</SelectItem></SelectContent></Select>
@@ -330,12 +329,13 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
           </div>
           <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Showing {filteredApplications.length} of {applications.length}</p><span className="text-xs font-medium text-muted-foreground">Compact roster</span></div>
         </div>}
-        <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"}>
+        <div className="overflow-hidden border bg-background">
+          {!initialLoading && applications.length > 0 && <div className="hidden grid-cols-[minmax(260px,1.4fr)_minmax(190px,.9fr)_minmax(160px,.7fr)_minmax(420px,auto)] gap-4 border-b bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground xl:grid"><span>Officer</span><span>Hiring stage</span><span>Onboarding</span><span className="text-right">Actions</span></div>}
           {initialLoading ? (
-            <div className="col-span-full" role="status" aria-live="polite">
+            <div role="status" aria-live="polite">
               <p className="sr-only">Loading applicants</p>
-              <div className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 2xl:grid-cols-3" : "space-y-2"} aria-hidden="true">
-                {[0, 1, 2].map((item) => <div key={item} className="rounded-xl border border-t-2 border-t-slate-200 bg-card p-4"><div className="flex items-center gap-3"><Skeleton className="h-10 w-10 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-4 w-32" /><Skeleton className="h-3 w-24" /></div></div><Skeleton className="mt-4 h-16 w-full rounded-lg" /><div className="mt-3 grid grid-cols-2 gap-2"><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /><Skeleton className="h-9" /></div></div>)}
+              <div aria-hidden="true">
+                {[0, 1, 2, 3].map((item) => <div key={item} className="flex h-16 items-center gap-4 border-b px-3 last:border-b-0"><Skeleton className="h-9 w-9 rounded-full" /><div className="flex-1 space-y-2"><Skeleton className="h-3.5 w-36" /><Skeleton className="h-3 w-52" /></div><Skeleton className="h-7 w-28" /><Skeleton className="h-7 w-64" /></div>)}
               </div>
             </div>
           ) : loadError ? (
@@ -349,8 +349,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
               const onboarding = getOnboardingStatus(app.onboardingProgress);
               const nextStep = getNextStep(app, onboarding);
               return (
-              <div key={app.id} className={`group rounded-xl border bg-card transition-all duration-200 hover:-translate-y-px hover:shadow-md ${viewMode === "cards" ? `p-4 ${onboarding.percent === 100 ? "border-t-2 border-t-green-500" : app.status === "accepted" ? "border-t-2 border-t-blue-500" : "border-t-2 border-t-slate-300"}` : "border-border/70 p-4 shadow-sm xl:grid xl:grid-cols-[minmax(250px,1.05fr)_minmax(270px,1fr)_minmax(350px,auto)] xl:items-center xl:gap-5"}`}>
-                <div className={viewMode === "cards" ? "mb-3" : "mb-3 min-w-0 xl:mb-0"}>
+              <div key={app.id} className="grid gap-2 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70 xl:grid-cols-[minmax(260px,1.4fr)_minmax(190px,.9fr)_minmax(160px,.7fr)_minmax(420px,auto)] xl:items-center xl:gap-4">
+                <div className="min-w-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <ProfileAvatar name={app.officerName} email={app.officerEmail} src={app.officerAvatar} />
@@ -359,7 +359,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                         <span className="mt-1 block truncate text-xs text-muted-foreground">{app.job_posting?.title || "Security Officer"}</span>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 pl-12 pt-1">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 pl-12">
                       {isPaidSubscriber && app.officerPhone && (
                         <a href={`tel:${app.officerPhone}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
                           <Phone className="h-3 w-3" />
@@ -376,26 +376,16 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                   </div>
                 </div>
 
-                <div className={viewMode === "cards" ? "space-y-2" : "mb-3 min-w-0 space-y-2 xl:mb-0"}>
-                  <div className={`rounded-lg border px-3 py-2.5 ${nextStep.tone}`}>
-                    <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] opacity-70">
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      What happens next
-                    </div>
-                    <p className="text-sm font-semibold leading-snug">{nextStep.label.replace(/^Next:\s*/, "")}</p>
-                  </div>
-
-                  {app.status === "accepted" && <div className={`rounded-lg border px-3 py-2.5 ${onboarding.percent === 100 ? "border-green-200 bg-green-50/60" : "border-blue-200 bg-blue-50/50"}`}>
-                    <div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-2"><ClipboardCheck className={`h-4 w-4 shrink-0 ${onboarding.percent === 100 ? "text-green-700" : "text-primary"}`} /><div className="min-w-0"><strong className="block truncate text-xs">{onboarding.label}</strong><span className="block truncate text-[11px] text-muted-foreground">{onboarding.detail}</span></div></div><span className="shrink-0 rounded-full bg-background/80 px-2 py-0.5 text-[11px] font-bold shadow-sm">{onboarding.percent}%</span></div>
-                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-background"><div className={`h-full rounded-full transition-all ${onboarding.percent === 100 ? "bg-green-600" : "bg-primary"}`} style={{ width: `${onboarding.percent}%` }} /></div>
-                  </div>}
+                <div className="min-w-0">
+                  <Badge variant="outline" className={`max-w-full truncate ${nextStep.tone}`}>{nextStep.label.replace(/^Next:\s*/, "")}</Badge>
                 </div>
+                <div>{app.status === "accepted" ? <div className="flex items-center gap-2"><Badge variant="outline" className={onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}>{onboarding.percent}%</Badge><span className="truncate text-xs text-muted-foreground">{onboarding.label}</span></div> : <span className="text-xs text-muted-foreground">Not started</span>}</div>
 
                 {isPaidSubscriber ? (
-                  <div className={viewMode === "cards" ? "mt-3 grid grid-cols-2 gap-2" : "grid grid-cols-2 gap-2 xl:w-[350px]"}>
+                  <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto xl:justify-end [&_button]:h-8 [&_button]:shrink-0 [&_button]:whitespace-nowrap [&_button]:px-2.5 [&_button]:text-xs">
                     <Button 
                       size="sm"
-                      className="h-9 px-3 text-xs shadow-sm"
+                      className="shadow-none"
                       onClick={() => onOpenOfficer?.(app.officer.id)}
                     >
                       View profile
@@ -403,7 +393,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="h-9 border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
+                      className="border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
                       onClick={() => {
                         setSelectedOfficer({
                           id: app.officer.id,
@@ -420,7 +410,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-9 border-amber-200 bg-amber-50 px-3 text-xs text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
+                      className="border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
                       onClick={() => setNotesApplication(app)}
                     >
                       <StickyNote className="mr-1.5 h-3.5 w-3.5" />
@@ -438,13 +428,13 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                       onChanged={loadApplications}
                     />
                     {app.status === "accepted" && app.onboardingProgress?.packet_id && (
-                      <Button size="sm" variant="outline" className="h-9 border-teal-200 bg-teal-50 px-3 text-xs text-teal-800 hover:border-teal-300 hover:bg-teal-100 hover:text-teal-900" onClick={() => setOnboardingApplication(app)}>
+                      <Button size="sm" variant="outline" className="border-teal-200 bg-teal-50 text-teal-800 hover:border-teal-300 hover:bg-teal-100 hover:text-teal-900" onClick={() => setOnboardingApplication(app)}>
                         <FileCheck2 className="mr-1.5 h-3.5 w-3.5" />
                         View onboarding
                       </Button>
                     )}
                     {app.status === "accepted" && onboarding.percent === 100 && app.hireId && (
-                      <Button size="sm" variant="outline" className="h-9 border-orange-200 bg-orange-50 px-3 text-xs text-orange-800 hover:border-orange-300 hover:bg-orange-100 hover:text-orange-900" onClick={() => setScreeningApplication(app)}>
+                      <Button size="sm" variant="outline" className="border-orange-200 bg-orange-50 text-orange-800 hover:border-orange-300 hover:bg-orange-100 hover:text-orange-900" onClick={() => setScreeningApplication(app)}>
                         <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />
                         Review screening
                       </Button>
