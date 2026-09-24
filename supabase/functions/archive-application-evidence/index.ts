@@ -137,11 +137,9 @@ serve(async (request) => {
     for (const source of sources) {
       const { data: blob, error: downloadError } = await admin.storage.from(source.bucket).download(source.path);
       if (downloadError || !blob) {
-        const statusCode = String((downloadError as { statusCode?: string | number } | null)?.statusCode ?? "");
-        const isMissing = statusCode === "404" || /not found|NoSuchKey/i.test(downloadError?.message || "");
-        if (!source.required && isMissing) {
-          warnings.push({ label: source.label, reason: "The original optional upload is no longer available." });
-          console.warn("Skipping missing optional application evidence", { applicationId: application.id, bucket: source.bucket, path: source.path });
+        if (!source.required) {
+          warnings.push({ label: source.label, reason: downloadError?.message || "The optional upload could not be copied." });
+          console.warn("Skipping unavailable optional application evidence", { applicationId: application.id, bucket: source.bucket, path: source.path, error: downloadError });
           continue;
         }
         throw downloadError || new Error(`Could not read ${source.label}`);
@@ -151,7 +149,14 @@ serve(async (request) => {
       const safeName = basename(source.path).replace(/[^a-zA-Z0-9._-]/g, "-");
       const destination = `${application.id}/${source.kind === "photo" ? "Photos" : "Certifications"}/${source.role}-${safeName}`;
       const { error: uploadError } = await admin.storage.from("application-evidence").upload(destination, bytes, { contentType: blob.type || "application/octet-stream", upsert: true });
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        if (!source.required) {
+          warnings.push({ label: source.label, reason: uploadError.message || "The optional upload could not be archived." });
+          console.warn("Skipping optional application evidence that could not be archived", { applicationId: application.id, destination, error: uploadError });
+          continue;
+        }
+        throw uploadError;
+      }
       rows.push({
         hiring_application_id: application.id,
         officer_id: officer.id,

@@ -98,9 +98,9 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
       setPhotosConfirmed(false);
       onSaved?.(false);
       
-      // Validate file size (5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error("File size must be less than 5MB");
+      // Current phone cameras commonly produce images larger than 5 MB.
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error("Photo must be 20MB or smaller");
         return;
       }
 
@@ -217,7 +217,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
               ) : (
                 <div className="rounded-lg border-2 border-dashed p-8 text-center">
                   <Input type="file" accept="image/*" onChange={(e) => uploadPhoto(e, photoType.id)} disabled={uploading === photoType.id} className="hidden" id={`photo-${photoType.id}`} />
-                  <label htmlFor={`photo-${photoType.id}`} className="cursor-pointer"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-muted-foreground" /><p className="text-sm font-medium">{uploading === photoType.id ? "Uploading..." : "Click to upload"}</p><p className="text-xs text-muted-foreground">JPG, PNG or WEBP (max 5MB)</p></div></label>
+                  <label htmlFor={`photo-${photoType.id}`} className="cursor-pointer"><div className="flex flex-col items-center gap-2"><Upload className="h-8 w-8 text-muted-foreground" /><p className="text-sm font-medium">{uploading === photoType.id ? "Uploading..." : "Take or choose a photo"}</p><p className="text-xs text-muted-foreground">Phone photos and images up to 20MB</p></div></label>
                 </div>
               )}
             </div>

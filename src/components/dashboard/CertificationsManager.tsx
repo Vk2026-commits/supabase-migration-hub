@@ -256,9 +256,8 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
 
       const file = event.target.files[0];
       
-      // Validate file size (10MB for documents)
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB");
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error("Document or photo must be 20MB or smaller");
         setUploading(null);
         return;
       }
@@ -379,8 +378,8 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       if (!e.target.files || e.target.files.length === 0) return;
       const file = e.target.files[0];
       
-      if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size must be less than 10MB");
+      if (file.size > 20 * 1024 * 1024) {
+        toast.error("Document or photo must be 20MB or smaller");
         return;
       }
       
@@ -572,7 +571,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                       <input
                         id={`license-upload-${licenseLevel}-${side}`}
                         type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+                        accept="image/*,.heic,.heif,.pdf,.doc,.docx"
                         onChange={(e) => {
                           if (existingLicense) {
                             handleDocumentUpload(e, existingLicense.id, side as "front" | "back");
@@ -896,7 +895,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                               <input
                                 id={`training-upload-${training.id}-${side}`}
                                 type="file"
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+                                accept="image/*,.heic,.heif,.pdf,.doc,.docx"
                                 onChange={(e) =>
                                   handleDocumentUpload(e, training.id, side as "front" | "back")
                                 }

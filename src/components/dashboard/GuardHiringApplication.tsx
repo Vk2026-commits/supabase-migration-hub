@@ -478,12 +478,23 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         : await (supabase as any).from("guard_hiring_applications").insert(employerPayload).select("id,evidence_snapshot_status").single();
       if (employerApplicationResult.error || !employerApplicationResult.data) throw employerApplicationResult.error || new Error("Could not create the employer application copy");
 
+      // Record the signed application before archiving optional uploads. A
+      // temporary storage or Edge Function problem must never make a valid
+      // application disappear or force the applicant to sign it again.
+      const employerSubmission = await (supabase as any)
+        .from("guard_hiring_applications")
+        .update({ status: "submitted", submitted_at: submittedAt })
+        .eq("id", employerApplicationResult.data.id);
+      if (employerSubmission.error) throw employerSubmission.error;
+
       const archiveResult = await supabase.functions.invoke("archive-application-evidence", {
         body: { hiring_application_id: employerApplicationResult.data.id, archive_kind: "submission" },
       });
-      if (archiveResult.error) throw new Error(archiveResult.data?.error || archiveResult.error.message || "Could not preserve the submitted photos and certificates");
-      if (archiveResult.data?.snapshot_status !== "complete") throw new Error(archiveResult.data?.error || "The required application attachments could not be preserved");
-      const attachmentManifest = archiveResult.data.manifest || [];
+      const archiveComplete = !archiveResult.error && archiveResult.data?.snapshot_status === "complete";
+      const attachmentManifest = archiveComplete ? archiveResult.data?.manifest || [] : [];
+      if (!archiveComplete) {
+        console.warn("Application submitted, but optional attachment archiving will need attention", archiveResult.error || archiveResult.data);
+      }
       setForm(current => ({ ...current, attachmentManifest }));
       const masterCompletion = await (supabase as any).from("guard_hiring_applications").update({ status: "submitted", submitted_at: submittedAt, application_data: { ...snapshot, attachmentManifest } }).eq("id", result.data.id);
       if (masterCompletion.error) throw masterCompletion.error;
@@ -491,6 +502,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       setEditingSubmitted(false);
       setShowSubmissionConfirmation(true);
       toast.success(editingSubmitted ? "Application resubmitted" : "Hiring application submitted");
+      if (!archiveComplete) toast.warning("Your application was sent. Some optional uploads may need to be added again later.");
       onChanged?.();
     } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
     finally { setSubmitting(false); }
