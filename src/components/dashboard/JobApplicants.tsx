@@ -139,8 +139,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       const unreadPromise = supabase.from("messages").select("id", { count: "exact", head: true }).eq("company_id", companyId).eq("sender_type", "officer").eq("is_read", false);
       const [profilesResult, offersResult, hiresResult, progressResult, screeningResult, interviewsResult, notesResult] = await Promise.all([
         officerUserIds.length ? supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", officerUserIds) : Promise.resolve({ data: [], error: null }),
-        (supabase as any).from("employment_offers").select("hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
-        (supabase as any).from("hires").select("id,employment_confirmed_at,status").eq("company_id", companyId),
+        (supabase as any).from("employment_offers").select("id,hire_id,job_application_id").eq("company_id", companyId).in("status", ["accepted", "legacy_accepted"]),
+        (supabase as any).from("hires").select("id,employment_confirmed_at,status,hiring_application_id,offer_id").eq("company_id", companyId),
         (supabase as any).rpc("get_company_onboarding_progress", { _company_id: companyId }),
         (supabase as any).from("hire_screening_checks").select("*").eq("company_id", companyId).order("created_at"),
         (supabase as any).from("interview_schedules").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -159,7 +159,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
       const profileById = new Map((profilesResult.data || []).map((entry: any) => [entry.id, entry]));
       const progressByHire = new Map((progressResult.data || []).map((entry: any) => [entry.hire_id, entry]));
       const hireByApplication = new Map((offersResult.data || []).filter((offer: any) => offer.job_application_id && offer.hire_id).map((offer: any) => [offer.job_application_id, offer.hire_id]));
-      const hireStateById = new Map((hiresResult.data || []).map((hire: any) => [hire.id, hire]));
+      const offerByApplication = new Map<string, any>((offersResult.data || []).filter((offer: any) => offer.job_application_id).map((offer: any) => [offer.job_application_id, offer]));
+      const hireStateById = new Map<string, any>((hiresResult.data || []).map((hire: any) => [hire.id, hire]));
       const screeningByHire = new Map<string, any[]>();
       for (const check of screeningResult.data || []) screeningByHire.set(check.hire_id, [...(screeningByHire.get(check.hire_id) || []), check]);
       const interviewByApplication = new Map<string, any>();
@@ -184,6 +185,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
           officerEmail: profile?.email || "",
           officerPhone: app.officer?.phone || "",
           hireId,
+          offerId: offerByApplication.get(app.id)?.id || hireStateById.get(hireId)?.offer_id || null,
+          hiringApplicationId: hireStateById.get(hireId)?.hiring_application_id || offerApplication?.id || null,
           employmentConfirmedAt: hireStateById.get(hireId)?.employment_confirmed_at || null,
           hireStatus: hireStateById.get(hireId)?.status || null,
           onboardingProgress: progressByHire.get(hireId) || null,
@@ -423,7 +426,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions 
         />
       )}
       <ApplicantReviewDialog open={Boolean(reviewApplication)} onOpenChange={(open) => !open && setReviewApplication(null)} application={reviewApplication} />
-      <OnboardingDocumentsDialog open={Boolean(onboardingApplication)} onOpenChange={(open) => !open && setOnboardingApplication(null)} application={onboardingApplication} />
+      <OnboardingDocumentsDialog open={Boolean(onboardingApplication)} onOpenChange={(open) => !open && setOnboardingApplication(null)} application={onboardingApplication} onAccepted={loadApplications} />
       <PreEmploymentScreeningDialog open={Boolean(screeningApplication)} onOpenChange={(open) => !open && setScreeningApplication(null)} application={screeningApplication} onChanged={loadApplications} />
       <ApplicantNotesDialog open={Boolean(notesApplication)} onOpenChange={(open) => !open && setNotesApplication(null)} companyId={companyId} application={notesApplication} onSaved={loadApplications} />
     </Card>

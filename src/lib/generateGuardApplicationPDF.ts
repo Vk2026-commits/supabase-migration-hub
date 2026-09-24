@@ -67,7 +67,7 @@ const formatTime = (value?: string) => {
   return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
 };
 
-export async function generateGuardApplicationPDF(data: GuardApplicationData, mode: "download" | "print" = "download") {
+export async function generateGuardApplicationPDF(data: GuardApplicationData, mode: "download" | "print" | "blob" = "download"): Promise<void | Blob> {
   const printWindow = mode === "print" ? window.open("", "_blank") : null;
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
@@ -274,7 +274,9 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   }
 
   const safeName = data.applicantName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "applicant";
-  if (mode === "print") {
+  if (mode === "blob") {
+    return doc.output("blob");
+  } else if (mode === "print") {
     doc.autoPrint();
     const url = doc.output("bloburl");
     if (printWindow) printWindow.location.href = url.toString();

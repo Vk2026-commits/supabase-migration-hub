@@ -374,7 +374,9 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   const confidentialityYear = isConfidentialityAgreement && formattedDate ? formattedDate.slice(-2) : "";
   const isOfferLetter = path.includes("10-offer-letter-per-hour");
   const employerRepresentativeName = values.employerSignatureName || values.employerRepresentativeName || (isKairosEmployer ? "Erika Garces" : "");
-  const employerRepresentativeTitle = values.employerRepresentativeTitle || (isKairosEmployer ? "Authorized Hiring Representative" : "");
+  const employerRepresentativeTitle = isKairosEmployer && /erika garces/i.test(employerRepresentativeName)
+    ? "Executive General Manager"
+    : values.employerRepresentativeTitle || (isKairosEmployer ? "Executive General Manager" : "");
   const employerSignedDate = date(values.offerPreparedAt?.slice(0, 10) || acknowledgement.signatureDate);
   const schedule = values.availabilitySchedule || {};
   const fieldValues: Record<string, string> = {
@@ -399,7 +401,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     "City State ZIP": [values.city, values.state, values.zip].filter(Boolean).join(", "),
     undefined: employeeName,
     "User Name  for Track Tik": values.trackTikUsername || "",
-    "Password  for  Track Tik": values.trackTikPasswordSet ? "Set privately" : "",
+    "Password  for  Track Tik": isTrackTikDocument ? "#Security2020" : "",
     Position: values.offeredPosition || "Security Officer",
     Text1: isConfidentialityAgreement ? confidentialityYear : isDrugTestingConsent ? "" : employeeName,
     Text2: date(values.startDate) || formattedDate,
@@ -447,7 +449,9 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     ["Employee Name", "Employees Name Printed"].forEach((name) => { try { form.getTextField(name).setFontSize(8); } catch { /* field differs */ } });
   }
   if (isHandbookAcknowledgement) {
-    try { form.getTextField("Employer Representative").setText(""); } catch { /* field differs */ }
+    ["Employer Representative", "Printed Name", "Date"].forEach((name) => {
+      try { form.getTextField(name).setText(""); } catch { /* field differs */ }
+    });
   }
   if (isConfidentialityAgreement) {
     try { form.getTextField("This Confidentiality Agreement the Agreement dated as of").setFontSize(9); } catch { /* field differs */ }
@@ -586,6 +590,16 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
       }
     } catch { /* employer representative field differs */ }
   }
+  if (isHandbookAcknowledgement) {
+    // Several browser PDF viewers omit the appearance stream for these two
+    // AcroForm fields. Bake the employee name and signing date onto the lines
+    // while retaining the underlying form and signed audit receipt.
+    const page = document.getPages()[0];
+    page.drawRectangle({ x: 108.5, y: 258, width: 252, height: 26, color: rgb(1, 1, 1) });
+    page.drawRectangle({ x: 372, y: 300, width: 171.5, height: 26, color: rgb(1, 1, 1) });
+    drawValue(page, employeeName, 112, 267, 244, 9);
+    drawValue(page, formattedDate, 376, 309, 162, 9);
+  }
 
   const staticPolicyLayout = isAppearancePolicy ? { page: 0, date: [154, 600], signature: [72, 130, 150, 20], name: [338, 136] }
     : isAttendancePolicy ? { page: 0, date: [165, 631], signature: [101, 137, 132, 20], name: [325, 143] }
@@ -620,7 +634,9 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
     drawValue(page, values.worksiteCity || "", 112, 491, 95, 8);
     drawValue(page, values.worksiteState || "", 245, 491, 95, 8);
     drawValue(page, values.worksiteZip || "", 375, 491, 62, 8);
-    drawValue(page, employeeName.split(/\s+/)[0] || employeeName, 100, 458, 135, 8);
+    // The salutation underline begins after "Dear". Keep the first name above
+    // that line instead of crossing the label/underline as older packets did.
+    drawValue(page, employeeName.split(/\s+/)[0] || employeeName, 122, 466, 118, 8);
     const dayXs = [171, 225, 282, 346, 399, 451, 504];
     const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
     dayKeys.forEach((day, index) => {
@@ -638,7 +654,7 @@ export async function buildPolicyAcknowledgement(path: string, acknowledgement: 
   if (isTrackTikDocument) {
     const entries = [
       ["User Name  for Track Tik", values.trackTikUsername || "", 8],
-      ["Password  for  Track Tik", values.trackTikPasswordSet ? "Set privately" : "", 7],
+      ["Password  for  Track Tik", "#Security2020", 7],
       ["Employee", values.employeeIdNumber || "", 8],
     ] as const;
     entries.forEach(([name, value, size]) => {

@@ -521,7 +521,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   const [lockedReason, setLockedReason] = useState("A company must send you a completed offer before employee onboarding is available.");
   const [data, setData] = useState(initialData);
   const [currentStep, setCurrentStep] = useState(0);
-  const [status, setStatus] = useState<"draft" | "submitted">("draft");
+  const [status, setStatus] = useState<"draft" | "submitted" | "correction_requested">("draft");
+  const [correctionRequests, setCorrectionRequests] = useState<any[]>([]);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -617,6 +618,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       const fullName = (snapshot.applicantName || hiring.applicant_name || profileResult.data?.full_name || "").trim().split(/\s+/).filter(Boolean);
       const saved = existing?.form_data || {};
       const offer = (hire?.offer_terms || {}) as Record<string, string>;
+      const automaticTrackTikUsername = `${(fullName[0] || "").slice(0, 1)}${fullName.length > 1 ? fullName[fullName.length - 1] : ""}`.toLowerCase().replace(/[^a-z0-9]/g, "");
       setData({
         ...initialData,
         legalFirstName: fullName[0] || "",
@@ -629,6 +631,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         state: snapshot.state || officerResult.data?.address_state || "",
         zip: snapshot.zip || officerResult.data?.address_zip || "",
         ...saved,
+        trackTikUsername: automaticTrackTikUsername,
+        trackTikPasswordSet: true,
         employerName: hire.company_profiles?.company_name || hiring.company_name || snapshot.companyName || "Your hiring company",
         startDate: offer.startDate || hire.hire_date || snapshot.startDate || "",
         offeredPosition: offer.positionTitle || offer.offeredPosition || hire.position_title || hiring.position || snapshot.position || officerResult.data?.title || "Security Officer",
@@ -645,7 +649,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           : saved.availabilitySchedule || snapshot.availability?.schedule || (officerResult.data as any)?.availability_schedule || {},
         acceptanceDeadline: offer.acceptanceDeadline || "",
         employerRepresentativeName: offer.representativeName || "",
-        employerRepresentativeTitle: offer.representativeTitle || "",
+        employerRepresentativeTitle: offer.representativeTitle || (/kairos security/i.test(hire.company_profiles?.company_name || hiring.company_name || "") ? "Executive General Manager" : ""),
         employerSignatureName: offer.employerSignatureName || offer.representativeName || "",
         offerPreparedAt: hire.offer_prepared_at,
       });
@@ -653,7 +657,16 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       setHiringApplicationId(hiring.id);
       setPacketId(existing?.id || null);
       setCurrentStep(Math.min(Number(existing?.current_step || 0), 7));
-      setStatus(existing?.status === "submitted" ? "submitted" : "draft");
+      setStatus(existing?.status === "submitted" ? "submitted" : existing?.status === "correction_requested" ? "correction_requested" : "draft");
+      if (existing?.id) {
+        const { data: corrections } = await (supabase as any)
+          .from("onboarding_correction_requests")
+          .select("id,document_label,page_number,area_label,instructions,requested_at")
+          .eq("packet_id", existing.id)
+          .eq("status", "requested")
+          .order("requested_at", { ascending: true });
+        if (mounted) setCorrectionRequests(corrections || []);
+      }
       setSubmittedAt(existing?.submitted_at || null);
       setI9SubmittedAt(existing?.i9_submitted_at || null);
       setW4SubmittedAt(existing?.w4_submitted_at || null);
@@ -731,7 +744,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   }, [data, currentStep, loaded, accessState, activeOfficerId, hireId, hiringApplicationId, status]);
 
   const policyDetailsComplete = (key: string) => {
-    if (key === "trackTik") return Boolean(data.trackTikUsername && data.trackTikPasswordSet);
+    if (key === "trackTik") return Boolean(data.trackTikUsername);
     if (key === "uniform") {
       const fields = data.policyAcknowledgements[key]?.documentFields || {};
       return fields.uniformNone === "true" || uniformChecklistRows.some((_, index) => fields[`uniformReceived:${index}`] === "true" || fields[`uniformReturned:${index}`] === "true");
@@ -986,9 +999,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         .update(submissionUpdate)
         .eq("id", packetIdRef.current);
       if (error) throw error;
+      if (status === "correction_requested") {
+        const { error: resolutionError } = await (supabase as any).rpc("resolve_onboarding_corrections", { _packet_id: packetIdRef.current });
+        if (resolutionError) throw resolutionError;
+      }
       setCurrentStep(7);
       setStatus("submitted");
       setSubmittedAt(submittedAt);
+      setCorrectionRequests([]);
       toast.success(`Onboarding complete — your packet was sent to ${data.employerName}`);
       onChanged?.();
     } catch (error: any) {
@@ -1191,6 +1209,20 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
 
   return (
     <form id="employee-onboarding-top" onSubmit={submit} className="w-full max-w-none scroll-mt-4 pb-24 lg:pb-8">
+      {status === "correction_requested" && correctionRequests.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950">
+          <p className="font-semibold">Your company returned part of the onboarding packet for correction</p>
+          <p className="mt-1 text-sm">Correct the items below, then submit onboarding again. Your prior signed versions remain in the audit record.</p>
+          <div className="mt-4 space-y-2">
+            {correctionRequests.map((request) => (
+              <div key={request.id} className="rounded-xl border border-amber-200 bg-white/70 p-3 text-sm">
+                <p className="font-semibold">{request.document_label}{request.page_number ? ` · page ${request.page_number}` : ""} · {request.area_label}</p>
+                <p className="mt-1">{request.instructions}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
         <div className="flex items-center gap-3 px-5 py-5 sm:px-8">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
@@ -1748,16 +1780,13 @@ function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onCh
           <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span><span>Your username is normally your first initial followed by your last name—for example, <strong className="font-mono">jdoe</strong>.</span></li>
           <li className="flex gap-3"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">4</span><span>Sign in with the temporary password <strong className="font-mono">#Security2020</strong>, then create a new private password when prompted.</span></li>
         </ol>
-        <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">We Find Guards records only that your password was set. Your private password is never stored or displayed in this onboarding packet.</p>
+        <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">These company-issued temporary credentials are included in your onboarding record. TrackTik will ask you to create a private password after your first sign-in.</p>
       </div>
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="TrackTik username" value={data.trackTikUsername} onChange={(value) => onChange("trackTikUsername", value)} required placeholder="Example: lrose" />
-        <Field label="Employee number (optional)" value={data.employeeIdNumber} onChange={(value) => onChange("employeeIdNumber", value)} placeholder="The company can assign this later" />
+        <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">Username</p><p className="mt-1 font-mono text-base font-semibold">{data.trackTikUsername || "Generated from your name"}</p><p className="mt-1 text-xs text-muted-foreground">First initial + last name, all lowercase</p></div>
+        <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">Temporary password</p><p className="mt-1 font-mono text-base font-semibold">#Security2020</p><p className="mt-1 text-xs text-muted-foreground">Change this after your first sign-in</p></div>
       </div>
-      <label className="flex items-start gap-3 rounded-xl border bg-background p-4">
-        <Checkbox checked={data.trackTikPasswordSet} onCheckedChange={(value) => onChange("trackTikPasswordSet", Boolean(value))} />
-        <span className="text-sm"><strong className="block">My TrackTik password has been set *</strong>Only the completion status is stored. Your private password is never exposed.</span>
-      </label>
+      <Field label="Employee number (optional)" value={data.employeeIdNumber} onChange={(value) => onChange("employeeIdNumber", value)} placeholder="The company can assign this later" />
     </section>
   );
 }
