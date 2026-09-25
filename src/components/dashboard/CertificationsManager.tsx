@@ -178,11 +178,9 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         return;
       }
 
-      const { data, error } = await supabase
-        .from("certifications")
-        .select("*")
-        .eq("officer_id", id)
-        .order("created_at", { ascending: false });
+      // This officer-only function bypasses the expensive company-review RLS
+      // branches that are irrelevant when an officer reads their own records.
+      const { data, error } = await (supabase as any).rpc("get_my_certifications");
 
       if (error) throw error;
       setCertifications((data || []) as Certification[]);
@@ -206,7 +204,8 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       setLoading(false);
       if (data && data.length > 0) void generateSignedUrls(data as Certification[]);
     } catch (error: any) {
-      toast.error("Failed to load certifications");
+      console.error("Failed to load certifications", error);
+      if (!embedded) toast.error("Failed to load certifications");
     } finally {
       setLoading(false);
     }
@@ -931,12 +930,9 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
     );
   };
 
-  if (loading) {
-    return <div className="text-center py-8">Loading certifications...</div>;
-  }
-
   return (
     <Tabs defaultValue="level-ii" className="w-full rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+      {loading && <div className="mb-4 flex items-center gap-2 border-b pb-3 text-sm text-muted-foreground"><span className="h-2 w-2 animate-pulse rounded-full bg-primary" />Loading saved credentials in the background… You can still go Back or Continue.</div>}
       <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
         <TabsTrigger className="min-h-11 whitespace-normal" value="level-ii">Non-Commission</TabsTrigger>
         <TabsTrigger className="min-h-11 whitespace-normal" value="level-iii">Commission</TabsTrigger>
