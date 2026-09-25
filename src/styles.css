@@ -153,7 +153,7 @@
     overflow-wrap: anywhere;
   }
 
-  .operations-workspace :where(.grid, form, form > *, input, textarea, select) {
+  .operations-workspace :where(.grid, .grid > *, form, form > *, input, textarea, select) {
     min-width: 0;
   }
 
