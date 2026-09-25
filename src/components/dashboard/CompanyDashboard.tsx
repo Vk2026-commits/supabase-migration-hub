@@ -387,7 +387,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white">
             <div className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-2 sm:min-h-14 sm:flex-nowrap sm:gap-4 sm:py-0">
-              <SidebarTrigger className="shrink-0" />
+              <SidebarTrigger
+                aria-label="Open dashboard menu"
+                className="h-10 w-auto shrink-0 gap-2 border border-slate-600 bg-slate-900 px-3 text-white hover:bg-slate-800 hover:text-white md:h-8 md:w-8 md:border-0 md:bg-transparent md:px-0"
+              >
+                <span className="md:sr-only">Dashboard menu</span>
+              </SidebarTrigger>
               <button type="button" onClick={() => selectTab("account")} className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-80" aria-label="Open account settings">
                 <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-9 w-9 shadow-none" />
                 <span className="min-w-0"><span className="block truncate text-base font-bold">{accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-slate-300">{formData.company_name || "Company representative"}</span></span>

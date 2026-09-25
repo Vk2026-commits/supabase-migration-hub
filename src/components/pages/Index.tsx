@@ -22,33 +22,33 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid lg:grid-cols-[1fr_300px] gap-8">
-          <div>
+      <div className="container mx-auto w-full max-w-full px-4 py-8">
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="min-w-0">
             {/* Hero Section */}
-            <section className="relative py-20 overflow-hidden">
+            <section className="relative min-w-0 overflow-hidden py-12 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,hsl(var(--primary)/0.1),transparent_50%)]" />
-        <div className="container mx-auto max-w-6xl relative">
-          <div className="text-center space-y-6">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/50 border border-primary/20 mb-4">
-              <Shield className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">{t('hero.badge')}</span>
+        <div className="relative mx-auto w-full min-w-0 max-w-6xl">
+          <div className="min-w-0 space-y-6 text-center">
+            <div className="mx-auto mb-4 inline-flex max-w-full items-center justify-center gap-2 rounded-full border border-primary/20 bg-secondary/50 px-3 py-2 sm:px-4">
+              <Shield className="h-4 w-4 shrink-0 text-primary" />
+              <span className="min-w-0 text-sm font-medium leading-snug">{t('hero.badge')}</span>
             </div>
             
-            <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
+            <h1 className="max-w-full break-words text-3xl font-bold leading-tight tracking-normal sm:text-5xl md:text-6xl">
               {t('hero.title')}
               <span className="block mt-2 pb-2 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
                 {t('hero.titleHighlight')}
               </span>
             </h1>
             
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="mx-auto max-w-2xl break-words text-base leading-relaxed text-muted-foreground sm:text-xl">
               {t('hero.subtitle')}
             </p>
             
             <Dialog>
               <DialogTrigger asChild>
-                <p className="text-lg font-medium text-primary max-w-2xl mx-auto cursor-pointer hover:underline">
+                <p className="mx-auto max-w-2xl cursor-pointer break-words text-base font-medium leading-relaxed text-primary hover:underline sm:text-lg">
                   {t('hero.freeProfessionals')}
                 </p>
               </DialogTrigger>
@@ -78,12 +78,12 @@ const Index = () => {
               </DialogContent>
             </Dialog>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button size="lg" asChild className="text-lg h-12 px-8">
-                <Link to="/get-started">Security Professionals Create Your Profile</Link>
+            <div className="flex min-w-0 flex-col justify-center gap-4 pt-4 sm:flex-row">
+              <Button size="lg" asChild className="h-auto min-h-12 w-full max-w-full whitespace-normal px-4 py-3 text-base leading-snug sm:w-auto sm:px-8 sm:text-lg">
+                <Link to="/get-started" className="text-center">Security Professionals Create Your Profile</Link>
               </Button>
-              <Button size="lg" variant="outline" asChild className="text-lg h-12 px-8">
-                <Link to="/auth?role=company">Create Your Company Profile For Companies</Link>
+              <Button size="lg" variant="outline" asChild className="h-auto min-h-12 w-full max-w-full whitespace-normal px-4 py-3 text-base leading-snug sm:w-auto sm:px-8 sm:text-lg">
+                <Link to="/auth?role=company" className="text-center">Create Your Company Profile For Companies</Link>
               </Button>
             </div>
           </div>
@@ -94,13 +94,13 @@ const Index = () => {
             <section className="py-8">
               <Card className="border-2 border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
                 <CardContent className="pt-6">
-                  <div className="flex gap-4">
+                   <div className="flex min-w-0 gap-3 sm:gap-4">
                     <div className="flex-shrink-0">
                       <div className="h-12 w-12 rounded-lg bg-amber-500/10 flex items-center justify-center">
                         <Shield className="h-6 w-6 text-amber-600 dark:text-amber-500" />
                       </div>
                     </div>
-                    <div className="flex-1">
+                     <div className="min-w-0 flex-1 break-words">
                       <h3 className="text-xl font-semibold mb-3 text-amber-900 dark:text-amber-100">
                         Important Notice for Security Companies
                       </h3>
@@ -125,8 +125,8 @@ const Index = () => {
             </section>
 
             {/* Features Section */}
-            <section className="py-20 bg-muted/30 rounded-lg">
-        <div className="container mx-auto max-w-6xl">
+            <section className="min-w-0 rounded-lg bg-muted/30 py-14 sm:py-20">
+        <div className="mx-auto w-full min-w-0 max-w-6xl px-3 sm:px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
               {t('features.title')}
@@ -154,7 +154,7 @@ const Index = () => {
                 <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <Video className="h-6 w-6 text-primary" />
                 </div>
-                <div className="flex items-center gap-2 mb-2">
+              <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
                   <h3 className="text-xl font-semibold">{t('features.video.title')}</h3>
                   <span className="px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded-full">Coming Soon</span>
                 </div>
@@ -180,21 +180,21 @@ const Index = () => {
       </section>
 
             {/* CTA Section */}
-            <section className="py-20 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-lg">
-        <div className="container mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            <section className="min-w-0 rounded-lg bg-gradient-to-br from-primary to-primary/80 px-4 py-14 text-primary-foreground sm:py-20">
+        <div className="mx-auto w-full min-w-0 max-w-4xl text-center">
+          <h2 className="mb-4 break-words text-2xl font-bold sm:text-3xl md:text-4xl">
             {t('cta.title')}
           </h2>
-          <p className="text-xl mb-8 opacity-90">
+          <p className="mb-8 break-words text-base leading-relaxed opacity-90 sm:text-xl">
             Join hundreds of security professionals and companies already using
-            <br />
+            <br className="hidden sm:block" />
             We Find Guards
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button size="lg" variant="secondary" asChild className="text-lg h-12 px-8">
+           <div className="flex min-w-0 flex-col justify-center gap-4 sm:flex-row">
+             <Button size="lg" variant="secondary" asChild className="h-auto min-h-12 w-full max-w-full whitespace-normal px-4 py-3 text-base sm:w-auto sm:px-8 sm:text-lg">
               <Link to="/auth?mode=signup">{t('cta.createAccount')}</Link>
             </Button>
-            <Button size="lg" variant="outline" asChild className="text-lg h-12 px-8 bg-transparent border-2 border-primary-foreground text-primary-foreground hover:bg-primary-foreground hover:text-primary">
+             <Button size="lg" variant="outline" asChild className="h-auto min-h-12 w-full max-w-full whitespace-normal border-2 border-primary-foreground bg-transparent px-4 py-3 text-base text-primary-foreground hover:bg-primary-foreground hover:text-primary sm:w-auto sm:px-8 sm:text-lg">
               <Link to="/browse">{t('cta.exploreProfiles')}</Link>
             </Button>
           </div>
@@ -203,11 +203,11 @@ const Index = () => {
 
             {/* QR Code Section */}
             <section className="py-16">
-              <div className="container mx-auto max-w-4xl">
+              <div className="mx-auto w-full min-w-0 max-w-4xl">
                 <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/30">
                   <CardContent className="pt-8 pb-8">
-                    <div className="flex flex-col md:flex-row items-center gap-8">
-                      <div className="flex-1 text-center md:text-left">
+                     <div className="flex min-w-0 flex-col items-center gap-8 md:flex-row">
+                       <div className="min-w-0 flex-1 break-words text-center md:text-left">
                         <h2 className="text-2xl font-bold mb-4">
                           Scan to Get Started
                         </h2>
@@ -236,7 +236,7 @@ const Index = () => {
           </div>
 
           {/* Job Listings Sidebar */}
-          <aside className="lg:sticky lg:top-8 lg:self-start">
+          <aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
             <JobListings />
           </aside>
         </div>
