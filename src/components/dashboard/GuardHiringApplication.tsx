@@ -127,7 +127,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     let mounted = true;
     Promise.all([
       supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
-      activeOfficerId ? supabase.from("certifications").select("*").eq("officer_id", activeOfficerId) : Promise.resolve({ data: [], error: null }),
+      activeOfficerId ? (supabase as any).rpc("get_my_certifications") : Promise.resolve({ data: [], error: null }),
     ]).then(([photoResult, certificationResult]) => {
       if (!mounted) return;
       if (!photoResult.error) {
@@ -309,10 +309,12 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         // Keep the convenience sync to the management tabs best-effort so an
         // unrelated profile or work-history error cannot trap the applicant on
         // the current step after their draft has already been saved.
-        try {
-          await syncShared(syncManagementRecords);
-        } catch (syncError) {
-          console.warn("Draft saved, but management record sync will be retried", syncError);
+        if (syncManagementRecords) {
+          try {
+            await syncShared(true);
+          } catch (syncError) {
+            console.warn("Draft saved, but management record sync will be retried", syncError);
+          }
         }
         return true;
       } catch (error: any) {
@@ -332,7 +334,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   useEffect(() => {
     if (!loaded || !activeOfficerId || !applicationStarted) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => { void saveDraft(); }, 250);
+    // Avoid writing the entire JSON application after nearly every keystroke.
+    // Continue/Back still queue an immediate durable save; this timer is only
+    // a quiet-period safety net while the applicant remains on one step.
+    saveTimer.current = setTimeout(() => { void saveDraft(); }, 1500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [form, shared, photos, photosSaved, certifications, certificationSaved, resumePath, currentStep, loaded, activeOfficerId, selectedJobId, applicationStarted, visitedSteps, completedSteps]);
 
@@ -430,7 +435,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     nextParams.set("applicationStep", String(nextStep + 1));
     setSearchParams(nextParams, { replace: true });
     requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
-    void saveDraft(nextStep, true);
+    // The application JSON is the durable in-progress record. Canonical
+    // profile/work-history tables are synchronized once at submission instead
+    // of being rewritten on every Back or Continue action.
+    void saveDraft(nextStep);
   };
   const next = async () => {
     if (currentStep === 8 && savePendingLicensesRef.current) {
