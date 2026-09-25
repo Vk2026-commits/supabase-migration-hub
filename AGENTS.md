@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Keep mobile overflow containment scoped to `.operations-workspace`; global overflow hiding can clip controls and conceal layout defects.

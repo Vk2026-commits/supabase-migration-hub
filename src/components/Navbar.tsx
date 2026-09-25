@@ -1,6 +1,6 @@
 import { Link, useNavigate, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
-import { Shield, Languages } from "lucide-react";
+import { Languages, Menu, Shield, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
@@ -22,6 +22,7 @@ const Navbar = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [accountRoles, setAccountRoles] = useState<string[]>([]);
   const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
@@ -127,119 +128,139 @@ const Navbar = () => {
     </DropdownMenuItem>
   ));
 
+  const navigationActions = (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="gap-2">
+            <Languages className="h-4 w-4" />
+            <span className="text-sm">{i18n.language === "es" ? "Español" : "English"}</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => changeLanguage("en")}>English</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => changeLanguage("es")}>Español</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {user ? (
+        <>
+          {activeRole !== "officer" && (
+            <Button variant="ghost" asChild>
+              <Link to={browseHref}>{t("nav.browse")}</Link>
+            </Button>
+          )}
+          <Button variant="ghost" asChild>
+            <Link
+              to={
+                hasOfficerAndCompanyAccess &&
+                (activeRole === "officer" || activeRole === "company")
+                  ? `/dashboard?viewAs=${activeRole}${activeRole === "company" ? companyQuery : ""}`
+                  : selectedCompanyId
+                    ? `/dashboard?companyId=${encodeURIComponent(selectedCompanyId)}`
+                    : "/dashboard"
+              }
+            >
+              {t("nav.dashboard")}
+            </Link>
+          </Button>
+          {isAdmin && (
+            <>
+              <Button variant="ghost" asChild>
+                <Link to="/admin">Admin</Link>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">View as</Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
+                    Security Officer
+                  </DropdownMenuItem>
+                  {companyWorkspaceItems.length > 0 ? companyWorkspaceItems : (
+                    <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
+                      Company
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => navigate("/admin")}>Admin</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+          {hasOfficerAndCompanyAccess ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">Switch account</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
+                  Security Officer
+                </DropdownMenuItem>
+                {companyWorkspaceItems.length > 0 ? companyWorkspaceItems : (
+                  <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
+                    Company Team
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : activeRole !== "officer" && (
+            <Button variant="ghost" asChild>
+              <Link to="/auth?force=1">Switch account</Link>
+            </Button>
+          )}
+          <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+        </>
+      ) : (
+        <>
+          <Button variant="ghost" asChild>
+            <Link to="/browse">{t("nav.browse")}</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/auth">{t("nav.login")}</Link>
+          </Button>
+          <Button asChild>
+            <Link to="/auth?mode=signup">{t("nav.signup")}</Link>
+          </Button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-semibold text-xl">
-          <Shield className="h-6 w-6 text-primary" />
+      <div className="container mx-auto grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-4 py-2 lg:flex lg:justify-between lg:gap-4 lg:py-0">
+        <Link to="/" className="flex min-w-0 items-center gap-2 whitespace-nowrap text-base font-semibold sm:text-xl">
+          <Shield className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6" />
           <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
             We Find Guards
           </span>
         </Link>
 
-        <div className="flex items-center gap-4">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Languages className="h-4 w-4" />
-                <span className="text-sm">{i18n.language === 'es' ? 'Español' : 'English'}</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => changeLanguage('en')}>
-                English
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => changeLanguage('es')}>
-                Español
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          {user ? (
-            <>
-              {activeRole !== "officer" && (
-                <Button variant="ghost" asChild>
-                  <Link to={browseHref}>{t('nav.browse')}</Link>
-                </Button>
-              )}
-              <Button variant="ghost" asChild>
-                <Link
-                  to={
-                    hasOfficerAndCompanyAccess &&
-                    (activeRole === "officer" || activeRole === "company")
-                      ? `/dashboard?viewAs=${activeRole}${activeRole === "company" ? companyQuery : ""}`
-                      : selectedCompanyId
-                        ? `/dashboard?companyId=${encodeURIComponent(selectedCompanyId)}`
-                        : "/dashboard"
-                  }
-                >
-                  {t('nav.dashboard')}
-                </Link>
-              </Button>
-              {isAdmin && (
-                <>
-                  <Button variant="ghost" asChild>
-                    <Link to="/admin">Admin</Link>
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm">View as</Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
-                        Security Officer
-                      </DropdownMenuItem>
-                      {companyWorkspaceItems.length > 0 ? companyWorkspaceItems : (
-                        <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
-                          Company
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => navigate("/admin")}>
-                        Admin
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-              {hasOfficerAndCompanyAccess ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">Switch account</Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => navigate("/dashboard?viewAs=officer")}>
-                      Security Officer
-                    </DropdownMenuItem>
-                    {companyWorkspaceItems.length > 0 ? companyWorkspaceItems : (
-                      <DropdownMenuItem onClick={() => navigate(`/dashboard?viewAs=company${companyQuery}`)}>
-                        Company Team
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : activeRole !== "officer" && (
-                <Button variant="ghost" asChild>
-                  <Link to="/auth?force=1">Switch account</Link>
-                </Button>
-              )}
-              <Button variant="outline" onClick={handleSignOut}>
-                Sign Out
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="ghost" asChild>
-                <Link to="/browse">{t('nav.browse')}</Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link to="/auth">{t('nav.login')}</Link>
-              </Button>
-              <Button asChild>
-                <Link to="/auth?mode=signup">{t('nav.signup')}</Link>
-              </Button>
-            </>
-          )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="shrink-0 gap-2 lg:hidden"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-navigation-actions"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          <span>{mobileMenuOpen ? "Close" : "Menu"}</span>
+        </Button>
+
+        <div className="hidden items-center gap-4 lg:flex">
+          {navigationActions}
         </div>
+
+        {mobileMenuOpen && (
+          <div
+            id="mobile-navigation-actions"
+            className="col-span-2 flex max-h-[calc(100dvh-5rem)] min-w-0 flex-wrap items-center gap-2 overflow-y-auto border-t border-border py-3 lg:hidden [&>*]:max-w-full"
+          >
+            {navigationActions}
+          </div>
+        )}
       </div>
     </nav>
   );
