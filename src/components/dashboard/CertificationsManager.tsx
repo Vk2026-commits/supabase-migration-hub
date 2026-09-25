@@ -31,6 +31,8 @@ interface CertificationsManagerProps {
   userId: string;
   onEnsureProfile?: () => Promise<any>;
   onChanged?: (certifications: Certification[]) => void;
+  embedded?: boolean;
+  onRegisterSave?: (save: () => Promise<boolean>) => void;
 }
 
 type LicenseFormData = {
@@ -77,7 +79,7 @@ function validateCertificationDates(issueDate: string, expiryDate: string) {
   return null;
 }
 
-export function CertificationsManager({ officerId, userId, onEnsureProfile, onChanged }: CertificationsManagerProps) {
+export function CertificationsManager({ officerId, userId, onEnsureProfile, onChanged, embedded = false, onRegisterSave }: CertificationsManagerProps) {
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -353,6 +355,83 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
     }
   };
 
+  const saveLicense = async (licenseLevel: string, label: string): Promise<boolean> => {
+    const existingLicense = certifications.find(
+      (certification) => certification.license_level === licenseLevel && certification.certification_type === "license"
+    );
+    const formData = licenseForms[licenseLevel] || {
+      certification_number: existingLicense?.certification_number || "",
+      issue_date: existingLicense?.issue_date || "",
+      expiry_date: existingLicense?.expiry_date || "",
+    };
+    const pendingUploads = pendingLicenseUploads[licenseLevel] || {};
+    const hasChanges = Boolean(
+      formData.certification_number || formData.issue_date || formData.expiry_date || pendingUploads.front || pendingUploads.back
+    );
+    if (!hasChanges) return true;
+    if (!formData.certification_number) {
+      toast.error(`Enter the license number for ${label} before continuing`);
+      return false;
+    }
+    const dateError = validateCertificationDates(formData.issue_date, formData.expiry_date);
+    if (dateError) {
+      toast.error(dateError);
+      return false;
+    }
+    const id = await ensureOfficerId();
+    if (!id) {
+      toast.error("Please create your profile first");
+      return false;
+    }
+
+    const saveKey = `${licenseLevel}-save`;
+    setUploading(saveKey);
+    try {
+      const certId = existingLicense?.id || crypto.randomUUID();
+      const [frontUrl, backUrl] = await Promise.all([
+        pendingUploads.front ? uploadDocument(pendingUploads.front, certId, "front") : Promise.resolve(undefined),
+        pendingUploads.back ? uploadDocument(pendingUploads.back, certId, "back") : Promise.resolve(undefined),
+      ]);
+      const certData: Record<string, unknown> = {
+        officer_id: id,
+        certification_type: "license",
+        name: label,
+        license_level: licenseLevel,
+        certification_number: formData.certification_number,
+        issue_date: formData.issue_date || null,
+        expiry_date: formData.expiry_date || null,
+        issuing_organization: "Texas Department of Public Safety",
+      };
+      if (frontUrl) certData.document_front_url = frontUrl;
+      if (backUrl) certData.document_back_url = backUrl;
+
+      const result = existingLicense
+        ? await supabase.from("certifications").update(certData as any).eq("id", existingLicense.id)
+        : await supabase.from("certifications").insert({ id: certId, ...certData } as any);
+      if (result.error) throw result.error;
+
+      setPendingLicenseUploads((current) => ({ ...current, [licenseLevel]: {} }));
+      await loadCertifications();
+      return true;
+    } catch (error: any) {
+      toast.error(error?.message ? `Failed to save license: ${error.message}` : "Failed to save license");
+      return false;
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const savePendingLicenses = async (): Promise<boolean> => {
+    for (const license of LICENSE_LEVELS) {
+      if (!await saveLicense(license.value, license.label)) return false;
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    onRegisterSave?.(savePendingLicenses);
+  });
+
   const renderLicenseForm = (licenseLevel: string, label: string) => {
     const existingLicense = certifications.find(
       (c) => c.license_level === licenseLevel && c.certification_type === "license"
@@ -384,71 +463,11 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       }
       
       setPendingUploads(prev => ({ ...prev, [side]: file }));
-      toast.success(`${side === "front" ? "Front" : "Back"} document selected. Save the license to upload.`);
+      toast.success(`${side === "front" ? "Front" : "Back"} document selected.${embedded ? " It will save when you continue." : " Save the license to upload."}`);
     };
 
     const handleSubmit = async () => {
-      if (!formData.certification_number) {
-        toast.error("License number is required");
-        return;
-      }
-
-      const dateError = validateCertificationDates(formData.issue_date, formData.expiry_date);
-      if (dateError) {
-        toast.error(dateError);
-        return;
-      }
-
-      const id = await ensureOfficerId();
-      if (!id) {
-        toast.error("Please create your profile first");
-        return;
-      }
-
-      const saveKey = `${licenseLevel}-save`;
-      setUploading(saveKey);
-      try {
-        // Generate the id on the client so creating a new record does not need
-        // an INSERT ... RETURNING query through every certification SELECT
-        // policy. Upload both sides first, then persist everything with one
-        // database write instead of three sequential writes.
-        const certId = existingLicense?.id || crypto.randomUUID();
-        const [frontUrl, backUrl] = await Promise.all([
-          pendingUploads.front ? uploadDocument(pendingUploads.front, certId, "front") : Promise.resolve(undefined),
-          pendingUploads.back ? uploadDocument(pendingUploads.back, certId, "back") : Promise.resolve(undefined),
-        ]);
-        const certData: Record<string, unknown> = {
-          officer_id: id,
-          certification_type: "license",
-          name: label,
-          license_level: licenseLevel,
-          certification_number: formData.certification_number,
-          issue_date: formData.issue_date || null,
-          expiry_date: formData.expiry_date || null,
-          issuing_organization: "Texas Department of Public Safety",
-        };
-        if (frontUrl) certData.document_front_url = frontUrl;
-        if (backUrl) certData.document_back_url = backUrl;
-
-        if (existingLicense) {
-          const { error } = await supabase
-            .from("certifications")
-            .update(certData as any)
-            .eq("id", existingLicense.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from("certifications").insert({ id: certId, ...certData } as any);
-          if (error) throw error;
-        }
-
-        toast.success("License saved successfully");
-        setPendingLicenseUploads((current) => ({ ...current, [licenseLevel]: {} }));
-        await loadCertifications();
-      } catch (error: any) {
-        toast.error(error?.message ? `Failed to save license: ${error.message}` : "Failed to save license");
-      } finally {
-        setUploading(null);
-      }
+      if (await saveLicense(licenseLevel, label)) toast.success("License saved successfully");
     };
 
     return (
@@ -592,9 +611,10 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               </div>
             </div>
 
-            <Button type="button" className="w-full" onClick={handleSubmit} disabled={uploading === `${licenseLevel}-save`}>
+            {!embedded && <Button type="button" className="w-full" onClick={handleSubmit} disabled={uploading === `${licenseLevel}-save`}>
               {uploading === `${licenseLevel}-save` ? "Saving License…" : existingLicense ? "Update License" : "Save License"}
-            </Button>
+            </Button>}
+            {embedded && <p className="text-sm text-muted-foreground">Your license information and selected documents will save when you press Continue.</p>}
           </div>
         </CardContent>
       </Card>

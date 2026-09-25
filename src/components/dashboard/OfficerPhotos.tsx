@@ -122,7 +122,10 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
 
       toast.success("Photo uploaded successfully!");
       if (hasSubmittedApplication) setShowResubmitReminder(true);
-      void loadPhotos();
+      const savedPhotos = await loadPhotos();
+      const complete = Boolean(savedPhotos?.headshot && savedPhotos?.["full-body"]);
+      setPhotosConfirmed(complete);
+      onSaved?.(complete);
     } catch (error: any) {
       toast.error("Error uploading photo: " + error.message);
     } finally {
@@ -223,7 +226,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
             </div>
           ))}
         </div>
-        <div className={`mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${photosConfirmed && requiredPhotosComplete ? "border-green-300 bg-green-50" : "bg-muted/30"}`}>
+        {!embedded && <div className={`mt-6 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${photosConfirmed && requiredPhotosComplete ? "border-green-300 bg-green-50" : "bg-muted/30"}`}>
           <div className="flex items-center gap-3">
             {photosConfirmed && requiredPhotosComplete && <CheckCircle2 className="h-6 w-6 shrink-0 text-green-600" />}
             <div>
@@ -234,7 +237,8 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
           <Button type="button" size="lg" onClick={savePhotos} disabled={savingPhotos || Boolean(uploading) || (!optional && !requiredPhotosComplete)} className="shrink-0">
             <Save className="mr-2 h-5 w-5" />{savingPhotos ? "Saving photos…" : photosConfirmed ? "Photos saved" : "Save photos"}
           </Button>
-        </div>
+        </div>}
+        {embedded && <p className="mt-5 text-sm text-muted-foreground">Photos save as soon as they upload. Use Continue when you are ready to move on.</p>}
       </CardContent>
     </>
   );
