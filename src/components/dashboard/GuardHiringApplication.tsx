@@ -172,15 +172,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         else setSaveError("We couldn't create the officer record needed to save this application.");
       }
       const appTable = (supabase as any).from("guard_hiring_applications");
+      // Only wait for the four records required to paint the saved draft.
+      // Work history and hiring destinations load after the form is visible.
       const requests: any[] = [
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
         supabase.from("officer_profiles").select("phone,address_street,address_unit,address_city,address_state,address_zip,employment_type,shift_preference,availability_schedule,resume_url").eq("user_id", userId).maybeSingle(),
-        appTable.select("*").eq("user_id", userId).eq("application_type", "master").maybeSingle(),
-        loadingOfficerId ? supabase.from("work_history").select("*").eq("officer_id", loadingOfficerId).order("start_date", { ascending: false }) : Promise.resolve({ data: [] }),
-        (supabase as any).rpc("list_active_hiring_destinations"),
-        supabase.auth.getUser(),
+        appTable.select("id,status,current_step,application_data,created_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.auth.getSession(),
       ];
-      const [profileResult, officerResult, masterResult, workResult, jobsResult, authResult] = await Promise.all(requests);
+      const [profileResult, officerResult, masterResult, authResult] = await Promise.all(requests);
       if (!mounted) return;
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
@@ -194,7 +194,6 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         setCertificationSaved(true);
         window.localStorage.setItem(`guard-application-certification-complete:${userId}`, "true");
       }
-      const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
       const capturedLead = (() => {
         const leadId = searchParams.get("lead");
         if (!leadId) return null;
@@ -206,12 +205,12 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         ...draft,
         applicantName: draft.applicantName || profile?.full_name || "",
         email: draft.email || profile?.email || "",
-        phone: formatUsPhone(draft.phone || officer?.phone || authResult?.data?.user?.user_metadata?.phone || capturedLead?.phone || ""),
+        phone: formatUsPhone(draft.phone || officer?.phone || authResult?.data?.session?.user?.user_metadata?.phone || capturedLead?.phone || ""),
         address: draft.address || officer?.address_street || "",
         city: draft.city || officer?.address_city || "",
         state: draft.state || officer?.address_state || "",
         zip: draft.zip || officer?.address_zip || "",
-        workHistory: draft.workHistory?.length ? draft.workHistory : (canonicalWork.length ? canonicalWork : initialForm.workHistory),
+        workHistory: draft.workHistory?.length ? draft.workHistory : initialForm.workHistory,
       });
       setResumePath((draft as any).resumePath || officer?.resume_url || "");
       const savedAvailability = (draft as any).availability as SharedData | undefined;
@@ -219,6 +218,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const savedStep = Math.min(Number(master?.current_step || 0), 9);
       const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
       const restoredStep = urlStep ?? savedStep;
+      masterIdRef.current = master?.id || null;
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
       const savedVisitedSteps = Array.isArray((draft as any).visitedSteps)
         ? (draft as any).visitedSteps.filter((step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9)
@@ -232,26 +232,34 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       setCompletedSteps(savedCompletedSteps);
       setApplicationStarted(Boolean(master));
       window.localStorage.setItem(`guard-application-step:${userId}`, String(restoredStep + 1));
-      const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({
-        id: item.id,
-        companyId: item.company_id,
-        companyName: item.company_name,
-        position: item.position,
-        city: item.city || "",
-        state: item.state || "",
-      }));
       const referredJobId = searchParams.get("job") || "";
       const savedJobId = referredJobId || (draft as any).jobPostingId || "";
-      const matchingDestination = destinations.find((item) => item.id === savedJobId) || destinations.find((item) =>
-        item.companyName.trim().toLowerCase() === (draft.companyName || initialForm.companyName).trim().toLowerCase()
-        && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()
-        && item.city.trim().toLowerCase() === (draft.companyCity || initialForm.companyCity).trim().toLowerCase()
-      );
-      const activeDestination = matchingDestination || (destinations.length === 1 ? destinations[0] : undefined);
-      setJobs(destinations);
-      setSelectedJobId(activeDestination?.id || "");
-      if (activeDestination) setForm((current) => ({ ...current, companyName: activeDestination.companyName, position: activeDestination.position, companyCity: activeDestination.city, companyState: activeDestination.state }));
+      setSelectedJobId(savedJobId);
       setLoaded(true);
+
+      // Secondary records hydrate the already-visible application.
+      void Promise.all([
+        loadingOfficerId && !draft.workHistory?.length
+          ? supabase.from("work_history").select("*").eq("officer_id", loadingOfficerId).order("start_date", { ascending: false })
+          : Promise.resolve({ data: [] }),
+        (supabase as any).rpc("list_active_hiring_destinations"),
+      ]).then(([workResult, jobsResult]) => {
+        if (!mounted) return;
+        const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
+        if (canonicalWork.length) setForm((current) => ({ ...current, workHistory: current.workHistory.some((item) => item.employer?.trim()) ? current.workHistory : canonicalWork }));
+        const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({ id: item.id, companyId: item.company_id, companyName: item.company_name, position: item.position, city: item.city || "", state: item.state || "" }));
+        const matchingDestination = destinations.find((item) => item.id === savedJobId) || destinations.find((item) =>
+          item.companyName.trim().toLowerCase() === (draft.companyName || initialForm.companyName).trim().toLowerCase()
+          && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()
+          && item.city.trim().toLowerCase() === (draft.companyCity || initialForm.companyCity).trim().toLowerCase()
+        );
+        const activeDestination = matchingDestination || (destinations.length === 1 ? destinations[0] : undefined);
+        setJobs(destinations);
+        if (activeDestination) {
+          setSelectedJobId(activeDestination.id);
+          setForm((current) => ({ ...current, companyName: activeDestination.companyName, position: activeDestination.position, companyCity: activeDestination.city, companyState: activeDestination.state }));
+        }
+      }).catch((error) => console.warn("Secondary application data is still loading", error));
     })();
     return () => { mounted = false; };
   }, [userId, officerId]);
