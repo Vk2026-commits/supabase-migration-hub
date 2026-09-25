@@ -467,87 +467,52 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     }
     setSubmitting(true);
     try {
-      // Final submission must also persist application work history into the
-      // canonical records used by the Work History tab. Step navigation does
-      // this too, but applicants can submit after restoring a saved draft.
-      await syncShared(true);
       const selectedJob = jobs.find(j => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
       const snapshot = { ...form, resumePath, jobPostingId: selectedJob.id, availability: shared, visitedSteps: Array.from({ length: 10 }, (_, index) => index), completedSteps: Array.from({ length: 10 }, (_, index) => index).filter(stepRequirementsMet), photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
-      const submittedAt = new Date().toISOString();
-      const base: any = { officer_id: activeOfficerId, user_id: userId, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName, applicant_email: form.email, current_step: 9, signature_name: form.signature, signature_date: form.signatureDate, application_data: snapshot };
-      const result = masterId ? await (supabase as any).from("guard_hiring_applications").update({ ...base, application_type: "master", job_application_id: null }).eq("id", masterId).select("id").single() : await (supabase as any).from("guard_hiring_applications").insert({ ...base, application_type: "master", job_application_id: null, status: "draft" }).select("id").single();
-      if (result.error) throw result.error; setMasterId(result.data.id);
-      let jobApplication: { id: string } | null = null;
-      const existingJobApplication = await supabase.from("job_applications").select("id").eq("job_posting_id", selectedJob.id).eq("officer_id", activeOfficerId).maybeSingle();
-      if (existingJobApplication.error) throw existingJobApplication.error;
-      if (existingJobApplication.data) {
-        jobApplication = existingJobApplication.data;
-      } else {
-        const createdJobApplication = await supabase.from("job_applications").insert({ job_posting_id: selectedJob.id, officer_id: activeOfficerId, status: "interested" }).select("id").single();
-        if (createdJobApplication.error) throw createdJobApplication.error;
-        jobApplication = createdJobApplication.data;
-      }
-      if (!jobApplication) throw new Error("Could not link this application to the selected company");
       const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
-      const employerPayload = {
-        ...base,
-        application_type: "employer_copy",
-        source_application_id: result.data.id,
-        job_application_id: jobApplication.id,
-        company_name: selectedJob.companyName,
-        position: selectedJob.position,
-        application_data: employerSnapshot,
-        status: "draft",
-        submitted_at: null,
-        evidence_snapshot_status: "pending",
-        evidence_snapshot_kind: "submission",
-      };
-      // A failed archive is retryable. Reuse that unfinished employer copy so
-      // repeated clicks do not leave duplicate draft applications behind.
-      const existingEmployerDraft = await (supabase as any)
-        .from("guard_hiring_applications")
-        .select("id")
-        .eq("job_application_id", jobApplication.id)
-        .eq("source_application_id", result.data.id)
-        .eq("application_type", "employer_copy")
-        .eq("status", "draft")
-        .in("evidence_snapshot_status", ["pending", "failed"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (existingEmployerDraft.error) throw existingEmployerDraft.error;
-      const employerApplicationResult = existingEmployerDraft.data
-        ? await (supabase as any).from("guard_hiring_applications").update(employerPayload).eq("id", existingEmployerDraft.data.id).select("id,evidence_snapshot_status").single()
-        : await (supabase as any).from("guard_hiring_applications").insert(employerPayload).select("id,evidence_snapshot_status").single();
-      if (employerApplicationResult.error || !employerApplicationResult.data) throw employerApplicationResult.error || new Error("Could not create the employer application copy");
-
-      // Record the signed application before archiving optional uploads. A
-      // temporary storage or Edge Function problem must never make a valid
-      // application disappear or force the applicant to sign it again.
-      const employerSubmission = await (supabase as any)
-        .from("guard_hiring_applications")
-        .update({ status: "submitted", submitted_at: submittedAt })
-        .eq("id", employerApplicationResult.data.id);
-      if (employerSubmission.error) throw employerSubmission.error;
-
-      const archiveResult = await supabase.functions.invoke("archive-application-evidence", {
-        body: { hiring_application_id: employerApplicationResult.data.id, archive_kind: "submission" },
+      const submission = await (supabase as any).rpc("submit_my_hiring_application", {
+        _master_application_id: masterId,
+        _officer_id: activeOfficerId,
+        _job_posting_id: selectedJob.id,
+        _position: form.position,
+        _applicant_name: form.applicantName,
+        _applicant_email: form.email,
+        _signature_name: form.signature,
+        _signature_date: form.signatureDate,
+        _application_data: employerSnapshot,
       });
-      const archiveComplete = !archiveResult.error && archiveResult.data?.snapshot_status === "complete";
-      const attachmentManifest = archiveComplete ? archiveResult.data?.manifest || [] : [];
-      if (!archiveComplete) {
-        console.warn("Application submitted, but optional attachment archiving will need attention", archiveResult.error || archiveResult.data);
-      }
-      setForm(current => ({ ...current, attachmentManifest }));
-      const masterCompletion = await (supabase as any).from("guard_hiring_applications").update({ status: "submitted", submitted_at: submittedAt, application_data: { ...snapshot, attachmentManifest } }).eq("id", result.data.id);
-      if (masterCompletion.error) throw masterCompletion.error;
+      if (submission.error || !submission.data?.[0]) throw submission.error || new Error("Could not submit the application");
+      const savedSubmission = submission.data[0];
+      setMasterId(savedSubmission.master_application_id);
       setMasterStatus("submitted");
       setEditingSubmitted(false);
       setShowSubmissionConfirmation(true);
       toast.success(editingSubmitted ? "Application resubmitted" : "Hiring application submitted");
-      if (!archiveComplete) toast.warning("Your application was sent. Some optional uploads may need to be added again later.");
       onChanged?.();
+
+      // The signed application and employer copy are already committed. These
+      // secondary synchronization and attachment tasks must never keep the
+      // applicant on a permanent Submitting screen.
+      void Promise.allSettled([
+        syncShared(true),
+        supabase.functions.invoke("archive-application-evidence", {
+          body: { hiring_application_id: savedSubmission.employer_application_id, archive_kind: "submission" },
+        }),
+      ]).then((results) => {
+        const archiveResult = results[1];
+        if (archiveResult.status === "fulfilled") {
+          const response = archiveResult.value;
+          const archiveComplete = !response.error && response.data?.snapshot_status === "complete";
+          if (archiveComplete) {
+            setForm(current => ({ ...current, attachmentManifest: response.data?.manifest || [] }));
+          } else {
+            console.warn("Application submitted; optional attachment archiving will retry later", response.error || response.data);
+          }
+        } else {
+          console.warn("Application submitted; optional attachment archiving will retry later", archiveResult.reason);
+        }
+      });
     } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
     finally { setSubmitting(false); }
   };
