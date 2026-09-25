@@ -763,8 +763,13 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         />
         <div className="flex min-w-0 flex-1">
           <div className="min-w-0 flex-1">
-            <div className="flex h-12 items-center border-b border-slate-800 bg-slate-950 px-4 text-white sm:px-5">
-              <SidebarTrigger />
+            <div className="flex min-h-12 items-center border-b border-slate-800 bg-slate-950 px-4 py-1.5 text-white sm:px-5">
+              <SidebarTrigger
+                aria-label="Open dashboard menu"
+                className="h-10 w-auto gap-2 border border-slate-600 bg-slate-900 px-3 text-white hover:bg-slate-800 hover:text-white md:h-8 md:w-8 md:border-0 md:bg-transparent md:px-0"
+              >
+                <span className="md:sr-only">Dashboard menu</span>
+              </SidebarTrigger>
             </div>
             <OperationsIdentityHeader
               name={profile?.full_name}
