@@ -1,3 +1,3 @@
 # Roadmap
 
-- [ ] Apply and verify the approved mobile viewport containment fix without business logic changes.
+- [ ] Verify the implemented mobile viewport containment fix at phone widths.

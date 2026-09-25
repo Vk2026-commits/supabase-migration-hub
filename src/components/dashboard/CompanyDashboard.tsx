@@ -386,17 +386,17 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
         <div className="flex-1 flex flex-col min-w-0">
           <div className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white">
-            <div className="flex h-14 items-center gap-4 px-4">
-              <SidebarTrigger />
-              <button type="button" onClick={() => selectTab("account")} className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80" aria-label="Open account settings">
+            <div className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-2 sm:min-h-14 sm:flex-nowrap sm:gap-4 sm:py-0">
+              <SidebarTrigger className="shrink-0" />
+              <button type="button" onClick={() => selectTab("account")} className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-80" aria-label="Open account settings">
                 <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-9 w-9 shadow-none" />
                 <span className="min-w-0"><span className="block truncate text-base font-bold">{accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-slate-300">{formData.company_name || "Company representative"}</span></span>
               </button>
               {companyWorkspaces.length > 1 && companyProfile && (
-                <div className="ml-auto w-full max-w-[280px]">
+                <div className="min-w-0 basis-full sm:ml-auto sm:w-full sm:max-w-[280px] sm:basis-auto">
                   <label htmlFor="company-workspace" className="sr-only">Company workspace</label>
                   <Select value={companyProfile.id} onValueChange={switchCompanyWorkspace}>
-                    <SelectTrigger id="company-workspace" className="bg-background" aria-label="Switch company workspace">
+                    <SelectTrigger id="company-workspace" className="min-w-0 bg-background" aria-label="Switch company workspace">
                       <Building2 className="mr-2 h-4 w-4 shrink-0 text-primary" />
                       <SelectValue placeholder="Choose a company" />
                     </SelectTrigger>

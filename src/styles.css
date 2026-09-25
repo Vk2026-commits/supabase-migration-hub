@@ -147,6 +147,16 @@
 }
 
 @layer components {
+  .operations-workspace {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .operations-workspace :where(.grid, form, form > *, input, textarea, select) {
+    min-width: 0;
+  }
+
   .operations-workspace .shadow,
   .operations-workspace .shadow-sm,
   .operations-workspace .shadow-md,
@@ -166,5 +176,15 @@
 
   .operations-workspace [data-radix-scroll-area-viewport] {
     scrollbar-gutter: stable;
+  }
+
+  @media (max-width: 639px) {
+    .operations-workspace :where(input, textarea, select, img, video, canvas, iframe) {
+      max-width: 100%;
+    }
+
+    .operations-workspace :where(input, textarea, select) {
+      font-size: 16px;
+    }
   }
 }
