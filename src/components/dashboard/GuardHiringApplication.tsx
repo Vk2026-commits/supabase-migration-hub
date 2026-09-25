@@ -286,12 +286,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       try {
         const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, resumePath, jobPostingId: selectedJobId, availability: shared, visitedSteps: visitedStepsRef.current, completedSteps: completedStepsRef.current, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved, canonicalCertificationIds: certifications.filter((certification) => certification.document_front_url).map((certification) => certification.id), certificationRequirementsComplete: certificationSaved } };
         const savedMasterId = masterIdRef.current;
-        const query = savedMasterId ? (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).select("id").single() : (supabase as any).from("guard_hiring_applications").insert(payload).select("id").single();
-        const { data, error } = await query;
+        const nextMasterId = savedMasterId || crypto.randomUUID();
+        const { error } = savedMasterId
+          ? await (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId)
+          : await (supabase as any).from("guard_hiring_applications").insert({ id: nextMasterId, ...payload });
         if (error) throw error;
-        if (data?.id) {
-          masterIdRef.current = data.id;
-          setMasterId(data.id);
+        if (!savedMasterId) {
+          masterIdRef.current = nextMasterId;
+          setMasterId(nextMasterId);
         }
         setSaveError(null);
         setSavedAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
@@ -412,17 +414,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     completedStepsRef.current = nextCompleted;
     setCompletedSteps(nextCompleted);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    const saved = await saveDraft(nextStep, true);
-    if (!saved) {
-      toast.error("Your progress could not be saved. Please try again before leaving this page.");
-      return;
-    }
+    // Navigation must never be held hostage by a slow autosave. Move the user
+    // immediately, then let the durable draft queue finish in the background.
     setCurrentStep(nextStep);
     window.localStorage.setItem(`guard-application-step:${userId}`, String(nextStep + 1));
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("applicationStep", String(nextStep + 1));
     setSearchParams(nextParams, { replace: true });
     requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
+    void saveDraft(nextStep, true);
   };
   const next = async () => {
     if (currentStep === 8 && savePendingLicensesRef.current) {

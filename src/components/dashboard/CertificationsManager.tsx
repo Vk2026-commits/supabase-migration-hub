@@ -126,23 +126,14 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
 
   // Generate signed URLs for all document paths
   const generateSignedUrls = async (certs: Certification[]) => {
+    const requests = certs.flatMap((cert) => ([
+      cert.document_front_url ? getSignedUrlForPath(cert.document_front_url).then((url) => url ? [`${cert.id}-front`, url] as const : null) : Promise.resolve(null),
+      cert.document_back_url ? getSignedUrlForPath(cert.document_back_url).then((url) => url ? [`${cert.id}-back`, url] as const : null) : Promise.resolve(null),
+    ]));
     const urls: Record<string, string> = {};
-    
-    for (const cert of certs) {
-      if (cert.document_front_url) {
-        const signedUrl = await getSignedUrlForPath(cert.document_front_url);
-        if (signedUrl) {
-          urls[`${cert.id}-front`] = signedUrl;
-        }
-      }
-      if (cert.document_back_url) {
-        const signedUrl = await getSignedUrlForPath(cert.document_back_url);
-        if (signedUrl) {
-          urls[`${cert.id}-back`] = signedUrl;
-        }
-      }
+    for (const entry of await Promise.all(requests)) {
+      if (entry) urls[entry[0]] = entry[1];
     }
-    
     setSignedUrls(urls);
   };
 
@@ -210,11 +201,10 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         return next;
       });
       onChanged?.((data || []) as Certification[]);
-      
-      // Generate signed URLs for all documents
-      if (data && data.length > 0) {
-        await generateSignedUrls(data as Certification[]);
-      }
+      // The form is usable as soon as its records arrive. Document previews
+      // load independently and in parallel instead of blocking the page.
+      setLoading(false);
+      if (data && data.length > 0) void generateSignedUrls(data as Certification[]);
     } catch (error: any) {
       toast.error("Failed to load certifications");
     } finally {

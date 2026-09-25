@@ -22,6 +22,26 @@ const PHOTO_TYPES = [
   { id: "action-2", label: "Action Shot 2", description: "On duty or training" },
 ];
 
+const preparePhotoForUpload = async (file: File): Promise<File> => {
+  if (!file.type.startsWith("image/") || file.size <= 2 * 1024 * 1024 || /gif|svg/i.test(file.type)) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxDimension = 1920;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "photo"}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch (error) {
+    console.warn("Photo compression was unavailable; uploading the original file", error);
+    return file;
+  }
+};
+
 export function OfficerPhotos({ userId, embedded = false, optional = false, onChanged, onSaved }: OfficerPhotosProps) {
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
@@ -94,15 +114,17 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
         return;
       }
 
-      const file = event.target.files[0];
+      const originalFile = event.target.files[0];
       setPhotosConfirmed(false);
       onSaved?.(false);
       
       // Current phone cameras commonly produce images larger than 5 MB.
-      if (file.size > 20 * 1024 * 1024) {
+      if (originalFile.size > 20 * 1024 * 1024) {
         toast.error("Photo must be 20MB or smaller");
         return;
       }
+
+      const file = await preparePhotoForUpload(originalFile);
 
       const fileExt = file.name.split(".").pop();
       const filePath = `${userId}/${photoType}.${fileExt}`;
