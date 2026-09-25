@@ -72,18 +72,29 @@ const Navbar = () => {
     const nextRoles = Array.from(new Set([profile?.role, ...(roles || []).map(({ role }) => role)]))
       .filter((role) => role === "officer" || role === "company") as string[];
 
-    setUserRole(profile?.role ?? null);
-    setAccountRoles(nextRoles);
+    let verifiedRoles = nextRoles;
+    let verifiedUserRole = profile?.role ?? null;
     if (nextRoles.includes("company")) {
       try {
-        setCompanyWorkspaces(await loadCompanyWorkspaces(userId));
+        const workspaces = await loadCompanyWorkspaces(userId);
+        setCompanyWorkspaces(workspaces);
+        if (workspaces.length === 0) {
+          verifiedRoles = nextRoles.filter((role) => role !== "company");
+          if (verifiedUserRole === "company") verifiedUserRole = verifiedRoles.includes("officer") ? "officer" : null;
+        }
       } catch (error) {
         console.error("Failed to load company workspace navigation", error);
         setCompanyWorkspaces([]);
+        // A stale role row or failed request must never expose company
+        // navigation before an actual workspace has been verified.
+        verifiedRoles = nextRoles.filter((role) => role !== "company");
+        if (verifiedUserRole === "company") verifiedUserRole = verifiedRoles.includes("officer") ? "officer" : null;
       }
     } else {
       setCompanyWorkspaces([]);
     }
+    setUserRole(verifiedUserRole);
+    setAccountRoles(verifiedRoles);
   };
 
   const handleSignOut = async () => {

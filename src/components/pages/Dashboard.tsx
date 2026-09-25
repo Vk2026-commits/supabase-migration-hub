@@ -39,6 +39,7 @@ const Dashboard = () => {
   const [showExpiredTrialDialog, setShowExpiredTrialDialog] = useState(false);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   useEffect(() => {
     const getProfile = async () => {
@@ -108,15 +109,14 @@ const Dashboard = () => {
           }
         }
 
-        setProfile(profileData ? { ...profileData, role: effectiveRole } : profileData);
-
         // Check if this is a company with expired trial.
         if (effectiveRole === "company") {
-          const workspaces = await loadCompanyWorkspaces(session.user.id);
-          const selectedWorkspace = selectCompanyWorkspace(workspaces, requestedCompanyId);
-          const companyData = selectedWorkspace?.company || null;
-          setCompanyWorkspaces(workspaces);
-          if (companyData) {
+          try {
+            const workspaces = await loadCompanyWorkspaces(session.user.id);
+            const selectedWorkspace = selectCompanyWorkspace(workspaces, requestedCompanyId);
+            const companyData = selectedWorkspace?.company || null;
+            if (!companyData) throw new Error("No authorized company workspace was found");
+            setCompanyWorkspaces(workspaces);
             setCompanyProfile(companyData);
 
             const trialExpired =
@@ -124,8 +124,26 @@ const Dashboard = () => {
             const isFreeTier = companyData.subscription_tier === "free";
 
             setShowExpiredTrialDialog(Boolean(trialExpired && isFreeTier));
+          } catch (workspaceError) {
+            console.error("Company workspace verification failed:", workspaceError);
+            const hasOfficerAccess = accountRoles.has("officer") || profileData?.role === "officer";
+            if (hasOfficerAccess) {
+              const officerParams = new URLSearchParams(window.location.search);
+              officerParams.set("viewAs", "officer");
+              officerParams.delete("companyId");
+              setCompanyProfile(null);
+              setCompanyWorkspaces([]);
+              setProfile(profileData ? { ...profileData, role: "officer" } : { role: "officer" });
+              navigate(`/dashboard?${officerParams.toString()}`, { replace: true });
+              return;
+            }
+            setAccessError("Your company access could not be verified. Please refresh and try again.");
+            setProfile(profileData ? { ...profileData, role: null } : null);
+            return;
           }
         }
+        setAccessError(null);
+        setProfile(profileData ? { ...profileData, role: effectiveRole } : profileData);
       } catch (error) {
         console.error("Failed to load dashboard:", error);
       } finally {
@@ -163,6 +181,27 @@ const Dashboard = () => {
     );
   }
 
+  if (accessError || (profile?.role !== "officer" && profile?.role !== "company")) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="container mx-auto px-4 py-10">
+          <Card className="mx-auto max-w-xl">
+            <CardHeader>
+              <CardTitle>Account access could not be verified</CardTitle>
+              <CardDescription>{accessError || "Refresh the page to verify your account access."}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <button className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground" onClick={() => window.location.reload()}>
+                Refresh account
+              </button>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   const handleUpgradeComplete = async () => {
     setShowExpiredTrialDialog(false);
     const workspaces = await loadCompanyWorkspaces(user.id);
@@ -182,7 +221,7 @@ const Dashboard = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <div className="container mx-auto px-4 py-8">
-        {profile?.role === "officer" ? (
+        {profile.role === "officer" ? (
           <OfficerDashboard
             userId={user.id}
             initialTab={onboarding === "application" ? "hiring-application" : "overview"}
