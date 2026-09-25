@@ -405,8 +405,19 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
         return;
       }
 
+      const saveKey = `${licenseLevel}-save`;
+      setUploading(saveKey);
       try {
-        const certData = {
+        // Generate the id on the client so creating a new record does not need
+        // an INSERT ... RETURNING query through every certification SELECT
+        // policy. Upload both sides first, then persist everything with one
+        // database write instead of three sequential writes.
+        const certId = existingLicense?.id || crypto.randomUUID();
+        const [frontUrl, backUrl] = await Promise.all([
+          pendingUploads.front ? uploadDocument(pendingUploads.front, certId, "front") : Promise.resolve(undefined),
+          pendingUploads.back ? uploadDocument(pendingUploads.back, certId, "back") : Promise.resolve(undefined),
+        ]);
+        const certData: Record<string, unknown> = {
           officer_id: id,
           certification_type: "license",
           name: label,
@@ -416,45 +427,27 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
           expiry_date: formData.expiry_date || null,
           issuing_organization: "Texas Department of Public Safety",
         };
-
-        let certId: string;
+        if (frontUrl) certData.document_front_url = frontUrl;
+        if (backUrl) certData.document_back_url = backUrl;
 
         if (existingLicense) {
           const { error } = await supabase
             .from("certifications")
-            .update(certData)
+            .update(certData as any)
             .eq("id", existingLicense.id);
           if (error) throw error;
-          certId = existingLicense.id;
         } else {
-          const { data, error } = await supabase.from("certifications").insert(certData).select().single();
+          const { error } = await supabase.from("certifications").insert({ id: certId, ...certData } as any);
           if (error) throw error;
-          certId = data.id;
-        }
-
-        // Upload pending documents after saving
-        if (pendingUploads.front) {
-          const frontUrl = await uploadDocument(pendingUploads.front, certId, "front");
-          const { error: frontUpdateError } = await supabase
-            .from("certifications")
-            .update({ document_front_url: frontUrl })
-            .eq("id", certId);
-          if (frontUpdateError) throw frontUpdateError;
-        }
-        if (pendingUploads.back) {
-          const backUrl = await uploadDocument(pendingUploads.back, certId, "back");
-          const { error: backUpdateError } = await supabase
-            .from("certifications")
-            .update({ document_back_url: backUrl })
-            .eq("id", certId);
-          if (backUpdateError) throw backUpdateError;
         }
 
         toast.success("License saved successfully");
-        setPendingUploads({});
-        loadCertifications();
+        setPendingLicenseUploads((current) => ({ ...current, [licenseLevel]: {} }));
+        await loadCertifications();
       } catch (error: any) {
         toast.error(error?.message ? `Failed to save license: ${error.message}` : "Failed to save license");
+      } finally {
+        setUploading(null);
       }
     };
 
@@ -599,8 +592,8 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
               </div>
             </div>
 
-            <Button type="button" className="w-full" onClick={handleSubmit}>
-              {existingLicense ? "Update License" : "Save License"}
+            <Button type="button" className="w-full" onClick={handleSubmit} disabled={uploading === `${licenseLevel}-save`}>
+              {uploading === `${licenseLevel}-save` ? "Saving License…" : existingLicense ? "Update License" : "Save License"}
             </Button>
           </div>
         </CardContent>
