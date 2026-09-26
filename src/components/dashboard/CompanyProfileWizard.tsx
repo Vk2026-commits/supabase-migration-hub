@@ -118,6 +118,7 @@ export function CompanyProfileWizard({
 }: Props) {
   const [currentStep, setCurrentStep] = useState(isComplete ? steps.length - 1 : 0);
   const [editing, setEditing] = useState(!isComplete);
+  const [editSnapshot, setEditSnapshot] = useState<CompanyProfileForm | null>(null);
   const update = <K extends keyof CompanyProfileForm>(key: K, value: CompanyProfileForm[K]) =>
     setFormData((current) => ({ ...current, [key]: value }));
   const stepComplete = (step: number) =>
@@ -172,7 +173,7 @@ export function CompanyProfileWizard({
   };
   const finish = async () => {
     if (await onSave()) {
-      toast.success("Company profile is ready");
+      toast.success(isComplete ? "Company profile updated" : "Company profile is ready");
       setEditing(false);
       requestAnimationFrame(() =>
         document
@@ -221,7 +222,7 @@ export function CompanyProfileWizard({
             <h2 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">{formData.company_name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">Company information and the contact applicants should reach.</p>
           </div>
-          {canEdit && <Button type="button" onClick={() => { setCurrentStep(0); setEditing(true); }}><Pencil className="mr-2 h-4 w-4" />Edit profile</Button>}
+          {canEdit && <Button type="button" onClick={() => { setEditSnapshot({ ...formData }); setCurrentStep(0); setEditing(true); }}><Pencil className="mr-2 h-4 w-4" />Edit profile</Button>}
         </div>
         <div className="grid gap-x-8 md:grid-cols-2">
           {sections.map((section) => (
@@ -245,7 +246,15 @@ export function CompanyProfileWizard({
 
   return (
     <div id="company-profile-top" className="mx-auto w-full max-w-6xl scroll-mt-20 pb-24 lg:pb-8">
-      <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
+      {isComplete ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+          <div><h2 className="text-xl font-bold">Edit {editSnapshot?.company_name || formData.company_name}</h2><p className="text-sm text-muted-foreground">Choose a section below. Changes are saved only when you select Save changes.</p></div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" disabled={loading || uploadingLogo} onClick={() => { if (editSnapshot) setFormData(editSnapshot); setLogoFile(null); setEditing(false); }}>Cancel</Button>
+            <Button type="button" onClick={finish} disabled={loading || uploadingLogo || !stepComplete(0) || !stepComplete(2)}>{loading || uploadingLogo ? "Saving…" : "Save changes"}</Button>
+          </div>
+        </div>
+      ) : (<div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
         <div className="flex items-center gap-3 px-5 py-5 sm:px-8">
           <div
             className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white ${isComplete ? "bg-emerald-600" : "bg-primary"}`}
@@ -273,10 +282,13 @@ export function CompanyProfileWizard({
         <div className="h-2 bg-muted">
           <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
-      </div>
+      </div>)}
+      {isComplete && <nav aria-label="Profile sections" className="mb-4 flex flex-wrap gap-1 border-b">
+        {steps.slice(0, 4).map(([label], index) => <Button key={label} type="button" variant="ghost" aria-current={currentStep === index ? "page" : undefined} className={currentStep === index ? "rounded-none border-b-2 border-primary text-primary" : "rounded-none"} onClick={() => setCurrentStep(index)}>{label}</Button>)}
+      </nav>}
 
-      <div className="grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="hidden lg:block">
+      <div className={isComplete ? "block" : "grid gap-6 lg:grid-cols-[250px_minmax(0,1fr)]"}>
+        <aside className={isComplete ? "hidden" : "hidden lg:block"}>
           <nav className="sticky top-20 space-y-1 rounded-2xl border bg-card p-3">
             {steps.map((step, index) => (
               <button
@@ -308,7 +320,7 @@ export function CompanyProfileWizard({
         </aside>
 
         <main className="min-w-0">
-          <div className="mb-4 flex justify-between lg:hidden">
+          <div className={isComplete ? "hidden" : "mb-4 flex justify-between lg:hidden"}>
             <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
               {isComplete ? (
                 <span className="flex items-center gap-1">
@@ -321,12 +333,12 @@ export function CompanyProfileWizard({
             </span>
             <span className="text-sm text-muted-foreground">{progress}% complete</span>
           </div>
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader className="border-b px-5 py-6 sm:px-8">
-              <CardTitle className="text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle>
+          <Card className={isComplete ? "rounded-none border-0 bg-transparent shadow-none" : "rounded-2xl shadow-sm"}>
+            <CardHeader className={isComplete ? "px-0 py-3" : "border-b px-5 py-6 sm:px-8"}>
+              <CardTitle className={isComplete ? "text-base" : "text-2xl sm:text-3xl"}>{steps[currentStep][0]}</CardTitle>
               <CardDescription className="text-base">{steps[currentStep][1]}</CardDescription>
             </CardHeader>
-            <CardContent className="px-5 py-7 sm:px-8 sm:py-9">
+            <CardContent className={isComplete ? "px-0 py-4" : "px-5 py-7 sm:px-8 sm:py-9"}>
               {currentStep === 0 && (
                 <div className="grid gap-5 md:grid-cols-2">
                   <Field
@@ -665,7 +677,7 @@ export function CompanyProfileWizard({
             </CardContent>
           </Card>
 
-          <div className="mt-5 hidden items-center justify-between lg:flex">
+          <div className={isComplete ? "hidden" : "mt-5 hidden items-center justify-between lg:flex"}>
             <Button
               type="button"
               variant="outline"
@@ -694,7 +706,7 @@ export function CompanyProfileWizard({
         </main>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden">
+      <div className={isComplete ? "hidden" : "fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"}>
         <Button
           type="button"
           variant="outline"
