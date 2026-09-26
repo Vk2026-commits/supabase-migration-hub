@@ -76,7 +76,9 @@ const Dashboard = () => {
         const selectedRole =
           requestedRole && (isAdmin || accountRoles.has(requestedRole)) ? requestedRole : null;
 
-        if (isAdmin && !selectedRole) {
+        // Admins who also run a company keep their company dashboard;
+        // the Admin area stays available from the top navigation.
+        if (isAdmin && !selectedRole && profileData?.role !== "company") {
           navigate("/admin");
           return;
         }
