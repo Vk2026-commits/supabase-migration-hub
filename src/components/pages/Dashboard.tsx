@@ -76,9 +76,9 @@ const Dashboard = () => {
         const selectedRole =
           requestedRole && (isAdmin || accountRoles.has(requestedRole)) ? requestedRole : null;
 
-        // Site-wide admins land on the Admin page; company workspaces belong
-        // to the companies themselves, not to the platform admin.
-        if (isAdmin && !selectedRole) {
+        // Admins who belong to a company land in their company workspace;
+        // only admins with no company profile go to the platform Admin page.
+        if (isAdmin && !selectedRole && profileData?.role !== "company") {
           navigate("/admin");
           return;
         }
