@@ -11,6 +11,7 @@ const corsHeaders = {
 
 interface ExpressInterestRequest {
   officerId: string;
+  companyId?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -43,14 +44,21 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    const { officerId }: ExpressInterestRequest = await req.json();
+    const { officerId, companyId }: ExpressInterestRequest = await req.json();
 
     // Get company profile
-    const { data: companyProfile, error: companyError } = await supabase
+    let companyQuery = supabase
       .from("company_profiles")
-      .select("id, company_name, contact_person_name, industry, subscription_tier")
-      .eq("user_id", user.id)
-      .single();
+      .select("id, user_id, company_name, contact_person_name, industry, subscription_tier");
+    // Older clients may omit the workspace only when exactly one owned company exists.
+    companyQuery = companyId ? companyQuery.eq("id", companyId) : companyQuery.eq("user_id", user.id);
+    const { data: companies, error: companyError } = await companyQuery.limit(2);
+    if (!companyError && companies && companies.length > 1) {
+      return new Response(JSON.stringify({ error: "Choose a company workspace before sending interest" }), {
+        status: 409, headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
+    const companyProfile = companies?.[0];
 
     if (companyError || !companyProfile) {
       console.error("Company profile error:", companyError);
@@ -58,6 +66,16 @@ const handler = async (req: Request): Promise<Response> => {
         status: 404,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
+    }
+
+    if (companyProfile.user_id !== user.id) {
+      const { data: membership, error: membershipError } = await supabase.from("company_members")
+        .select("role,status").eq("company_id", companyProfile.id).eq("user_id", user.id).maybeSingle();
+      if (membershipError || membership?.status !== "active" || !["owner", "admin", "hiring_manager"].includes(membership.role)) {
+        return new Response(JSON.stringify({ error: "Company hiring access denied" }), {
+          status: 403, headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
     }
 
     // Check if company has paid tier

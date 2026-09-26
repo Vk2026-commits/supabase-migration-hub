@@ -11,7 +11,7 @@ export type CompanyWorkspace = {
 
 export async function loadCompanyWorkspaces(userId: string): Promise<CompanyWorkspace[]> {
   const [ownedResult, membershipsResult] = await Promise.all([
-    supabase.from("company_profiles").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("company_profiles").select("*").eq("user_id", userId),
     supabase
       .from("company_members")
       .select("company_id,role,status")
@@ -22,12 +22,12 @@ export async function loadCompanyWorkspaces(userId: string): Promise<CompanyWork
   if (ownedResult.error) throw ownedResult.error;
   if (membershipsResult.error) throw membershipsResult.error;
 
-  const ownedCompany = ownedResult.data;
+  const ownedCompanyIds = new Set((ownedResult.data || []).map((company) => company.id));
   const roleByCompanyId = new Map<string, string>();
   for (const membership of membershipsResult.data || []) {
     roleByCompanyId.set(membership.company_id, membership.role);
   }
-  if (ownedCompany) roleByCompanyId.set(ownedCompany.id, "owner");
+  for (const companyId of ownedCompanyIds) roleByCompanyId.set(companyId, "owner");
 
   const companyIds = Array.from(roleByCompanyId.keys());
   if (companyIds.length === 0) return [];
@@ -42,7 +42,7 @@ export async function loadCompanyWorkspaces(userId: string): Promise<CompanyWork
     .map((company) => ({
       company,
       role: roleByCompanyId.get(company.id) || "reviewer",
-      owned: company.id === ownedCompany?.id,
+      owned: ownedCompanyIds.has(company.id),
     }))
     .sort((left, right) => {
       if (left.owned !== right.owned) return left.owned ? -1 : 1;

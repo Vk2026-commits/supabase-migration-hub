@@ -106,7 +106,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
 
     try {
       const { error } = await supabase.functions.invoke('express-interest', {
-        body: { officerId }
+        body: { officerId, companyId }
       });
       
       if (error) {

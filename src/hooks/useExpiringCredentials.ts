@@ -17,11 +17,12 @@ const daysUntil = (date: string) => {
   return Math.ceil((expiry.getTime() - today.getTime()) / 86_400_000);
 };
 
-export const useExpiringCredentials = (userId: string, mode: "officer" | "company") => {
+export const useExpiringCredentials = (userId: string, mode: "officer" | "company", companyId?: string) => {
   const [items, setItems] = useState<ExpiringItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
+    setItems([]);
 
     const load = async () => {
       try {
@@ -52,17 +53,13 @@ export const useExpiringCredentials = (userId: string, mode: "officer" | "compan
             }))
             .filter((row) => row.daysLeft <= 90);
         } else {
-          const { data: company } = await supabase
-            .from("company_profiles")
-            .select("id")
-            .eq("user_id", userId)
-            .maybeSingle();
-          if (!company) return;
+          // The dashboard supplies its validated workspace; RLS still checks access.
+          if (!companyId) return;
 
           const { data: hires } = await supabase
             .from("hires")
             .select("officer_id")
-            .eq("company_id", company.id);
+            .eq("company_id", companyId);
 
           const officerIds = [...new Set((hires || []).map((hire) => hire.officer_id))];
           if (officerIds.length === 0) return;
@@ -111,7 +108,7 @@ export const useExpiringCredentials = (userId: string, mode: "officer" | "compan
     return () => {
       cancelled = true;
     };
-  }, [userId, mode]);
+  }, [userId, mode, companyId]);
 
   return items;
 };

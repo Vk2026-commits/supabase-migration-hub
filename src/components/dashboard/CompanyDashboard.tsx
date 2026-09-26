@@ -125,7 +125,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const expiringItems = useExpiringCredentials(userId, "company");
+  const expiringItems = useExpiringCredentials(userId, "company", companyProfile?.id);
   const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
   const showLegacyProfile = import.meta.env.VITE_SHOW_LEGACY_PROFILE === "true";
   const companyProfileComplete = Boolean(

@@ -439,7 +439,7 @@ const Browse = () => {
 
     try {
       const { error } = await supabase.functions.invoke("express-interest", {
-        body: { officerId },
+        body: { officerId, companyId: companyProfile?.id },
       });
 
       if (error) {
