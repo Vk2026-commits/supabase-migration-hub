@@ -213,10 +213,12 @@ export function CompanyProfileWizard({
     ];
     return (
       <div id="company-profile-top" className="w-full scroll-mt-20">
-        <div className="flex flex-wrap items-center gap-4 border-b pb-4">
-          {formData.logo_url ? <img src={formData.logo_url} alt={`${formData.company_name} logo`} className="h-14 w-14 shrink-0 rounded border bg-white object-contain" /> : <Building2 className="h-10 w-10 shrink-0 text-primary" aria-hidden="true" />}
+        <div className="flex flex-wrap items-center gap-5 border-b pb-5 sm:gap-6">
+          <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg border border-primary/20 border-b-4 border-b-primary bg-white p-2 shadow-sm sm:h-32 sm:w-32 sm:p-3">
+            {formData.logo_url ? <img src={formData.logo_url} alt={`${formData.company_name} logo`} className="h-full w-full object-contain" /> : <Building2 className="h-12 w-12 text-primary sm:h-16 sm:w-16" aria-hidden="true" />}
+          </div>
           <div className="min-w-0 flex-1">
-            <h2 className="break-words text-xl font-bold">{formData.company_name}</h2>
+            <h2 className="break-words text-2xl font-bold tracking-tight sm:text-3xl">{formData.company_name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">Company information and the contact applicants should reach.</p>
           </div>
           {canEdit && <Button type="button" onClick={() => { setCurrentStep(0); setEditing(true); }}><Pencil className="mr-2 h-4 w-4" />Edit profile</Button>}
