@@ -463,10 +463,22 @@ const Browse = () => {
       <SidebarProvider className="min-h-[calc(100vh-4rem)]">
       {companyProfile && <CompanySidebar activeTab="browse" companyId={companyProfile.id} profileComplete={companyProfileIsComplete(companyProfile)} onTabChange={(tab) => navigate(`/dashboard?viewAs=company&companyId=${encodeURIComponent(companyProfile.id)}&tab=${encodeURIComponent(tab)}`)} />}
       <div className="min-w-0 flex-1">
-      <div className="flex flex-wrap items-center gap-3 border-b bg-background px-4 py-2">
-        {companyProfile && <SidebarTrigger aria-label="Open company navigation" className="h-9 w-auto gap-2 px-3"><span className="md:sr-only">Menu</span></SidebarTrigger>}
-        <Button variant="ghost" size="sm" asChild><Link to={companyProfile ? `/dashboard?viewAs=company&companyId=${encodeURIComponent(companyProfile.id)}` : currentUser ? "/dashboard" : "/"}><ArrowLeft className="mr-2 h-4 w-4" />{currentUser ? "Back to Dashboard" : "Back to Home"}</Link></Button>
-        {companyProfile && <span className="ml-auto text-sm font-medium">{companyProfile.company_name}</span>}
+      <div className={`flex min-h-14 flex-wrap items-center gap-3 border-b px-4 py-2 ${companyProfile ? "border-slate-800 bg-slate-950 text-white" : "bg-background"}`}>
+        {companyProfile && <>
+          <SidebarTrigger aria-label="Open company navigation" className="h-10 w-auto shrink-0 gap-2 border border-slate-600 bg-slate-900 px-3 text-white hover:bg-slate-800 hover:text-white md:h-8 md:w-8 md:border-0 md:bg-transparent md:px-0"><span className="md:sr-only">Menu</span></SidebarTrigger>
+          <Link
+            to={`/dashboard?viewAs=company&companyId=${encodeURIComponent(companyProfile.id)}&tab=account`}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-80"
+            aria-label="Open account settings"
+          >
+            <ProfileAvatar name={userProfile?.full_name || "Your account"} email={userProfile?.email} src={userProfile?.avatar_url} className="h-9 w-9 shrink-0 shadow-none" />
+            <span className="min-w-0">
+              <span className="block truncate text-base font-bold">{userProfile?.full_name || "Your account"}</span>
+              <span className="block truncate text-xs text-slate-300">{companyProfile.company_name || "Company representative"}</span>
+            </span>
+          </Link>
+        </>}
+        <Button variant="ghost" size="sm" className={companyProfile ? "shrink-0 text-white hover:bg-slate-800 hover:text-white" : undefined} asChild><Link to={companyProfile ? `/dashboard?viewAs=company&companyId=${encodeURIComponent(companyProfile.id)}` : currentUser ? "/dashboard" : "/"}><ArrowLeft className="mr-2 h-4 w-4" />{currentUser ? "Back to Dashboard" : "Back to Home"}</Link></Button>
       </div>
       <div className="container mx-auto max-w-7xl px-4 py-5">
         <div className="mb-5 border-b pb-4">
