@@ -73,6 +73,9 @@ const companySectionDetails: Record<string, { title: string; description: string
   account: { title: "Account settings", description: "Update your name, username, profile picture, or password.", icon: Settings },
 };
 
+// These sections already render a title alongside their own counts/actions.
+const sectionsWithOwnHeading = new Set(["jobs", "sites", "not-hired", "team", "subscriptions"]);
+
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
@@ -409,9 +412,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
           <div
             id="company-dashboard-content"
+            ref={sectionsWithOwnHeading.has(activeTab) ? sectionHeaderRef : undefined}
+            tabIndex={-1}
+            aria-label={companySectionDetails[activeTab]?.title || "Company dashboard"}
             className="w-full scroll-mt-20 space-y-5 overflow-auto p-4 sm:p-5"
           >
-            {activeTab !== "overview" && companySectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Company workspace" title={companySectionDetails[activeTab].title} description={companySectionDetails[activeTab].description} icon={companySectionDetails[activeTab].icon} status={companyProfileComplete ? { label: "Company profile complete", tone: "green" } : { label: "Profile setup required", tone: "amber" }} />}
+            {activeTab !== "overview" && !sectionsWithOwnHeading.has(activeTab) && companySectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Company workspace" title={companySectionDetails[activeTab].title} description={companySectionDetails[activeTab].description} icon={companySectionDetails[activeTab].icon} status={companyProfileComplete ? { label: "Company profile complete", tone: "green" } : { label: "Profile setup required", tone: "amber" }} />}
             {activeTab === "overview" && (
               <div className="mx-auto w-full max-w-7xl space-y-4 p-4 sm:p-5">
                 <div className="border-b pb-3"><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Company workspace</p><h2 className="mt-1 text-xl font-bold">Hiring operations</h2><p className="mt-0.5 text-sm text-muted-foreground">Open a work queue to review and act on current records.</p></div>
