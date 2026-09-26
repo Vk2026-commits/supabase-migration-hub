@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Building2,
   Check,
-  CheckCircle2,
   Cloud,
   FileCheck2,
   Pencil,
@@ -184,52 +183,60 @@ export function CompanyProfileWizard({
   };
 
   if (isComplete && !editing) {
+    const sections = [
+      { title: "Company details", fields: [
+        ["Industry", formData.industry],
+        ["Company size", formData.company_size],
+        ["Address", [formData.company_address, formData.company_address_unit, formData.company_city, formData.company_state, formData.company_zip].filter(Boolean).join(", ")],
+        ["Website", formData.website_url],
+        ["Year founded", formData.year_founded],
+        ["Years in business", formData.years_in_business],
+      ] },
+      { title: "Hiring contact", fields: [
+        ["Contact name", formData.contact_person_name],
+        ["Title / position", [formData.contact_person_title, formData.contact_person_position].filter(Boolean).join(" · ")],
+        ["Email", formData.contact_email],
+        ["Company phone", [formData.company_phone, formData.company_phone_ext ? `ext. ${formData.company_phone_ext}` : ""].filter(Boolean).join(" ")],
+        ["Mobile phone", formData.contact_cell_phone],
+      ] },
+      { title: "Licensing", fields: [
+        ["License number", formData.license_number],
+        ["Licensed states", formData.licensed_states.join(", ")],
+        ["License types", formData.license_types.join(", ")],
+      ] },
+      { title: "Online presence", fields: [
+        ["LinkedIn", formData.linkedin_url],
+        ["Facebook", formData.facebook_url],
+        ["Instagram", formData.instagram_url],
+        ["X / Twitter", formData.twitter_url],
+      ] },
+    ];
     return (
-      <div id="company-profile-top" className="mx-auto w-full max-w-3xl scroll-mt-20">
-        <Card className="overflow-hidden rounded-2xl border-emerald-200 bg-emerald-50/40 shadow-sm">
-          <CardContent className="p-0">
-            <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
-              <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-                  <CheckCircle2 className="h-7 w-7" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold sm:text-2xl">Company profile complete</h2>
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                      Complete
-                    </span>
+      <div id="company-profile-top" className="w-full scroll-mt-20">
+        <div className="flex flex-wrap items-center gap-4 border-b pb-4">
+          {formData.logo_url ? <img src={formData.logo_url} alt={`${formData.company_name} logo`} className="h-14 w-14 shrink-0 rounded border bg-white object-contain" /> : <Building2 className="h-10 w-10 shrink-0 text-primary" aria-hidden="true" />}
+          <div className="min-w-0 flex-1">
+            <h2 className="break-words text-xl font-bold">{formData.company_name}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Company information and the contact applicants should reach.</p>
+          </div>
+          {canEdit && <Button type="button" onClick={() => { setCurrentStep(0); setEditing(true); }}><Pencil className="mr-2 h-4 w-4" />Edit profile</Button>}
+        </div>
+        <div className="grid gap-x-8 md:grid-cols-2">
+          {sections.map((section) => (
+            <section key={section.title} className="min-w-0 border-b py-5" aria-label={section.title}>
+              <h3 className="mb-3 text-sm font-semibold">{section.title}</h3>
+              <dl className="space-y-3">
+                {section.fields.map(([label, value]) => (
+                  <div key={label} className="grid gap-1 text-sm sm:grid-cols-[140px_minmax(0,1fr)] sm:gap-3">
+                    <dt className="text-muted-foreground">{label}</dt>
+                    <dd className="min-w-0 break-words">{value || <span className="text-muted-foreground">Not provided</span>}</dd>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Your information is saved. Open the profile only when you want to review or
-                    update it.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
-                {canEdit && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11"
-                    onClick={() => {
-                      setCurrentStep(0);
-                      setEditing(true);
-                    }}
-                  >
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit company profile
-                  </Button>
-                )}
-                <Button type="button" className="h-11" onClick={onBrowse}>
-                  Browse guards
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+        {!canEdit && <p className="mt-4 text-sm text-muted-foreground">Only company owners and administrators can update these details.</p>}
       </div>
     );
   }
