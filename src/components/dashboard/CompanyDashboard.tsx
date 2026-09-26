@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import { AlertTriangle, ArrowRight, BellRing, Briefcase, Building2, CreditCard, Crown, Heart, MapPinned, Settings, UserCheck, UserPlus, UserX, Users, UsersRound, Upload, type LucideIcon } from "lucide-react";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
 import EmploymentTracking from "./EmploymentTracking";
 import NotHiredTracking from "./NotHiredTracking";
@@ -31,7 +31,7 @@ import { CompanyProfileWizard, type CompanyProfileForm } from "./CompanyProfileW
 import CompanyTeam from "./CompanyTeam";
 import ClientSites from "./ClientSites";
 import { AccountSettings } from "./AccountSettings";
-import { ProfileAvatar } from "./ProfileAvatar";
+import { WorkspaceIdentityHeader } from "./WorkspaceIdentityHeader";
 import { DashboardSectionHeader } from "./DashboardSectionHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -386,23 +386,12 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
         />
 
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950 text-white">
-            <div className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-2 sm:min-h-14 sm:flex-nowrap sm:gap-4 sm:py-0">
-              <SidebarTrigger
-                aria-label="Open dashboard menu"
-                className="h-10 w-auto shrink-0 gap-2 border border-slate-600 bg-slate-900 px-3 text-white hover:bg-slate-800 hover:text-white md:h-8 md:w-8 md:border-0 md:bg-transparent md:px-0"
-              >
-                <span className="md:sr-only">Dashboard menu</span>
-              </SidebarTrigger>
-              <button type="button" onClick={() => selectTab("account")} className="flex min-w-0 flex-1 items-center gap-3 text-left transition-opacity hover:opacity-80" aria-label="Open account settings">
-                <ProfileAvatar name={accountProfile?.full_name || userName} email={accountProfile?.email} src={accountProfile?.avatar_url} className="h-9 w-9 shadow-none" />
-                <span className="min-w-0"><span className="block truncate text-base font-bold">{accountProfile?.full_name || userName}</span><span className="block truncate text-xs text-slate-300">{formData.company_name || "Company representative"}</span></span>
-              </button>
+          <WorkspaceIdentityHeader name={accountProfile?.full_name || userName} email={accountProfile?.email} avatarUrl={accountProfile?.avatar_url} subtitle={formData.company_name || "Company representative"} onOpenAccount={() => selectTab("account")}>
               {companyWorkspaces.length > 1 && companyProfile && (
                 <div className="min-w-0 basis-full sm:ml-auto sm:w-full sm:max-w-[280px] sm:basis-auto">
                   <label htmlFor="company-workspace" className="sr-only">Company workspace</label>
                   <Select value={companyProfile.id} onValueChange={switchCompanyWorkspace}>
-                    <SelectTrigger id="company-workspace" className="min-w-0 bg-background" aria-label="Switch company workspace">
+                    <SelectTrigger id="company-workspace" className="min-w-0 bg-background text-foreground" aria-label="Switch company workspace">
                       <Building2 className="mr-2 h-4 w-4 shrink-0 text-primary" />
                       <SelectValue placeholder="Choose a company" />
                     </SelectTrigger>
@@ -416,8 +405,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
                   </Select>
                 </div>
               )}
-            </div>
-          </div>
+          </WorkspaceIdentityHeader>
 
           <div
             id="company-dashboard-content"

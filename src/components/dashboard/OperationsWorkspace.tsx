@@ -67,7 +67,7 @@ export function OfficerRecordShell({
         </Button>
       </div>
 
-      <header className="border-b bg-slate-950 px-4 py-5 text-white sm:px-6">
+      <header className="border-b bg-background px-4 py-5 text-foreground sm:px-6">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <ProfileAvatar
@@ -78,18 +78,18 @@ export function OfficerRecordShell({
               fallbackClassName="bg-primary text-xl text-white"
             />
             <div className="min-w-0 pt-1">
-              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-200">{labelForContext[context]}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{labelForContext[context]}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <h1 className="truncate text-2xl font-bold sm:text-3xl">{officer.name}</h1>
-                {officer.employmentStatus ? <Badge className="border-white/20 bg-white/10 text-white hover:bg-white/15">{officer.employmentStatus}</Badge> : null}
+                {officer.employmentStatus ? <Badge variant="secondary">{officer.employmentStatus}</Badge> : null}
               </div>
-              <p className="mt-1 text-sm text-slate-300">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {officer.title || "Security Officer"}
                 {officer.officerNumber ? ` · Officer #${officer.officerNumber}` : ""}
               </p>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-200">
-                {officer.phone ? <a className="inline-flex items-center gap-1.5 hover:text-white hover:underline" href={`tel:${officer.phone}`}><Phone className="h-4 w-4" />{officer.phone}</a> : null}
-                {officer.email ? <a className="inline-flex min-w-0 items-center gap-1.5 hover:text-white hover:underline" href={`mailto:${officer.email}`}><Mail className="h-4 w-4" /><span className="truncate">{officer.email}</span></a> : null}
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                {officer.phone ? <a className="inline-flex items-center gap-1.5 hover:text-primary hover:underline" href={`tel:${officer.phone}`}><Phone className="h-4 w-4" />{officer.phone}</a> : null}
+                {officer.email ? <a className="inline-flex min-w-0 items-center gap-1.5 hover:text-primary hover:underline" href={`mailto:${officer.email}`}><Mail className="h-4 w-4" /><span className="truncate">{officer.email}</span></a> : null}
                 {officer.location ? <span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{officer.location}</span> : null}
               </div>
             </div>

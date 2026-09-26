@@ -23,19 +23,19 @@ export const DashboardSectionHeader = forwardRef<HTMLDivElement, DashboardSectio
     <div
       ref={ref}
       tabIndex={-1}
-      className="scroll-mt-20 border-b border-slate-800 bg-slate-950 px-4 py-3 text-white outline-none ring-offset-background motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200 focus-visible:ring-2 focus-visible:ring-primary sm:px-5"
+      className="scroll-mt-20 border-b border-border bg-transparent px-4 py-3 text-foreground outline-none ring-offset-background motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200 focus-visible:ring-2 focus-visible:ring-primary sm:px-5"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-blue-500/20 text-blue-200">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center text-primary">
             <Icon className="h-4 w-4" aria-hidden="true" />
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <h1 className="text-xl font-bold tracking-tight">{title}</h1>
-              <p className="text-[11px] font-bold uppercase tracking-[.14em] text-blue-200">{eyebrow}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted-foreground">{eyebrow}</p>
             </div>
-            <p className="mt-0.5 text-sm text-slate-300">{description}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
           </div>
         </div>
         {status ? (

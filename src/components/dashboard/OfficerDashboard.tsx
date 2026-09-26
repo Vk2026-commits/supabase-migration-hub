@@ -19,7 +19,7 @@ import { OfficerMessages } from "./OfficerMessages";
 import { OfficerChatPanel } from "./OfficerChatPanel";
 import { InterestedJobsPanel } from "./InterestedJobsPanel";
 import JobSearch from "./JobSearch";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { OfficerSidebar } from "./OfficerSidebar";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -31,7 +31,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { formatUsPhone } from "@/lib/phone";
 import { AccountSettings } from "./AccountSettings";
 import { DashboardSectionHeader } from "./DashboardSectionHeader";
-import { OperationsIdentityHeader } from "./OperationsWorkspace";
+import { WorkspaceIdentityHeader } from "./WorkspaceIdentityHeader";
 
 interface OfficerDashboardProps {
   userId: string;
@@ -763,23 +763,11 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         />
         <div className="flex min-w-0 flex-1">
           <div className="min-w-0 flex-1">
-            <div className="flex min-h-12 items-center border-b border-slate-800 bg-slate-950 px-4 py-1.5 text-white sm:px-5">
-              <SidebarTrigger
-                aria-label="Open dashboard menu"
-                className="h-10 w-auto gap-2 border border-slate-600 bg-slate-900 px-3 text-white hover:bg-slate-800 hover:text-white md:h-8 md:w-8 md:border-0 md:bg-transparent md:px-0"
-              >
-                <span className="md:sr-only">Dashboard menu</span>
-              </SidebarTrigger>
-            </div>
-            <OperationsIdentityHeader
-              name={profile?.full_name}
-              email={profile?.email}
-              phone={formData.phone}
-              title={formData.title || "Security Officer"}
-              avatarUrl={profile?.avatar_url}
-              status={hireDecisionStatus === "not_hired" ? "Application closed" : onboardingReviewedAt && employmentConfirmedAt ? "Hired" : onboardingComplete ? "Awaiting review" : "Officer profile"}
-              onOpenAccount={() => handleTabChange("account")}
-            />
+            <WorkspaceIdentityHeader name={profile?.full_name} email={profile?.email} subtitle={[formData.title || "Security Officer", formData.phone].filter(Boolean).join(" · ")} avatarUrl={profile?.avatar_url} onOpenAccount={() => handleTabChange("account")}>
+              <span className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200">
+                {hireDecisionStatus === "not_hired" ? "Application closed" : onboardingReviewedAt && employmentConfirmedAt ? "Hired" : onboardingComplete ? "Awaiting review" : "Officer profile"}
+              </span>
+            </WorkspaceIdentityHeader>
 
             {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={hireDecisionStatus === "not_hired" ? { label: "Application closed", tone: "amber" } : onboardingReviewedAt && employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
 
