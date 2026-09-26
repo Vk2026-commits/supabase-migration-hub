@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import "./ApplicantRoster.css";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -287,7 +288,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
   }
 
   return (
-    <Card className="overflow-hidden border-0 bg-transparent shadow-none">
+    <Card className="overflow-visible border-0 bg-transparent shadow-none">
       <CardHeader className="sr-only">
         <div className="flex flex-wrap items-center gap-3"><CardTitle>Applicants</CardTitle>{applications.length > 0 && <Badge variant="secondary" className="rounded-full">{applications.length} total</Badge>}{unreadCount > 0 && <Badge className="rounded-full">{unreadCount} new message{unreadCount === 1 ? "" : "s"}</Badge>}</div>
         <CardDescription>
@@ -329,8 +330,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
           </div>
           <div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Showing {filteredApplications.length} of {applications.length}</p><span className="text-xs font-medium text-muted-foreground">Compact roster</span></div>
         </div>}
-        <div className="overflow-hidden border bg-background">
-          {!initialLoading && applications.length > 0 && <div className="hidden grid-cols-[minmax(260px,1.4fr)_minmax(190px,.9fr)_minmax(160px,.7fr)_minmax(420px,auto)] gap-4 border-b bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground xl:grid"><span>Officer</span><span>Hiring stage</span><span>Onboarding</span><span className="text-right">Actions</span></div>}
+        <div className="applicant-roster border bg-background">
+          {!initialLoading && applications.length > 0 && <div className="applicant-roster-heading border-b bg-slate-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><span>Officer</span><span>Hiring stage</span><span>Onboarding</span><span className="text-right">Actions</span></div>}
           {initialLoading ? (
             <div role="status" aria-live="polite">
               <p className="sr-only">Loading applicants</p>
@@ -349,7 +350,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
               const onboarding = getOnboardingStatus(app.onboardingProgress);
               const nextStep = getNextStep(app, onboarding);
               return (
-              <div key={app.id} className="grid gap-2 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70 xl:grid-cols-[minmax(260px,1.4fr)_minmax(190px,.9fr)_minmax(160px,.7fr)_minmax(420px,auto)] xl:items-center xl:gap-4">
+              <div key={app.id} className="applicant-roster-row border-b px-3 py-3 last:border-b-0 hover:bg-slate-50/70">
                 <div className="min-w-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -369,7 +370,7 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                       {isPaidSubscriber && app.officerEmail && (
                         <a href={`mailto:${app.officerEmail}`} className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline">
                           <Mail className="h-3 w-3 shrink-0" />
-                          {app.officerEmail}
+                          <span className="break-all">{app.officerEmail}</span>
                         </a>
                       )}
                     </div>
@@ -377,12 +378,12 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                 </div>
 
                 <div className="min-w-0">
-                  <Badge variant="outline" className={`max-w-full truncate ${nextStep.tone}`}>{nextStep.label.replace(/^Next:\s*/, "")}</Badge>
+                  <Badge variant="outline" className={`max-w-full whitespace-normal text-left leading-snug ${nextStep.tone}`}>{nextStep.label.replace(/^Next:\s*/, "")}</Badge>
                 </div>
-                <div>{app.status === "accepted" ? <div className="flex items-center gap-2"><Badge variant="outline" className={onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}>{onboarding.percent}%</Badge><span className="truncate text-xs text-muted-foreground">{onboarding.label}</span></div> : <span className="text-xs text-muted-foreground">Not started</span>}</div>
+                <div className="min-w-0">{app.status === "accepted" ? <div className="flex items-center gap-2"><Badge variant="outline" className={`shrink-0 whitespace-nowrap ${onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>{onboarding.percent}%</Badge><span className="text-xs leading-snug text-muted-foreground">{onboarding.percent === 100 ? "Complete" : onboarding.label.replace("Onboarding: ", "")}</span></div> : <span className="text-xs text-muted-foreground">Not started</span>}</div>
 
                 {isPaidSubscriber ? (
-                  <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto xl:justify-end [&_button]:h-8 [&_button]:shrink-0 [&_button]:whitespace-nowrap [&_button]:px-2.5 [&_button]:text-xs">
+                  <div className="applicant-roster-actions">
                     <Button 
                       size="sm"
                       className="shadow-none"
@@ -390,6 +391,21 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                     >
                       View profile
                     </Button>
+                    {app.status === "accepted" && onboarding.percent === 100 && app.hireId ? (
+                      <Button size="sm" variant="outline" onClick={() => setScreeningApplication(app)}>Review screening</Button>
+                    ) : app.status === "accepted" && app.onboardingProgress?.packet_id ? (
+                      <Button size="sm" variant="outline" onClick={() => setOnboardingApplication(app)}>View onboarding</Button>
+                    ) : app.offerHiringApplicationId && app.status !== "accepted" ? (
+                      <HireButton officerId={app.officer.id} officerName={app.officerName} companyId={companyId} hiringApplicationId={app.offerHiringApplicationId} jobApplicationId={app.id} jobTitle={app.job_posting?.title} onChanged={loadApplications} />
+                    ) : null}
+                    <details name="applicant-row-actions" className="applicant-more" onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.currentTarget.open = false;
+                        event.currentTarget.querySelector("summary")?.focus();
+                      }
+                    }}>
+                      <summary aria-label={`More actions for ${isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}`}>More</summary>
+                      <div className="applicant-more-panel">
                     <Button 
                       size="sm" 
                       variant="outline"
@@ -439,17 +455,8 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                         Review screening
                       </Button>
                     )}
-                    {app.offerHiringApplicationId && app.status !== "accepted" && (
-                      <HireButton
-                        officerId={app.officer.id}
-                        officerName={app.officerName}
-                        companyId={companyId}
-                        hiringApplicationId={app.offerHiringApplicationId}
-                        jobApplicationId={app.id}
-                        jobTitle={app.job_posting?.title}
-                        onChanged={loadApplications}
-                      />
-                    )}
+                      </div>
+                    </details>
                   </div>
                 ) : (
                   <Button size="sm" variant="outline" disabled className="mt-3">
