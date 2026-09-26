@@ -448,6 +448,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
               (profileLoaded ? (
                 <div className="space-y-5">
                   <CompanyProfileWizard
+                    companyId={companyProfile?.id}
                     formData={formData}
                     setFormData={setFormData}
                     logoFile={logoFile}

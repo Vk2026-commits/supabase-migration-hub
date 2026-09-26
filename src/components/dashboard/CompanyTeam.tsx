@@ -78,9 +78,10 @@ const withTimeout = <T,>(promise: Promise<T>, milliseconds: number) =>
 type CompanyTeamProps = {
   companyId: string;
   allowInvites?: boolean;
+  readOnly?: boolean;
 };
 
-export default function CompanyTeam({ companyId, allowInvites = false }: CompanyTeamProps) {
+export default function CompanyTeam({ companyId, allowInvites = false, readOnly = false }: CompanyTeamProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [serverCanManage, setServerCanManage] = useState(false);
   const [canAssignOwners, setCanAssignOwners] = useState(false);
@@ -93,7 +94,7 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
   const [memberToPromote, setMemberToPromote] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const canManage = allowInvites || serverCanManage;
+  const canManage = !readOnly && (allowInvites || serverCanManage);
 
   const invoke = useCallback(
     async (body: Record<string, unknown>) => {
@@ -218,10 +219,10 @@ export default function CompanyTeam({ companyId, allowInvites = false }: Company
         <CardHeader className="px-4 py-4 sm:px-5">
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
-            Company team
+            {readOnly ? "Company owners and team" : "Company team"}
           </CardTitle>
           <CardDescription>
-            Add staff to the same company account and control what they can do.
+            {readOnly ? "Everyone linked to this company, with their saved access role. Add people or change roles under Team; the primary hiring contact is managed separately." : "Add staff to the same company account and control what they can do."}
           </CardDescription>
         </CardHeader>
         {canManage && (

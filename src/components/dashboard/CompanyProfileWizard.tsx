@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { AddressAutocomplete } from "./AddressAutocomplete";
+import CompanyTeam from "./CompanyTeam";
 
 export type CompanyProfileForm = {
   company_name: string;
@@ -54,6 +55,7 @@ export type CompanyProfileForm = {
 };
 
 type Props = {
+  companyId?: string;
   formData: CompanyProfileForm;
   setFormData: Dispatch<SetStateAction<CompanyProfileForm>>;
   logoFile: File | null;
@@ -69,7 +71,7 @@ type Props = {
 const steps = [
   ["Company basics", "Tell officers who you are"],
   ["Brand and website", "Add your logo and online presence"],
-  ["Hiring contact", "Who should applicants contact?"],
+  ["People and contacts", "Company owners, team, and primary hiring contact"],
   ["Licensing", "Share where your company operates"],
   ["Review", "Confirm and save your profile"],
 ];
@@ -105,6 +107,7 @@ const Field = ({
 );
 
 export function CompanyProfileWizard({
+  companyId,
   formData,
   setFormData,
   logoFile,
@@ -193,7 +196,7 @@ export function CompanyProfileWizard({
         ["Year founded", formData.year_founded],
         ["Years in business", formData.years_in_business],
       ] },
-      { title: "Hiring contact", fields: [
+      { title: "Primary hiring contact", fields: [
         ["Contact name", formData.contact_person_name],
         ["Title / position", [formData.contact_person_title, formData.contact_person_position].filter(Boolean).join(" · ")],
         ["Email", formData.contact_email],
@@ -239,6 +242,7 @@ export function CompanyProfileWizard({
             </section>
           ))}
         </div>
+        {companyId && <div className="mt-5"><CompanyTeam key={companyId} companyId={companyId} readOnly /></div>}
         {!canEdit && <p className="mt-4 text-sm text-muted-foreground">Only company owners and administrators can update these details.</p>}
       </div>
     );
@@ -493,9 +497,11 @@ export function CompanyProfileWizard({
 
               {currentStep === 2 && (
                 <div className="space-y-5">
+                  {companyId && <CompanyTeam key={companyId} companyId={companyId} readOnly />}
+                  <h3 className="text-base font-semibold">Primary hiring contact</h3>
                   <p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">
-                    This person will receive and manage applicant communication for your company.
-                    Their name, email, and mobile number are required.
+                    This is the primary contact for applicants, not the company’s only owner or team member.
+                    Their name, email, and mobile number are required. Changing these details does not change anyone’s access role.
                   </p>
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field
