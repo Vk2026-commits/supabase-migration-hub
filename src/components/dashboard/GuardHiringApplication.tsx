@@ -16,6 +16,7 @@ import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/ge
 import { DatePicker } from "@/components/ui/date-picker";
 import { useSearchParams } from "@/lib/router-compat";
 import { SignaturePad } from "./SignaturePad";
+import { submissionAttemptKey, submitWithReceipt, withDeadline, type SubmissionReceipt } from "@/lib/hiringSubmission";
 import { formatUsPhone } from "@/lib/phone";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -112,8 +113,13 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [showSubmissionConfirmation, setShowSubmissionConfirmation] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveQueue = useRef<Promise<boolean>>(Promise.resolve(true));
+  const submissionLocked = useRef(false);
+  const submissionConfirmed = useRef(false);
+  const intentionalAttempt = useRef<string | null>(null);
+  const [submissionUncertain, setSubmissionUncertain] = useState(false);
   const pendingSaveCount = useRef(0);
   const masterIdRef = useRef<string | null>(null);
+  const submittedAtRef = useRef<string | null>(null);
   const visitedStepsRef = useRef<number[]>([]);
   const completedStepsRef = useRef<number[]>([]);
   const savePendingLicensesRef = useRef<(() => Promise<boolean>) | null>(null);
@@ -153,6 +159,28 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   }, [masterId]);
 
   useEffect(() => {
+    if (!loaded || !activeOfficerId || !selectedJobId || editingSubmitted || submitting) return;
+    const attemptId = window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId));
+    if (!attemptId) return;
+    let cancelled = false;
+    setSubmissionUncertain(true);
+    void (async () => {
+      try {
+        const result = await (supabase as any).rpc("get_my_hiring_submission_receipt", { _attempt_id: attemptId }).abortSignal(AbortSignal.timeout(8000));
+        if (cancelled || result.error || !result.data?.[0]) return;
+        const receipt = result.data[0] as SubmissionReceipt;
+        submissionConfirmed.current = true;
+        masterIdRef.current = receipt.master_application_id;
+        submittedAtRef.current = receipt.submitted_at;
+        setMasterId(receipt.master_application_id);
+        setMasterStatus("submitted");
+        setSubmissionUncertain(false);
+      } catch { /* Keep the attempt for safe reconciliation on Retry Submit. */ }
+    })();
+    return () => { cancelled = true; };
+  }, [loaded, activeOfficerId, selectedJobId, userId, editingSubmitted, submitting]);
+
+  useEffect(() => {
     visitedStepsRef.current = visitedSteps;
   }, [visitedSteps]);
 
@@ -177,7 +205,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const requests: any[] = [
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
         supabase.from("officer_profiles").select("phone,address_street,address_unit,address_city,address_state,address_zip,employment_type,shift_preference,availability_schedule,resume_url").eq("user_id", userId).maybeSingle(),
-        appTable.select("id,status,current_step,application_data,created_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        appTable.select("id,status,current_step,application_data,created_at,submitted_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.auth.getSession(),
       ];
       const [profileResult, officerResult, masterResult, authResult] = await Promise.all(requests);
@@ -219,6 +247,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
       const restoredStep = urlStep ?? savedStep;
       masterIdRef.current = master?.id || null;
+      submittedAtRef.current = master?.submitted_at || null;
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
       const savedVisitedSteps = Array.isArray((draft as any).visitedSteps)
         ? (draft as any).visitedSteps.filter((step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9)
@@ -287,16 +316,23 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   const saveDraft = (step = currentStep, syncManagementRecords = false): Promise<boolean> => {
+    // Explicit revisions use an optimistic receipt version; ordinary draft
+    // writes may never modify a submitted master.
+    if (submissionLocked.current || submissionConfirmed.current || (masterStatus === "submitted" && !editingSubmitted) || submissionUncertain) return Promise.resolve(true);
+    if (activeOfficerId && selectedJobId && !editingSubmitted && window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId))) return Promise.resolve(true);
     if (!loaded || !activeOfficerId) return Promise.resolve(false);
     pendingSaveCount.current += 1;
     setSaving(true);
+    const expectedSubmittedAt = submittedAtRef.current;
     const performSave = async () => {
       try {
         const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, resumePath, jobPostingId: selectedJobId, availability: shared, visitedSteps: visitedStepsRef.current, completedSteps: completedStepsRef.current, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved, canonicalCertificationIds: certifications.filter((certification) => certification.document_front_url).map((certification) => certification.id), certificationRequirementsComplete: certificationSaved } };
         const savedMasterId = masterIdRef.current;
         const nextMasterId = savedMasterId || crypto.randomUUID();
-        const { error } = savedMasterId
-          ? await (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId)
+        const { error } = savedMasterId && masterStatus === "submitted" && editingSubmitted
+          ? await (supabase as any).rpc("save_my_hiring_revision", { _master_id: savedMasterId, _expected_submitted_at: expectedSubmittedAt, _data: payload.application_data, _step: step })
+          : savedMasterId
+          ? await (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).eq("status", "draft").select("id").single()
           : await (supabase as any).from("guard_hiring_applications").insert({ id: nextMasterId, ...payload });
         if (error) throw error;
         if (!savedMasterId) {
@@ -332,14 +368,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   useEffect(() => {
-    if (!loaded || !activeOfficerId || !applicationStarted) return;
+    if (!loaded || !activeOfficerId || !applicationStarted || submitting || submissionUncertain || (masterStatus === "submitted" && !editingSubmitted)) return;
+    if (!editingSubmitted && selectedJobId && window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId))) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     // Avoid writing the entire JSON application after nearly every keystroke.
     // Continue/Back still queue an immediate durable save; this timer is only
     // a quiet-period safety net while the applicant remains on one step.
     saveTimer.current = setTimeout(() => { void saveDraft(); }, 1500);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [form, shared, photos, photosSaved, certifications, certificationSaved, resumePath, currentStep, loaded, activeOfficerId, selectedJobId, applicationStarted, visitedSteps, completedSteps]);
+  }, [form, shared, photos, photosSaved, certifications, certificationSaved, resumePath, currentStep, loaded, activeOfficerId, selectedJobId, applicationStarted, visitedSteps, completedSteps, submitting, submissionUncertain, masterStatus, editingSubmitted]);
 
   const availabilityComplete = shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule).some(v => v.start && v.end);
   const photosComplete = photosSaved;
@@ -417,6 +454,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     finally { setUploadingResume(false); event.target.value = ""; }
   };
   const go = async (step: number) => {
+    if (submissionLocked.current) return;
     const nextStep = Math.max(0, Math.min(9, step));
     const nextVisited = Array.from(new Set([...visitedStepsRef.current, currentStep, nextStep])).sort((a, b) => a - b);
     visitedStepsRef.current = nextVisited;
@@ -457,6 +495,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (submissionLocked.current || submissionConfirmed.current) return;
     if (!activeOfficerId) { toast.error("Your officer profile is not ready yet. Refresh the page and try again."); return; }
     if (!complete) {
       const firstMissingStep = missingRequiredSteps[0];
@@ -465,14 +504,31 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       if (firstMissingStep !== undefined && firstMissingStep !== currentStep) await go(firstMissingStep);
       return;
     }
+    submissionLocked.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
     setSubmitting(true);
     try {
+      await withDeadline(saveQueue.current, 15000);
       const selectedJob = jobs.find(j => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
       const snapshot = { ...form, resumePath, jobPostingId: selectedJob.id, availability: shared, visitedSteps: Array.from({ length: 10 }, (_, index) => index), completedSteps: Array.from({ length: 10 }, (_, index) => index).filter(stepRequirementsMet), photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
-      const employerSnapshot = { ...snapshot, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
-      const submission = await (supabase as any).rpc("submit_my_hiring_application", {
-        _master_application_id: masterId,
+      const employerSnapshot = { ...snapshot, consentAccepted: acknowledged, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: selectedJob.position };
+      const attemptKey = submissionAttemptKey(userId, activeOfficerId, selectedJob.id);
+      const previousAttempt = intentionalAttempt.current || window.localStorage.getItem(attemptKey);
+      const attemptId = previousAttempt || crypto.randomUUID();
+      // Persist before dispatch. If storage is unavailable, do not send an
+      // untrackable request that could be duplicated after refresh.
+      window.localStorage.setItem(attemptKey, attemptId);
+      setSubmissionUncertain(true);
+      const lookup = async (): Promise<SubmissionReceipt | null> => {
+        const result = await (supabase as any).rpc("get_my_hiring_submission_receipt", { _attempt_id: attemptId }).abortSignal(AbortSignal.timeout(8000));
+        if (result.error) throw result.error;
+        return result.data?.[0] || null;
+      };
+      const send = async (): Promise<SubmissionReceipt> => {
+        const submission = await (supabase as any).rpc("submit_my_hiring_application_v2", {
+        _attempt_id: attemptId,
+        _master_application_id: masterIdRef.current,
         _officer_id: activeOfficerId,
         _job_posting_id: selectedJob.id,
         _position: form.position,
@@ -481,46 +537,37 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         _signature_name: form.signature,
         _signature_date: form.signatureDate,
         _application_data: employerSnapshot,
-      });
-      if (submission.error || !submission.data?.[0]) throw submission.error || new Error("Could not submit the application");
-      const savedSubmission = submission.data[0];
+        }).abortSignal(AbortSignal.timeout(20000));
+        if (submission.error || !submission.data?.[0]) throw submission.error || new Error("Could not submit the application");
+        return submission.data[0];
+      };
+      const priorReceipt = previousAttempt ? await lookup() : null;
+      const savedSubmission = priorReceipt || await submitWithReceipt(send, lookup);
+      submissionConfirmed.current = true;
+      submittedAtRef.current = savedSubmission.submitted_at;
+      masterIdRef.current = savedSubmission.master_application_id;
       setMasterId(savedSubmission.master_application_id);
       setMasterStatus("submitted");
       setEditingSubmitted(false);
       setShowSubmissionConfirmation(true);
+      setSubmissionUncertain(false);
+      // Retain the receipt key until the user explicitly chooses to edit and
+      // resubmit. This also protects against a stale refresh/second browser tab.
       toast.success(editingSubmitted ? "Application resubmitted" : "Hiring application submitted");
       onChanged?.();
 
-      // The signed application and employer copy are already committed. These
-      // secondary synchronization and attachment tasks must never keep the
-      // applicant on a permanent Submitting screen.
-      void Promise.allSettled([
-        syncShared(true),
-        supabase.functions.invoke("archive-application-evidence", {
-          body: { hiring_application_id: savedSubmission.employer_application_id, archive_kind: "submission" },
-        }),
-      ]).then((results) => {
-        const archiveResult = results[1];
-        if (archiveResult.status === "fulfilled") {
-          const response = archiveResult.value;
-          const archiveComplete = !response.error && response.data?.snapshot_status === "complete";
-          if (archiveComplete) {
-            setForm(current => ({ ...current, attachmentManifest: response.data?.manifest || [] }));
-          } else {
-            console.warn("Application submitted; optional attachment archiving will retry later", response.error || response.data);
-          }
-        } else {
-          console.warn("Application submitted; optional attachment archiving will retry later", archiveResult.reason);
-        }
-      });
-    } catch (error: any) { toast.error(error.message || "Could not submit the application"); }
-    finally { setSubmitting(false); }
+      // The transaction durably queued archiving and profile synchronization.
+    } catch (error: any) { toast.error(`${error.message || "Could not confirm submission"}. Your information is still on this page. Retry Submit to check the same submission safely.`); }
+    finally { submissionLocked.current = false; setSubmitting(false); }
   };
 
   const completedRequiredSteps = requiredSteps.filter((step) => stepStatus(step) === "completed").length;
   const progress = Math.round((completedRequiredSteps / requiredSteps.length) * 100);
   const pdfApplication: GuardApplicationData = { ...form, availability: shared, photosComplete, certificationComplete };
   const editForAnotherCompany = () => {
+    submissionConfirmed.current = false;
+    intentionalAttempt.current = crypto.randomUUID();
+    setSubmissionUncertain(false);
     setEditingSubmitted(true);
     setAcknowledged(false);
     setCurrentStep(0);
@@ -598,6 +645,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   }
 
   return <form id="guard-application-top" onSubmit={submit} className="mx-auto w-full max-w-6xl scroll-mt-4 pb-24 lg:pb-8">
+    {submissionUncertain && !submitting && <div role="status" className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Submission has not been confirmed yet. Keep this page open and retry Submit; we will check the same submission instead of creating a duplicate. Automatic draft saving is paused while its status is uncertain.</div>}
     <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background"><div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:px-8"><div className="flex min-w-0 flex-1 items-center gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-7 w-7" /></div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Step {currentStep + 1}: {steps[currentStep][0]}</p><h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1><p className="mt-1 text-sm text-muted-foreground">{completedRequiredSteps} of {requiredSteps.length} required sections completed</p>{saveError && <p className="mt-2 text-sm font-semibold text-destructive">Draft not saved. Please check your connection and try again.</p>}</div></div><span className={`flex items-center gap-1 text-xs ${saveError ? "text-destructive" : "text-muted-foreground"}`}><Cloud className="h-4 w-4" />{saveError ? "Save failed" : saving ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Autosave on"}</span></div><div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div></div>
     <div className="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]"><aside className="hidden lg:block"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => { const status = stepStatus(i); return <button key={s[0]} type="button" onClick={() => void go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : status === "completed" ? "bg-green-100 text-green-700" : status === "in_progress" ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{status === "completed" ? <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} /> : status === "in_progress" ? <PlayCircle className="h-4 w-4" aria-label={`Step ${i + 1} in progress`} /> : i + 1}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{status === "completed" ? "Completed" : status === "in_progress" ? "In progress" : "Not started"}</span></span></button>; })}</nav></aside>
       <main className="min-w-0"><div className="mb-4 space-y-3 lg:hidden"><div className="flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{stepStatus(currentStep) === "completed" && <Check className="h-4 w-4" />}Step {currentStep + 1} of 10</span><span className="text-sm text-muted-foreground">{progress}% required complete</span></div><select aria-label="Application section" className="h-12 w-full rounded-xl border bg-background px-3 font-medium" value={currentStep} onChange={(event) => void go(Number(event.target.value))}>{steps.map((step, index) => <option key={step[0]} value={index}>{index + 1}. {step[0]} — {stepStatus(index) === "completed" ? "Completed" : stepStatus(index) === "in_progress" ? "In progress" : "Not started"}</option>)}</select></div><Card className="min-w-0 rounded-2xl shadow-sm"><CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="break-words text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader><CardContent className="min-w-0 px-5 py-7 sm:px-8 sm:py-9">

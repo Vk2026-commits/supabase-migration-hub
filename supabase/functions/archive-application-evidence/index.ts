@@ -50,12 +50,14 @@ serve(async (request) => {
     const admin = createClient(supabaseUrl, serviceKey);
     failureAdmin = admin;
     const token = authorization.replace("Bearer ", "");
-    const { data: authData, error: authError } = await admin.auth.getUser(token);
-    if (authError || !authData.user) return json({ error: "Invalid or expired session" }, 401);
+    const isWorker = token === serviceKey;
+    const { data: authData, error: authError } = isWorker
+      ? { data: { user: null }, error: null }
+      : await admin.auth.getUser(token);
+    if (!isWorker && (authError || !authData.user)) return json({ error: "Invalid or expired session" }, 401);
 
     const { hiring_application_id: applicationId, archive_kind: requestedKind } = await request.json();
     if (!applicationId) return json({ error: "A hiring application is required" }, 400);
-    failureApplicationId = applicationId;
 
     const { data: application, error: applicationError } = await admin
       .from("guard_hiring_applications")
@@ -64,10 +66,11 @@ serve(async (request) => {
       .maybeSingle();
     if (applicationError || !application || application.application_type !== "employer_copy") return json({ error: "Employer application not found" }, 404);
 
-    const { data: roles } = await admin.from("user_roles").select("role").eq("user_id", authData.user.id);
-    const isAdmin = (roles || []).some((item: { role: string }) => ["admin", "view_only", "full_access"].includes(item.role));
+    const actorId = authData.user?.id || application.user_id;
+    const { data: roles } = isWorker ? { data: [] } : await admin.from("user_roles").select("role").eq("user_id", actorId);
+    const isAdmin = isWorker || (roles || []).some((item: { role: string }) => ["admin", "view_only", "full_access"].includes(item.role));
     let isCompany = false;
-    if (application.job_application_id) {
+    if (!isWorker && application.job_application_id) {
       const { data: jobApplication } = await admin.from("job_applications").select("job_posting_id").eq("id", application.job_application_id).maybeSingle();
       const { data: jobPosting } = jobApplication?.job_posting_id
         ? await admin.from("job_postings").select("company_id").eq("id", jobApplication.job_posting_id).maybeSingle()
@@ -76,25 +79,28 @@ serve(async (request) => {
         ? await admin.from("company_profiles").select("user_id,subscription_tier,company_name,company_address,company_city,company_state,company_zip,contact_person_name,contact_email,contact_cell_phone").eq("id", jobPosting.company_id).maybeSingle()
         : { data: null };
       const { data: member } = jobPosting?.company_id
-        ? await admin.from("company_members").select("status").eq("company_id", jobPosting.company_id).eq("user_id", authData.user.id).maybeSingle()
+        ? await admin.from("company_members").select("status").eq("company_id", jobPosting.company_id).eq("user_id", actorId).maybeSingle()
         : { data: null };
       isCompany = Boolean(
         company
-        && (company.user_id === authData.user.id || member?.status === "active")
+        && (company.user_id === actorId || member?.status === "active")
         && companyProfileReady(company)
         && ["professional", "premium"].includes(company.subscription_tier),
       );
     }
-    const isOwner = application.user_id === authData.user.id;
+    const isOwner = application.user_id === actorId;
     const archiveKind = requestedKind === "legacy" || application.evidence_snapshot_kind === "legacy" ? "legacy" : "submission";
     if ((archiveKind === "submission" && !isOwner && !isAdmin) || (archiveKind === "legacy" && !isOwner && !isCompany && !isAdmin)) {
       return json({ error: "You do not have access to archive this application" }, 403);
     }
+    failureApplicationId = applicationId;
 
-    const { data: existing } = await admin.from("application_evidence_files").select("*").eq("hiring_application_id", application.id).order("evidence_kind").order("evidence_role");
-    if (application.evidence_snapshot_status === "complete" && existing?.length) return json({ attachments: existing, snapshot_status: "complete", archive_kind: application.evidence_snapshot_kind });
+    const { data: existing, error: existingError } = await admin.from("application_evidence_files").select("*").eq("hiring_application_id", application.id).order("evidence_kind").order("evidence_role");
+    if (existingError) throw existingError;
+    if (application.evidence_snapshot_status === "complete") return json({ attachments: existing || [], manifest: application.application_data?.attachmentManifest || [], snapshot_status: "complete", archive_kind: application.evidence_snapshot_kind });
 
-    await admin.from("guard_hiring_applications").update({ evidence_snapshot_status: "processing", evidence_snapshot_kind: archiveKind }).eq("id", application.id);
+    const processing = await admin.from("guard_hiring_applications").update({ evidence_snapshot_status: "processing", evidence_snapshot_kind: archiveKind }).eq("id", application.id);
+    if (processing.error) throw processing.error;
 
     const { data: officer, error: officerError } = await admin.from("officer_profiles").select("id,user_id").eq("id", application.officer_id).single();
     if (officerError || !officer) throw new Error("Officer profile not found");
@@ -125,7 +131,6 @@ serve(async (request) => {
       const completedAt = new Date().toISOString();
       const applicationData = { ...(application.application_data || {}), attachmentManifest: [] };
       const update: Record<string, unknown> = { evidence_snapshot_status: "complete", evidence_snapshot_completed_at: completedAt, evidence_snapshot_kind: archiveKind, application_data: applicationData };
-      if (archiveKind === "submission") Object.assign(update, { status: "submitted", submitted_at: application.submitted_at || completedAt });
       const { error: updateError } = await admin.from("guard_hiring_applications").update(update).eq("id", application.id);
       if (updateError) throw updateError;
       return json({ attachments: [], manifest: [], snapshot_status: "complete", archive_kind: archiveKind, completed_at: completedAt });
@@ -137,11 +142,8 @@ serve(async (request) => {
     for (const source of sources) {
       const { data: blob, error: downloadError } = await admin.storage.from(source.bucket).download(source.path);
       if (downloadError || !blob) {
-        if (!source.required) {
-          warnings.push({ label: source.label, reason: downloadError?.message || "The optional upload could not be copied." });
-          console.warn("Skipping unavailable optional application evidence", { applicationId: application.id, bucket: source.bucket, path: source.path, error: downloadError });
-          continue;
-        }
+        // Optional means not required to submit; an existing upload must not
+        // silently disappear from a supposedly completed archive.
         throw downloadError || new Error(`Could not read ${source.label}`);
       }
       const bytes = await blob.arrayBuffer();
@@ -150,11 +152,6 @@ serve(async (request) => {
       const destination = `${application.id}/${source.kind === "photo" ? "Photos" : "Certifications"}/${source.role}-${safeName}`;
       const { error: uploadError } = await admin.storage.from("application-evidence").upload(destination, bytes, { contentType: blob.type || "application/octet-stream", upsert: true });
       if (uploadError) {
-        if (!source.required) {
-          warnings.push({ label: source.label, reason: uploadError.message || "The optional upload could not be archived." });
-          console.warn("Skipping optional application evidence that could not be archived", { applicationId: application.id, destination, error: uploadError });
-          continue;
-        }
         throw uploadError;
       }
       rows.push({
@@ -175,15 +172,17 @@ serve(async (request) => {
         archive_kind: archiveKind,
         metadata: source.metadata,
         archived_at: archivedAt,
-        created_by: authData.user.id,
+        created_by: actorId,
       });
     }
 
     let attachments: Array<Record<string, unknown>> = [];
     if (rows.length) {
-      const { data: inserted, error: insertError } = await admin.from("application_evidence_files").upsert(rows, { onConflict: "hiring_application_id,evidence_kind,evidence_role,source_path", ignoreDuplicates: true }).select("*");
+      const { error: insertError } = await admin.from("application_evidence_files").upsert(rows, { onConflict: "hiring_application_id,evidence_kind,evidence_role,source_path", ignoreDuplicates: true });
       if (insertError) throw insertError;
-      attachments = inserted?.length ? inserted : (await admin.from("application_evidence_files").select("*").eq("hiring_application_id", application.id)).data || [];
+      const allFiles = await admin.from("application_evidence_files").select("*").eq("hiring_application_id", application.id);
+      if (allFiles.error) throw allFiles.error;
+      attachments = allFiles.data || [];
     }
     const manifest = attachments.map((item: Record<string, unknown>) => ({
       id: item.id,
@@ -200,7 +199,6 @@ serve(async (request) => {
     const applicationData = { ...(application.application_data || {}), attachmentManifest: manifest };
     const completedAt = new Date().toISOString();
     const update: Record<string, unknown> = { evidence_snapshot_status: "complete", evidence_snapshot_completed_at: completedAt, evidence_snapshot_kind: archiveKind, application_data: applicationData };
-    if (archiveKind === "submission") Object.assign(update, { status: "submitted", submitted_at: application.submitted_at || completedAt });
     const { error: updateError } = await admin.from("guard_hiring_applications").update(update).eq("id", application.id);
     if (updateError) throw updateError;
     return json({ attachments, manifest, warnings, snapshot_status: "complete", archive_kind: archiveKind, completed_at: completedAt });
