@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useSearchParams } from "@/lib/router-compat";
 import Navbar from "@/components/Navbar";
+import { CompanySidebar } from "@/components/dashboard/CompanySidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import {
   MapPin,
+  ArrowLeft,
   DollarSign,
   Briefcase,
   Search,
@@ -457,7 +460,14 @@ const Browse = () => {
   return (
     <div className="operations-workspace min-h-screen bg-slate-50/70">
       <Navbar />
-
+      <SidebarProvider className="min-h-[calc(100vh-4rem)]">
+      {companyProfile && <CompanySidebar activeTab="browse" companyId={companyProfile.id} profileComplete={companyProfileIsComplete(companyProfile)} onTabChange={(tab) => navigate(`/dashboard?viewAs=company&companyId=${encodeURIComponent(companyProfile.id)}&tab=${encodeURIComponent(tab)}`)} />}
+      <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-3 border-b bg-background px-4 py-2">
+        {companyProfile && <SidebarTrigger aria-label="Open company navigation" className="h-9 w-auto gap-2 px-3"><span className="md:sr-only">Menu</span></SidebarTrigger>}
+        <Button variant="ghost" size="sm" asChild><Link to={companyProfile ? `/dashboard?viewAs=company&companyId=${encodeURIComponent(companyProfile.id)}` : currentUser ? "/dashboard" : "/"}><ArrowLeft className="mr-2 h-4 w-4" />{currentUser ? "Back to Dashboard" : "Back to Home"}</Link></Button>
+        {companyProfile && <span className="ml-auto text-sm font-medium">{companyProfile.company_name}</span>}
+      </div>
       <div className="container mx-auto max-w-7xl px-4 py-5">
         <div className="mb-5 border-b pb-4">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Recruiting workspace</p>
@@ -924,6 +934,8 @@ const Browse = () => {
           currentUserType="company"
         />
       )}
+      </div>
+      </SidebarProvider>
     </div>
   );
 };
