@@ -152,10 +152,10 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
     <Tabs defaultValue="interested" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="interested">
-          Interested ({interestedOfficers.length})
+          Saved ({interestedOfficers.length})
         </TabsTrigger>
         <TabsTrigger value="not_interested">
-          Not Interested ({notInterestedOfficers.length})
+          Not interested ({notInterestedOfficers.length})
         </TabsTrigger>
       </TabsList>
 
@@ -170,7 +170,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
           </Card>
         ) : (
           <div className="overflow-hidden border bg-background">{filteredInterestedOfficers.map((interest) => (
-            <div key={interest.id} className="grid gap-2 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70 lg:grid-cols-[minmax(250px,1fr)_minmax(180px,.7fr)_minmax(420px,auto)] lg:items-center lg:gap-4">
+            <div key={interest.id} className="grid gap-3 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70 md:grid-cols-2 md:items-center">
                   <div className="flex min-w-0 items-center gap-3">
                     <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} />
                     <div className="min-w-0">
@@ -179,7 +179,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                     </div>
                   </div>
                   <div className="flex items-center gap-2"><Badge variant="secondary">{interest.officer_profiles?.availability_status}</Badge><span className="text-xs text-muted-foreground">{interest.officer_profiles?.years_experience || 0} years</span></div>
-                  <div className="flex items-center gap-1.5 overflow-x-auto lg:justify-end [&_button]:h-8 [&_button]:shrink-0 [&_button]:whitespace-nowrap [&_button]:px-2.5 [&_button]:text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5 md:col-span-2 [&_button]:h-8 [&_button]:shrink-0 [&_button]:whitespace-nowrap [&_button]:px-2.5 [&_button]:text-xs">
                       <Button
                         variant="outline"
                         onClick={() =>
@@ -233,7 +233,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
           </Card>
         ) : (
           <div className="overflow-hidden border bg-background">{filteredNotInterestedOfficers.map((interest) => (
-            <div key={interest.id} className="flex items-center gap-3 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70">
+            <div key={interest.id} className="flex flex-wrap items-center gap-3 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70">
                 <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} /><div className="min-w-0 flex-1"><p className="truncate font-semibold">{interest.officer_profiles?.profiles?.full_name}</p><p className="truncate text-xs text-muted-foreground">{interest.officer_profiles?.title}</p></div><div className="flex shrink-0 gap-1.5 [&_button]:h-8 [&_button]:text-xs">
                   <Button
                     variant="outline"

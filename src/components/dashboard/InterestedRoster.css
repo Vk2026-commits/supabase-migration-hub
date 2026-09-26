@@ -1,0 +1,8 @@
+.interested-job-group { container-type: inline-size; }
+.interested-officer-row { display: grid; gap: .75rem; min-width: 0; }
+.interested-officer-actions > button { width: auto; height: 2rem; font-size: .75rem; white-space: nowrap; }
+.interested-officer-message { grid-column: 1 / -1; order: 4; overflow-wrap: anywhere; }
+@container (min-width: 55rem) {
+  .interested-officer-row { grid-template-columns: minmax(0,1.3fr) minmax(0,1fr) auto; align-items: center; gap: 1.5rem; }
+  .interested-officer-actions { justify-content: flex-end; }
+}

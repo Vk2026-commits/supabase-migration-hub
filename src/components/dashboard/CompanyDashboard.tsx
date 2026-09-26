@@ -20,6 +20,7 @@ import { CompanySidebar } from "./CompanySidebar";
 import EmploymentTracking from "./EmploymentTracking";
 import NotHiredTracking from "./NotHiredTracking";
 import InterestedOfficers from "./InterestedOfficers";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JobPostings from "./JobPostings";
 import JobApplicants from "./JobApplicants";
 import JobApplicationsList from "./JobApplicationsList";
@@ -1061,15 +1062,17 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             )}
 
             {activeTab === "interested" && companyProfile && (
-              <>
-                <JobApplicationsList companyId={companyProfile.id} />
-                <div className="mt-8">
+              <Tabs key={companyProfile.id} defaultValue="job-interest" className="space-y-3">
+                <TabsList className="h-auto flex-wrap justify-start"><TabsTrigger value="job-interest">Interested in your jobs</TabsTrigger><TabsTrigger value="shortlist">Company shortlist</TabsTrigger></TabsList>
+                <TabsContent value="job-interest" className="m-0"><JobApplicationsList companyId={companyProfile.id} onOpenOfficer={(officerId) => openOfficerRecord(officerId, "applicants")} /></TabsContent>
+                <TabsContent value="shortlist" className="m-0">
+                  <p className="mb-3 text-sm text-muted-foreground">Officers your company saved while browsing. This is separate from responses to your jobs.</p>
                   <InterestedOfficers
                     companyId={companyProfile.id}
                     subscriptionTier={companyProfile.subscription_tier ?? "free"}
                   />
-                </div>
-              </>
+                </TabsContent>
+              </Tabs>
             )}
 
             {activeTab === "employment" && companyProfile && (
