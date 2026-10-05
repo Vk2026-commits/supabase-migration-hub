@@ -6,6 +6,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       className="toaster group"
+      // Top placement keeps feedback clear of sticky bottom action bars
+      // (e.g. the mobile application Continue button).
+      position="top-center"
+      closeButton
+      duration={4000}
       toastOptions={{
         classNames: {
           toast:
