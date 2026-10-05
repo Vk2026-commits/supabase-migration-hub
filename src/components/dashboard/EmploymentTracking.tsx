@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, ChevronDown, Plus, Search, UsersRound, ArrowRight, ShieldCheck, UserX, X } from "lucide-react";
+import { Star, Calendar, CheckCircle, Clock, Eye, FileCheck2, ClipboardCheck, Download, ChevronDown, Plus, Search, UsersRound, ArrowRight, ShieldCheck, UserX, X, ExternalLink } from "lucide-react";
 import EvaluationForm from "./EvaluationForm";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { PreEmploymentScreeningDialog } from "./PreEmploymentScreeningDialog";
@@ -43,6 +43,9 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOff
   const [rejectingHire, setRejectingHire] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [savingRejection, setSavingRejection] = useState(false);
+  const [terminatingHire, setTerminatingHire] = useState<any>(null);
+  const [terminationReason, setTerminationReason] = useState("");
+  const [savingTermination, setSavingTermination] = useState(false);
   const [showManualUpdate, setShowManualUpdate] = useState(false);
   const [hireSearch, setHireSearch] = useState("");
   const [hireStatusFilter, setHireStatusFilter] = useState("all");
@@ -221,6 +224,35 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOff
     }
   };
 
+  const terminateHiredOfficer = async () => {
+    if (!terminatingHire?.id || !terminationReason.trim()) {
+      toast.error("Add a termination reason before ending employment");
+      return;
+    }
+    setSavingTermination(true);
+    try {
+      const { error } = await (supabase as any).rpc("terminate_hired_officer", {
+        _hire_id: terminatingHire.id,
+        _reason: terminationReason.trim(),
+      });
+      if (error) throw error;
+      toast.success(`${terminatingHire.officer_profiles?.profiles?.full_name || "Officer"} was moved to Terminated`);
+      setTerminatingHire(null);
+      setTerminationReason("");
+      await loadHires();
+      onCloseOfficer?.();
+    } catch (error: any) {
+      toast.error(error.message || "Employment could not be terminated");
+    } finally {
+      setSavingTermination(false);
+    }
+  };
+
+  const openWeFindGuardsProfile = (officerId: string) => {
+    const params = new URLSearchParams({ companyId, officerId, officerSource: "hired-roster" });
+    window.open(`/browse?${params.toString()}`, "_blank", "noopener,noreferrer");
+  };
+
   const handleSubmitUpdate = async () => {
     if (!selectedHire) {
       toast.error("Please select an employee");
@@ -331,10 +363,12 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOff
             employmentStatus: statusLabel,
           }}
           actions={<>
+            {finalized && <Button size="sm" variant="secondary" onClick={() => openWeFindGuardsProfile(activeHire.officer_id)}><ExternalLink className="mr-2 h-4 w-4" />View We Find Guards profile</Button>}
             <Button size="sm" variant="secondary" disabled={!activeHire.onboarding_progress?.packet_id} onClick={openPacket}><FileCheck2 className="mr-2 h-4 w-4" />Documents</Button>
             {!finalized && <Button size="sm" variant="secondary" onClick={() => setScreeningHire({ ...activeHire, hireId: activeHire.id, officerName: name, screeningChecks: activeHire.screening_checks || [] })}><ShieldCheck className="mr-2 h-4 w-4" />Screening</Button>}
             {activeHire.onboarding_progress?.status === "submitted" && !finalized && <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" disabled={!screeningReady} onClick={() => setOnboardingReviewHire(activeHire)}><CheckCircle className="mr-2 h-4 w-4" />Accept onboarding</Button>}
             {!finalized && <Button size="sm" variant="destructive" onClick={() => { setRejectingHire(activeHire); setRejectionReason(""); }}><UserX className="mr-2 h-4 w-4" />Not hired</Button>}
+            {finalized && <Button size="sm" variant="destructive" onClick={() => { setTerminatingHire(activeHire); setTerminationReason(""); }}><UserX className="mr-2 h-4 w-4" />Terminate employment</Button>}
             <Button size="sm" variant="secondary" onClick={() => { setSelectedHire(activeHire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add update</Button>
           </>}
           tabs={[
@@ -398,6 +432,7 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOff
                 <span className="hidden items-center gap-2 md:flex"><Badge variant="outline" className={finalized ? "border-green-200 bg-green-50 text-green-800" : screeningFailed ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-800"}>{finalized ? "Hired" : screeningFailed ? "Screening failed" : "Pending onboarding"}</Badge>{finalized && (nextEvaluation ? <Badge variant="secondary">Next: {periodNames[nextEvaluation.evaluation_period]} · {new Date(nextEvaluation.due_date).toLocaleDateString()}</Badge> : <Badge variant="secondary">Evaluations complete</Badge>)}</span>
               </button>
               <Badge variant={hire.status === "active" ? "default" : "secondary"} className="hidden capitalize sm:inline-flex">{hire.status}</Badge>
+              {finalized && <Button type="button" size="sm" variant="outline" onClick={() => openWeFindGuardsProfile(hire.officer_id)} aria-label={`View ${name} We Find Guards profile`}><ExternalLink className="mr-1.5 h-4 w-4" />Profile</Button>}
               <Button type="button" size="sm" variant="outline" onClick={() => onOpenOfficer?.(hire.officer_id)} aria-label={`View ${name} employee record`}>View</Button>
             </div>
 
@@ -410,6 +445,8 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOff
               <div className="rounded-xl border bg-background p-3"><div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /><p className="text-sm font-semibold">Pre-employment screening</p></div><Badge variant="outline" className={screeningFailed ? "border-red-200 bg-red-50 text-red-800" : screeningReady ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-800"}>{screeningFailed ? "Failed result" : screeningReady ? "Required checks cleared" : "Action required"}</Badge></div><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{(hire.screening_checks || []).map((check: any) => <div key={check.id} className="rounded-lg border px-3 py-2"><p className="text-xs font-medium capitalize">{String(check.check_type).replace(/_/g, " ")}</p><p className={`mt-0.5 text-xs font-semibold ${check.status === "cleared" || check.status === "not_required" ? "text-green-700" : check.status === "failed" ? "text-red-700" : "text-amber-700"}`}>{String(check.status).replace(/_/g, " ")}</p></div>)}</div></div>
 
               <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={!hire.onboarding_progress?.packet_id} onClick={() => setOnboardingDocumentsApplication({ officerName: name, officer: { id: hire.officer_id }, onboardingProgress: hire.onboarding_progress, hireId: hire.id, offerId: hire.offer_id, hiringApplicationId: hire.hiring_application_id })}><FileCheck2 className="mr-2 h-4 w-4" />View complete onboarding packet</Button>{!finalized && <Button type="button" size="sm" variant="outline" className="border-orange-200 bg-orange-50 text-orange-800" onClick={() => setScreeningHire({ ...hire, hireId: hire.id, officerName: name, screeningChecks: hire.screening_checks || [] })}><ShieldCheck className="mr-2 h-4 w-4" />Update screening</Button>}{hire.onboarding_progress?.status === "submitted" && !finalized && <Button type="button" size="sm" disabled={!screeningReady} title={!screeningReady ? "Clear every required screening check first" : undefined} className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setOnboardingReviewHire(hire)}><CheckCircle className="mr-2 h-4 w-4" />Mark onboarding complete</Button>}{!finalized && <Button type="button" size="sm" variant="destructive" onClick={() => { setRejectingHire(hire); setRejectionReason(""); }}><UserX className="mr-2 h-4 w-4" />Move to Not Hired</Button>}<Button type="button" size="sm" variant="outline" onClick={() => { setSelectedHire(hire.id); setShowManualUpdate(true); }}><Plus className="mr-2 h-4 w-4" />Add note or update</Button></div>
+
+              {finalized && <div className="flex flex-col justify-between gap-3 rounded-lg border border-red-200 bg-red-50/60 p-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-red-950">End employment</p><p className="text-xs text-red-900/80">A reason is required. The employee record, offer, and onboarding history stay available in Terminated.</p></div><Button type="button" size="sm" variant="destructive" onClick={() => { setTerminatingHire(hire); setTerminationReason(""); }}><UserX className="mr-2 h-4 w-4" />Terminate employment</Button></div>}
 
               {finalized && evaluations.length > 0 && <div><h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Performance evaluations</h4><div className="grid gap-2 lg:grid-cols-3">{evaluations.map((evaluation: any) => { const status = getEvaluationStatus(evaluation); const StatusIcon = status.icon; return <div key={evaluation.id} className="flex items-center justify-between gap-3 rounded-lg border bg-background p-3"><div className="flex min-w-0 items-center gap-2"><StatusIcon className="h-4 w-4 shrink-0 text-muted-foreground" /><div><p className="text-sm font-medium">{periodNames[evaluation.evaluation_period]}</p><p className="text-xs text-muted-foreground">Due {new Date(evaluation.due_date).toLocaleDateString()}</p></div></div><div className="flex items-center gap-1"><Badge className={status.color}>{status.label}</Badge>{!evaluation.completed_date && <Button size="sm" variant="ghost" onClick={() => setSelectedEvaluation(evaluation)}>Open</Button>}</div></div>; })}</div></div>}
 
@@ -434,6 +471,13 @@ const EmploymentTracking = ({ companyId, onPendingReviewCountChange, selectedOff
       <Dialog open={Boolean(rejectingHire)} onOpenChange={(open) => { if (!open && !savingRejection) { setRejectingHire(null); setRejectionReason(""); } }}>
         <DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>Move {rejectingHire?.officer_profiles?.profiles?.full_name || "officer"} to Not Hired?</DialogTitle><DialogDescription>This closes the pending hire while retaining the application, offer, screening, and onboarding records for company history.</DialogDescription></DialogHeader><div className="space-y-2"><Label htmlFor="not-hired-reason">Reason *</Label><Textarea id="not-hired-reason" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Example: Required drug screening was not passed" rows={4} /></div><DialogFooter><Button type="button" variant="outline" onClick={() => setRejectingHire(null)} disabled={savingRejection}>Cancel</Button><Button type="button" variant="destructive" onClick={() => void rejectPendingHire()} disabled={savingRejection || !rejectionReason.trim()}>{savingRejection ? "Moving…" : "Move to Not Hired"}</Button></DialogFooter></DialogContent>
       </Dialog>
+      <AlertDialog open={Boolean(terminatingHire)} onOpenChange={(open) => { if (!open && !savingTermination) { setTerminatingHire(null); setTerminationReason(""); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Terminate {terminatingHire?.officer_profiles?.profiles?.full_name || "this officer"}?</AlertDialogTitle><AlertDialogDescription>This ends active employment and moves the employee to the Terminated sidebar. The offer, onboarding, screening, and employment history remain retained.</AlertDialogDescription></AlertDialogHeader>
+          <div className="space-y-2"><Label htmlFor="termination-reason">Termination reason *</Label><Textarea id="termination-reason" value={terminationReason} onChange={(event) => setTerminationReason(event.target.value)} placeholder="Document the reason for ending employment" rows={4} /></div>
+          <AlertDialogFooter><AlertDialogCancel disabled={savingTermination}>Cancel</AlertDialogCancel><AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={(event) => { event.preventDefault(); void terminateHiredOfficer(); }} disabled={savingTermination || !terminationReason.trim()}>{savingTermination ? "Terminating…" : "Terminate employment"}</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <OnboardingDocumentsDialog open={Boolean(onboardingDocumentsApplication)} onOpenChange={(open) => !open && setOnboardingDocumentsApplication(null)} application={onboardingDocumentsApplication} onAccepted={loadHires} />
     </div>
   );

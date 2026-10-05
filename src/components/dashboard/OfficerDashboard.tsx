@@ -786,13 +786,17 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           <div className="min-w-0 flex-1">
             <WorkspaceIdentityHeader name={profile?.full_name} email={profile?.email} subtitle={[formData.title || "Security Officer", formData.phone].filter(Boolean).join(" · ")} avatarUrl={profile?.avatar_url} onOpenAccount={() => handleTabChange("account")}>
               <span className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-200">
-                {hireDecisionStatus === "not_hired" ? "Application closed" : onboardingReviewedAt && employmentConfirmedAt ? "Hired" : onboardingComplete ? "Awaiting review" : "Officer profile"}
+                {hireDecisionStatus === "terminated" ? "Employment ended" : hireDecisionStatus === "not_hired" ? "Application closed" : onboardingReviewedAt && employmentConfirmedAt ? "Hired" : onboardingComplete ? "Awaiting review" : "Officer profile"}
               </span>
             </WorkspaceIdentityHeader>
 
-            {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={hireDecisionStatus === "not_hired" ? { label: "Application closed", tone: "amber" } : onboardingReviewedAt && employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
+            {activeTab !== "overview" && officerSectionDetails[activeTab] && <DashboardSectionHeader key={activeTab} ref={sectionHeaderRef} eyebrow="Officer workspace" title={officerSectionDetails[activeTab].title} description={officerSectionDetails[activeTab].description} icon={officerSectionDetails[activeTab].icon} status={hireDecisionStatus === "terminated" ? { label: "Employment ended", tone: "amber" } : hireDecisionStatus === "not_hired" ? { label: "Application closed", tone: "amber" } : onboardingReviewedAt && employmentConfirmedAt ? { label: "Hired", tone: "green" } : onboardingComplete ? { label: "Awaiting company review", tone: "amber" } : undefined} />}
 
-            {activeTab === "overview" && hireDecisionStatus !== "not_hired" && !onboardingReviewedAt && (employmentConfirmedAt || onboardingComplete) && (
+            {activeTab === "overview" && hireDecisionStatus === "terminated" && (
+              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950 shadow-sm"><p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">Employment ended</p><h2 className="mt-0.5 text-lg font-bold">Your employment record with {completedCompanyName} is no longer active</h2><p className="mt-1 text-sm text-amber-900/80">Contact the company directly if you have questions about the employment decision or final records.</p></div>
+            )}
+
+            {activeTab === "overview" && !["not_hired", "terminated"].includes(hireDecisionStatus || "") && !onboardingReviewedAt && (employmentConfirmedAt || onboardingComplete) && (
               <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 via-sky-50/70 to-background px-5 py-4 shadow-sm sm:flex-row sm:items-center">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                   <CheckCircle2 className="h-6 w-6" />

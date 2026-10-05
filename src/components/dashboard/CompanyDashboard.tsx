@@ -19,6 +19,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { CompanySidebar } from "./CompanySidebar";
 import EmploymentTracking from "./EmploymentTracking";
 import NotHiredTracking from "./NotHiredTracking";
+import TerminatedTracking from "./TerminatedTracking";
 import InterestedOfficers from "./InterestedOfficers";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import JobPostings from "./JobPostings";
@@ -63,6 +64,7 @@ const companyTabs = new Set([
   "interested",
   "employment",
   "not-hired",
+  "terminated",
   "team",
   "subscriptions",
   "account",
@@ -76,13 +78,14 @@ const companySectionDetails: Record<string, { title: string; description: string
   interested: { title: "Interested officers", description: "Review officers who expressed interest in your jobs.", icon: Heart },
   employment: { title: "Hired officers", description: "Access employee records, documents, and evaluations.", icon: Users },
   "not-hired": { title: "Not Hired", description: "Review closed pending hires and retained decision history.", icon: UserX },
+  terminated: { title: "Terminated", description: "Review former employee records and documented employment-end history.", icon: UserX },
   team: { title: "Company team", description: "Manage staff access and hiring permissions.", icon: UsersRound },
   subscriptions: { title: "Subscription", description: "Review your plan, features, and account access.", icon: CreditCard },
   account: { title: "Account settings", description: "Update your name, username, profile picture, or password.", icon: Settings },
 };
 
 // These sections already render a title alongside their own counts/actions.
-const sectionsWithOwnHeading = new Set(["jobs", "sites", "not-hired", "team", "subscriptions"]);
+const sectionsWithOwnHeading = new Set(["jobs", "sites", "not-hired", "terminated", "team", "subscriptions"]);
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
@@ -1144,6 +1147,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
 
             {activeTab === "not-hired" && companyProfile && (
               <NotHiredTracking companyId={companyProfile.id} />
+            )}
+
+            {activeTab === "terminated" && companyProfile && (
+              <TerminatedTracking companyId={companyProfile.id} />
             )}
 
             {activeTab === "team" && companyProfile && (

@@ -44,6 +44,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
         { title: "Applicants", value: "applicants", icon: UserCheck },
         { title: "Hired Officers", value: "employment", icon: UserCheck },
         { title: "Not Hired", value: "not-hired", icon: UserX },
+        { title: "Terminated", value: "terminated", icon: UserX },
       ],
     },
     {

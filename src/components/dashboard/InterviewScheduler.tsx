@@ -75,9 +75,9 @@ const makeInstructions = (
   return [
     "Please bring the following items:",
     "• Driver's License",
-    "• Social Security Card/Certificate",
-    "• Security License Pocket Card",
-    "• Duty Gear Unloaded",
+    "• Social Security Card",
+    "• Security License (Pocket Card)",
+    "• Fire Arm Unloaded",
     "• Duty Belt",
     "",
     "If you have any questions or concerns, please give us a call.",
