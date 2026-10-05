@@ -416,7 +416,10 @@ const JobApplicants = ({
       });
       setApplications(
         applicationRows.filter(
-          (app: any) => !app.employmentConfirmedAt && app.hireStatus !== "not_hired",
+          (app: any) =>
+            !app.employmentConfirmedAt &&
+            app.hireStatus !== "not_hired" &&
+            !["not_selected", "not_interested"].includes(String(app.status || "")),
         ),
       );
       setLoadError("");

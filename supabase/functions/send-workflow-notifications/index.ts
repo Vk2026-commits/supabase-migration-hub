@@ -62,7 +62,9 @@ const destinationFor = (workflow: Workflow) => {
   switch (workflow.kind) {
     case "application_reminder":
     case "application_submitted_officer":
-      return "/dashboard?tab=hiring-application";
+      return "/dashboard?onboarding=application";
+    case "application_not_selected_officer":
+      return "/browse";
     case "application_submitted_company":
     case "interview_response_company":
     case "interview_change_requested_company":
@@ -93,27 +95,48 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
   const context = workflow.context || {};
   const officerName = html(context.officer_name || "there");
   const companyName = html(context.company_name || "your hiring company");
+  const companyLocation = html(context.company_location || "their local area");
   const position = html(context.position || "Security Officer");
   const deadline = html(context.acceptance_deadline || "");
   const scheduledAt = clean(context.scheduled_at)
-    ? html(new Date(String(context.scheduled_at)).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short", timeZone: "America/Chicago" }))
+    ? html(
+        new Date(String(context.scheduled_at)).toLocaleString("en-US", {
+          dateStyle: "full",
+          timeStyle: "short",
+          timeZone: "America/Chicago",
+        }),
+      )
     : "the scheduled time";
   const response = clean(context.response);
   const decision = clean(context.decision);
-  const changeReason = html(context.change_reason || context.cancellation_reason || "No reason provided");
+  const changeReason = html(
+    context.change_reason || context.cancellation_reason || "No reason provided",
+  );
   const proposedAt = clean(context.proposed_scheduled_at)
-    ? html(new Date(String(context.proposed_scheduled_at)).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short", timeZone: "America/Chicago" }))
+    ? html(
+        new Date(String(context.proposed_scheduled_at)).toLocaleString("en-US", {
+          dateStyle: "full",
+          timeStyle: "short",
+          timeZone: "America/Chicago",
+        }),
+      )
     : "the proposed time";
-  const interviewType = clean(context.interview_type) === "video" ? "Online interview" : "In-person interview";
-  const interviewLocation = clean(context.interview_type) === "video"
-    ? clean(context.meeting_url)
-    : clean(context.location);
+  const interviewType =
+    clean(context.interview_type) === "video" ? "Online interview" : "In-person interview";
+  const interviewLocation =
+    clean(context.interview_type) === "video"
+      ? clean(context.meeting_url)
+      : clean(context.location);
   const interviewNotes = clean(context.notes);
   const confirmedInterviewDetails = [
     `<strong>Date and time:</strong> ${scheduledAt}`,
     `<strong>Format:</strong> ${html(interviewType)}`,
-    interviewLocation ? `<strong>${clean(context.interview_type) === "video" ? "Meeting link" : "Location"}:</strong> ${html(interviewLocation)}` : "",
-    interviewNotes ? `<strong>Company instructions:</strong><br />${html(interviewNotes).replace(/\r?\n/g, "<br />")}` : "",
+    interviewLocation
+      ? `<strong>${clean(context.interview_type) === "video" ? "Meeting link" : "Location"}:</strong> ${html(interviewLocation)}`
+      : "",
+    interviewNotes
+      ? `<strong>Company instructions:</strong><br />${html(interviewNotes).replace(/\r?\n/g, "<br />")}`
+      : "",
   ].filter(Boolean);
 
   switch (workflow.kind) {
@@ -131,14 +154,27 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
       };
     case "application_submitted_officer":
       return {
-        subject: "Your hiring application has been sent",
-        eyebrow: "Application submitted",
-        title: "Your application is on its way",
+        subject: `Application received by ${clean(context.company_name) || "the hiring company"}`,
+        eyebrow: "Application received",
+        title: "The company received your application",
         paragraphs: [
-          `Hi ${officerName}, your application for ${position} has been submitted to ${companyName}.`,
+          `Hi ${officerName}, ${companyName}, located in ${companyLocation}, received your application for ${position}.`,
+          "Their hiring team will review your application and get back to you as soon as possible.",
           "You can return to your application at any time to review your submitted information.",
         ],
         cta: "View application",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
+    case "application_not_selected_officer":
+      return {
+        subject: `Update from ${clean(context.company_name) || "the hiring company"}`,
+        eyebrow: "Application update",
+        title: "The company is not moving forward right now",
+        paragraphs: [
+          `Hi ${officerName}, ${companyName}, located in ${companyLocation}, reviewed your application for ${position}.`,
+          "They are not moving forward with this role at this time. We appreciate the time you invested in applying and encourage you to explore other opportunities on We Find Guards.",
+        ],
+        cta: "Browse opportunities",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
     case "application_submitted_company":
@@ -157,10 +193,28 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
     case "interview_updated_officer":
       return {
         subject: `${workflow.kind === "interview_updated_officer" ? "Updated: " : ""}Interview request from ${clean(context.company_name) || "a hiring company"}`,
-        eyebrow: workflow.kind === "interview_updated_officer" ? "Interview updated" : "Interview request",
-        title: workflow.kind === "interview_updated_officer" ? "Your interview details changed" : "You have an interview request",
-        paragraphs: [`Hi ${officerName}, ${companyName} would like to interview you for ${position} on ${scheduledAt}.`, "Open your dashboard to review the details and accept or decline the request."],
-        cta: "Review interview",
+        eyebrow:
+          workflow.kind === "interview_updated_officer" ? "Interview updated" : "Interview request",
+        title:
+          workflow.kind === "interview_updated_officer"
+            ? "Your interview details changed"
+            : "Your application was reviewed—an interview is ready",
+        paragraphs:
+          workflow.kind === "interview_updated_officer"
+            ? [
+                `Hi ${officerName}, ${companyName} updated the details for your ${position} interview.`,
+                ...confirmedInterviewDetails,
+                "Open your dashboard to review the updated appointment.",
+              ]
+            : [
+                `Hi ${officerName}, ${companyName} reviewed your application for ${position} and would like to interview you.`,
+                ...confirmedInterviewDetails,
+                "Open your dashboard to accept or decline the interview request. After accepting, you can request a different time if needed.",
+              ],
+        cta:
+          workflow.kind === "interview_updated_officer"
+            ? "Review updated interview"
+            : "Review and accept interview",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
     case "interview_cancelled_officer":
@@ -168,7 +222,11 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `Interview canceled by ${clean(context.company_name) || "a hiring company"}`,
         eyebrow: "Interview update",
         title: "Your interview was canceled",
-        paragraphs: [`Hi ${officerName}, ${companyName} canceled the interview for ${position} that was scheduled for ${scheduledAt}.`, `<strong>Reason:</strong> ${changeReason}`, "Open your dashboard to review and dismiss the notice."],
+        paragraphs: [
+          `Hi ${officerName}, ${companyName} canceled the interview for ${position} that was scheduled for ${scheduledAt}.`,
+          `<strong>Reason:</strong> ${changeReason}`,
+          "Open your dashboard to review and dismiss the notice.",
+        ],
         cta: "Open dashboard",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -177,7 +235,11 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `${clean(context.officer_name) || "A candidate"} canceled the interview`,
         eyebrow: "Interview canceled",
         title: "The candidate canceled the interview",
-        paragraphs: [`${officerName} canceled the interview with ${companyName} for ${position}.`, `<strong>Reason:</strong> ${changeReason}`, "Open Applicants to review and dismiss the notice."],
+        paragraphs: [
+          `${officerName} canceled the interview with ${companyName} for ${position}.`,
+          `<strong>Reason:</strong> ${changeReason}`,
+          "Open Applicants to review and dismiss the notice.",
+        ],
         cta: "Review applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -186,7 +248,11 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `New interview time proposed by ${clean(context.company_name) || "a hiring company"}`,
         eyebrow: "Reschedule request",
         title: `${companyName} requested a different interview time`,
-        paragraphs: [`Hi ${officerName}, ${companyName} proposed ${proposedAt} for your ${position} interview.`, `<strong>Reason:</strong> ${changeReason}`, "Your current appointment remains active until you accept the new time."],
+        paragraphs: [
+          `Hi ${officerName}, ${companyName} proposed ${proposedAt} for your ${position} interview.`,
+          `<strong>Reason:</strong> ${changeReason}`,
+          "Your current appointment remains active until you accept the new time.",
+        ],
         cta: "Review new time",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -195,7 +261,11 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `${clean(context.officer_name) || "A candidate"} requested a different interview time`,
         eyebrow: "Reschedule request",
         title: "The candidate proposed a new interview time",
-        paragraphs: [`${officerName} proposed ${proposedAt} for the ${position} interview.`, `<strong>Reason:</strong> ${changeReason}`, "The current appointment remains active until your company accepts the new time."],
+        paragraphs: [
+          `${officerName} proposed ${proposedAt} for the ${position} interview.`,
+          `<strong>Reason:</strong> ${changeReason}`,
+          "The current appointment remains active until your company accepts the new time.",
+        ],
         cta: "Review request",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -203,8 +273,20 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
       return {
         subject: `${clean(context.company_name) || "The company"} ${decision === "accepted" ? "accepted" : "declined"} your reschedule request`,
         eyebrow: "Reschedule response",
-        title: decision === "accepted" ? "Your new interview time is confirmed" : "Your requested time was declined",
-        paragraphs: decision === "accepted" ? [`${companyName} accepted your proposed time of ${scheduledAt}.`, "Open your dashboard to review the confirmed interview details."] : [`${companyName} declined your proposed time.`, `The original appointment remains scheduled for ${scheduledAt}.`],
+        title:
+          decision === "accepted"
+            ? "Your new interview time is confirmed"
+            : "Your requested time was declined",
+        paragraphs:
+          decision === "accepted"
+            ? [
+                `${companyName} accepted your proposed time of ${scheduledAt}.`,
+                "Open your dashboard to review the confirmed interview details.",
+              ]
+            : [
+                `${companyName} declined your proposed time.`,
+                `The original appointment remains scheduled for ${scheduledAt}.`,
+              ],
         cta: "View interview",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -212,8 +294,20 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
       return {
         subject: `${clean(context.officer_name) || "The candidate"} ${decision === "accepted" ? "accepted" : "declined"} the new interview time`,
         eyebrow: "Reschedule response",
-        title: decision === "accepted" ? "The new interview time is confirmed" : "The candidate kept the original time",
-        paragraphs: decision === "accepted" ? [`${officerName} accepted the new interview time of ${scheduledAt}.`, "Open Applicants to review the confirmed details."] : [`${officerName} declined the proposed time.`, `The original appointment remains scheduled for ${scheduledAt}.`],
+        title:
+          decision === "accepted"
+            ? "The new interview time is confirmed"
+            : "The candidate kept the original time",
+        paragraphs:
+          decision === "accepted"
+            ? [
+                `${officerName} accepted the new interview time of ${scheduledAt}.`,
+                "Open Applicants to review the confirmed details.",
+              ]
+            : [
+                `${officerName} declined the proposed time.`,
+                `The original appointment remains scheduled for ${scheduledAt}.`,
+              ],
         cta: "View applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -226,6 +320,7 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
           `Hi ${officerName}, your interview with ${companyName} for ${position} is confirmed.`,
           ...confirmedInterviewDetails,
           "A calendar invitation is attached. You can also open your dashboard to add it directly to Google, Outlook, Apple, or another calendar.",
+          "Need a different time? Open your dashboard before the interview to request a reschedule from the company.",
         ],
         cta: "View confirmed interview",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
@@ -235,13 +330,17 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} the interview request`,
         eyebrow: "Interview response",
         title: `Interview ${response === "accepted" ? "accepted" : "declined"}`,
-        paragraphs: response === "accepted"
-          ? [
-              `${officerName} accepted the interview request for ${position}. The interview is now confirmed.`,
-              ...confirmedInterviewDetails,
-              "A calendar invitation is attached for the company calendar. Open Applicants if you need to update the interview or contact the candidate.",
-            ]
-          : [`${officerName} declined the interview request for ${position}.`, "Open Applicants to review the candidate and decide the next step."],
+        paragraphs:
+          response === "accepted"
+            ? [
+                `${officerName} accepted the interview request for ${position}. The interview is now confirmed.`,
+                ...confirmedInterviewDetails,
+                "A calendar invitation is attached for the company calendar. Open Applicants if you need to update the interview or contact the candidate.",
+              ]
+            : [
+                `${officerName} declined the interview request for ${position}.`,
+                "Open Applicants to review the candidate and decide the next step.",
+              ],
         cta: "View applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -264,7 +363,12 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} your offer`,
         eyebrow: "Offer response",
         title: `Employment offer ${response === "accepted" ? "accepted" : "declined"}`,
-        paragraphs: [`${officerName} ${response === "accepted" ? "accepted" : "declined"} the offer from ${companyName} for ${position}.`, response === "accepted" ? "The officer can now complete the onboarding packet." : "Open Applicants to review the record and determine any follow-up."],
+        paragraphs: [
+          `${officerName} ${response === "accepted" ? "accepted" : "declined"} the offer from ${companyName} for ${position}.`,
+          response === "accepted"
+            ? "The officer can now complete the onboarding packet."
+            : "Open Applicants to review the record and determine any follow-up.",
+        ],
         cta: "View applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -309,7 +413,10 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
         subject: `${clean(context.company_name) || "A hiring company"} confirmed your employment`,
         eyebrow: "Employment confirmed",
         title: "Congratulations—your hire is confirmed",
-        paragraphs: [`Hi ${officerName}, ${companyName} confirmed your employment for the ${position} position.`, "The company will contact you with any remaining first-day instructions."],
+        paragraphs: [
+          `Hi ${officerName}, ${companyName} confirmed your employment for the ${position} position.`,
+          "The company will contact you with any remaining first-day instructions.",
+        ],
         cta: "View status",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -376,26 +483,52 @@ const brandedEmail = ({
 const calendarAttachmentFor = (workflow: Workflow) => {
   if (
     workflow.kind !== "interview_confirmed_officer" &&
-    !(workflow.kind === "interview_response_company" && clean(workflow.context?.response) === "accepted") &&
-    !(workflow.kind === "interview_change_response_officer" && clean(workflow.context?.decision) === "accepted") &&
-    !(workflow.kind === "interview_change_response_company" && clean(workflow.context?.decision) === "accepted")
-  ) return null;
+    !(
+      workflow.kind === "interview_response_company" &&
+      clean(workflow.context?.response) === "accepted"
+    ) &&
+    !(
+      workflow.kind === "interview_change_response_officer" &&
+      clean(workflow.context?.decision) === "accepted"
+    ) &&
+    !(
+      workflow.kind === "interview_change_response_company" &&
+      clean(workflow.context?.decision) === "accepted"
+    )
+  )
+    return null;
   const context = workflow.context || {};
   const scheduledAt = clean(context.scheduled_at);
   if (!scheduledAt) return null;
   const start = new Date(scheduledAt);
   if (Number.isNaN(start.getTime())) return null;
   const end = new Date(start.getTime() + 60 * 60 * 1000);
-  const stamp = (date: Date) => date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
-  const escapeText = (value: unknown) => clean(value).replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+  const stamp = (date: Date) =>
+    date
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "Z");
+  const escapeText = (value: unknown) =>
+    clean(value)
+      .replace(/\\/g, "\\\\")
+      .replace(/\r?\n/g, "\\n")
+      .replace(/,/g, "\\,")
+      .replace(/;/g, "\\;");
   const companyName = clean(context.company_name) || "Hiring company";
   const position = clean(context.position) || "Security Officer";
-  const location = clean(context.interview_type) === "video" ? clean(context.meeting_url) : clean(context.location);
+  const location =
+    clean(context.interview_type) === "video"
+      ? clean(context.meeting_url)
+      : clean(context.location);
   const description = [
     `Confirmed interview for ${position} with ${companyName}.`,
     clean(context.notes),
-    clean(context.meeting_url) && clean(context.interview_type) !== "video" ? `Meeting link: ${clean(context.meeting_url)}` : "",
-  ].filter(Boolean).join("\n\n");
+    clean(context.meeting_url) && clean(context.interview_type) !== "video"
+      ? `Meeting link: ${clean(context.meeting_url)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   const calendar = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -418,7 +551,11 @@ const calendarAttachmentFor = (workflow: Workflow) => {
   const bytes = new TextEncoder().encode(calendar);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return { filename: "we-find-guards-interview.ics", content: btoa(binary), contentType: "text/calendar; charset=utf-8; method=REQUEST" };
+  return {
+    filename: "we-find-guards-interview.ics",
+    content: btoa(binary),
+    contentType: "text/calendar; charset=utf-8; method=REQUEST",
+  };
 };
 
 const actionIsComplete = async (admin: ReturnType<typeof createClient>, workflow: Workflow) => {

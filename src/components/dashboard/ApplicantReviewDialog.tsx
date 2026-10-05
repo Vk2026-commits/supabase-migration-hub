@@ -21,12 +21,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import {
   generateGuardApplicationPDF,
   type GuardApplicationData,
@@ -113,6 +123,9 @@ export function ApplicantReviewDialog({
   } | null>(null);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
   const [markingReviewed, setMarkingReviewed] = useState(false);
+  const [closeDecisionOpen, setCloseDecisionOpen] = useState(false);
+  const [notSelectedReason, setNotSelectedReason] = useState("");
+  const [closingApplication, setClosingApplication] = useState(false);
   const [review, setReview] = useState<ReviewData>({
     applicationId: null,
     snapshot: null,
@@ -131,6 +144,9 @@ export function ApplicantReviewDialog({
     const embedded = embeddedApplication(application);
     setReviewConfirmed(false);
     setMarkingReviewed(false);
+    setCloseDecisionOpen(false);
+    setNotSelectedReason("");
+    setClosingApplication(false);
 
     setReview({
       applicationId: embedded?.id || null,
@@ -471,6 +487,28 @@ export function ApplicantReviewDialog({
       toast.error(error.message || "The application review could not be completed");
     } finally {
       setMarkingReviewed(false);
+    }
+  };
+
+  const closeApplicationNotSelected = async () => {
+    if (!application?.id) return;
+    setClosingApplication(true);
+    try {
+      const { error } = await (supabase as any).rpc("close_job_application_not_selected", {
+        _job_application_id: application.id,
+        _reason: notSelectedReason.trim() || null,
+      });
+      if (error) throw error;
+      toast.success(
+        "Application closed. The officer will receive a We Find Guards update by email.",
+      );
+      onReviewed?.();
+      setCloseDecisionOpen(false);
+      onOpenChange(false);
+    } catch (error: any) {
+      toast.error(error.message || "The application could not be closed");
+    } finally {
+      setClosingApplication(false);
     }
   };
 
@@ -862,13 +900,29 @@ export function ApplicantReviewDialog({
               </Section>
 
               {application?.status === "reviewed" ? (
-                <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
-                  <ShieldCheck className="h-6 w-6 shrink-0 text-emerald-700" />
-                  <div>
-                    <p className="font-semibold">Application review completed</p>
-                    <p className="mt-1 text-sm text-emerald-900/80">
-                      This candidate is ready for the next stage: schedule an interview.
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-950">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" />
+                    <div>
+                      <p className="font-semibold">Application review completed</p>
+                      <p className="mt-1 text-sm text-emerald-900/80">
+                        This candidate is ready for the next stage: schedule an interview.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-emerald-200 pt-4">
+                    <p className="text-sm text-emerald-900/80">
+                      If the company is not moving forward, close the application so the officer
+                      receives a courteous email update.
                     </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3 border-red-200 bg-white text-red-800 hover:border-red-300 hover:bg-red-50 hover:text-red-900"
+                      onClick={() => setCloseDecisionOpen(true)}
+                    >
+                      Not moving forward
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -908,6 +962,42 @@ export function ApplicantReviewDialog({
             </>
           )}
         </div>
+
+        <AlertDialog open={closeDecisionOpen} onOpenChange={setCloseDecisionOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Close this application?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The applicant will receive a We Find Guards email that the company is not hiring for
+                this role right now. This closes the application before an interview is sent.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-2">
+              <label htmlFor="not-selected-reason" className="text-sm font-medium">
+                Optional note for the applicant
+              </label>
+              <Textarea
+                id="not-selected-reason"
+                value={notSelectedReason}
+                onChange={(event) => setNotSelectedReason(event.target.value)}
+                placeholder="Optional: share a short, professional reason or next-step guidance."
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={closingApplication}>
+                Keep application open
+              </AlertDialogCancel>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={closingApplication}
+                onClick={() => void closeApplicationNotSelected()}
+              >
+                {closingApplication ? "Closing…" : "Close and email applicant"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Dialog
           open={Boolean(previewDocument)}
