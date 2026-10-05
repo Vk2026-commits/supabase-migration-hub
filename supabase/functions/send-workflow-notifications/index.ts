@@ -76,6 +76,8 @@ const destinationFor = (workflow: Workflow) => {
     case "interview_updated_officer":
     case "interview_cancelled_officer":
     case "interview_confirmed_officer":
+    case "interview_reminder_day_before_officer":
+    case "interview_reminder_one_hour_officer":
     case "interview_change_requested_officer":
     case "interview_change_response_officer":
     case "hire_confirmed_officer":
@@ -313,16 +315,42 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
       };
     case "interview_confirmed_officer":
       return {
-        subject: `Interview confirmed with ${clean(context.company_name) || "your hiring company"}`,
-        eyebrow: "Interview confirmed",
+        subject: `You accepted the interview with ${clean(context.company_name) || "your hiring company"}`,
+        eyebrow: "Interview accepted",
         title: "Your interview is confirmed",
         paragraphs: [
-          `Hi ${officerName}, your interview with ${companyName} for ${position} is confirmed.`,
+          `Hi ${officerName}, you accepted the interview with ${companyName} for ${position}.`,
           ...confirmedInterviewDetails,
           "A calendar invitation is attached. You can also open your dashboard to add it directly to Google, Outlook, Apple, or another calendar.",
           "Need a different time? Open your dashboard before the interview to request a reschedule from the company.",
         ],
         cta: "View confirmed interview",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
+    case "interview_reminder_day_before_officer":
+      return {
+        subject: `Reminder: your interview with ${clean(context.company_name) || "the hiring company"} is tomorrow`,
+        eyebrow: "Interview reminder",
+        title: "Your interview is tomorrow",
+        paragraphs: [
+          `Hi ${officerName}, this is a reminder that your ${position} interview with ${companyName} is tomorrow.`,
+          ...confirmedInterviewDetails,
+          "Review the details before you go. If you need a different time, submit a reschedule request from your dashboard as soon as possible.",
+        ],
+        cta: "Review interview details",
+        note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
+      };
+    case "interview_reminder_one_hour_officer":
+      return {
+        subject: `Starting in one hour: your interview with ${clean(context.company_name) || "the hiring company"}`,
+        eyebrow: "Interview reminder",
+        title: "Your interview starts in one hour",
+        paragraphs: [
+          `Hi ${officerName}, your ${position} interview with ${companyName} starts in approximately one hour.`,
+          ...confirmedInterviewDetails,
+          "Please allow enough time to join the meeting or arrive at the location and complete check-in.",
+        ],
+        cta: "Open interview details",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
     case "interview_response_company":
@@ -597,6 +625,25 @@ const actionIsComplete = async (admin: ReturnType<typeof createClient>, workflow
     return (
       data.status !== "scheduled" ||
       data.response_status !== "pending" ||
+      new Date(data.scheduled_at).getTime() <= Date.now()
+    );
+  }
+
+  if (
+    workflow.kind === "interview_reminder_day_before_officer" ||
+    workflow.kind === "interview_reminder_one_hour_officer"
+  ) {
+    const interviewId = clean(workflow.context?.interview_id);
+    if (!interviewId) return true;
+    const { data } = await admin
+      .from("interview_schedules")
+      .select("status,response_status,scheduled_at")
+      .eq("id", interviewId)
+      .maybeSingle();
+    if (!data) return true;
+    return (
+      data.status !== "scheduled" ||
+      data.response_status !== "accepted" ||
       new Date(data.scheduled_at).getTime() <= Date.now()
     );
   }

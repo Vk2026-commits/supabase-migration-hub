@@ -66,7 +66,7 @@ npx supabase functions deploy send-workflow-notifications --project-ref "$PROJEC
 run_query "SELECT cron.unschedule(jobid) FROM cron.job WHERE jobname = 'dispatch-workflow-notifications';
 SELECT cron.schedule(
   'dispatch-workflow-notifications',
-  '*/15 * * * *',
+  '*/5 * * * *',
   \$cron\$
     SELECT net.http_post(
       url := (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'notification_project_url') || '/functions/v1/send-workflow-notifications',
@@ -80,4 +80,4 @@ SELECT cron.schedule(
   \$cron\$
 );"
 
-echo "Workflow notifications are deployed. The dispatcher runs every 15 minutes; each active reminder is resent 24 hours after its prior delivery."
+echo "Workflow notifications are deployed. The dispatcher runs every 5 minutes; daily application, offer, and onboarding reminders remain 24 hours apart, while confirmed interview reminders are sent one day and one hour before the appointment."
