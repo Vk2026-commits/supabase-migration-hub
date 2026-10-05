@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Link } from "@/lib/router-compat";
 import { z } from "zod";
 import { formatUsPhone } from "@/lib/phone";
+import { authDeadline } from "@/lib/authRequest";
 
 // Password validation schema
 const passwordSchema = z
@@ -32,7 +33,7 @@ const isTemporaryAuthFailure = (error: unknown) => {
   return status >= 500 || /(?:http\s*)?5\d\d|gateway|timed?\s*out|failed to fetch|network request/i.test(message);
 };
 
-const signInWithRecovery = async (email: string, password: string) => {
+const signInWithRecovery = (email: string, password: string) => authDeadline((async () => {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error) return;
@@ -42,7 +43,7 @@ const signInWithRecovery = async (email: string, password: string) => {
     }
     await new Promise((resolve) => window.setTimeout(resolve, 650));
   }
-};
+})());
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -83,11 +84,13 @@ const Auth = () => {
   useEffect(() => {
     // Check if user is already logged in
     const force = searchParams.get("force");
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !force) {
+    let active = true;
+    authDeadline(supabase.auth.getSession()).then(({ data: { session } }) => {
+      if (active && session && !force) {
         navigate(nextPath || "/dashboard");
       }
-    });
+    }).catch(() => { /* Keep the sign-in form usable if session recovery fails. */ });
+    return () => { active = false; };
   }, [navigate, nextPath, searchParams]);
 
   const validatePassword = (pwd: string) => {
@@ -182,11 +185,11 @@ const Auth = () => {
           await signInWithRecovery(emailOrUsername, password);
         } else {
           // Sign in with username - first get email from profiles
-          const { data: profile, error: profileError } = await supabase
+          const { data: profile, error: profileError } = await authDeadline(supabase
             .from("profiles")
             .select("email")
             .eq("username", emailOrUsername)
-            .single();
+            .single());
 
           if (profileError || !profile) {
             throw new Error("Username not found");

@@ -213,8 +213,18 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
     ensureOfficerProfilePromise.current = (async () => {
       try {
+        // Existing applicants should never wait for a profile-creation service.
+        // The signed-in dashboard supplies userId; RLS still enforces ownership.
+        const { data: existing, error: existingError } = await supabase
+          .from('officer_profiles').select('*').eq('user_id', userId).maybeSingle();
+        if (existingError) throw existingError;
+        if (existing) {
+          setOfficerProfile(existing);
+          return existing;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
+        if (!user || user.id !== userId) {
           toast.error("You must be logged in");
           return null;
         }

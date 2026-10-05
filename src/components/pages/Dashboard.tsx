@@ -40,13 +40,23 @@ const Dashboard = () => {
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(null);
   const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
   const [accessError, setAccessError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setAccessError(null);
+    const timer = window.setTimeout(() => {
+      active = false;
+      setAccessError("The account service is taking too long to respond. Retry to load your account; this does not erase your application.");
+      setLoading(false);
+    }, 15000);
     const getProfile = async () => {
       try {
         const {
           data: { session },
         } = await supabase.auth.getSession();
+        if (!active) return;
 
         if (!session) {
           const next = `${window.location.pathname}${window.location.search}`;
@@ -66,6 +76,7 @@ const Dashboard = () => {
               .eq("user_id", session.user.id),
             supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
           ]);
+        if (!active) return;
 
         if (rolesError) throw rolesError;
         if (profileError) throw profileError;
@@ -98,6 +109,7 @@ const Dashboard = () => {
             .order("invited_at", { ascending: false })
             .limit(1)
             .maybeSingle();
+          if (!active) return;
 
           if (membershipError) throw membershipError;
           if (pendingMembership) {
@@ -115,6 +127,7 @@ const Dashboard = () => {
         if (effectiveRole === "company") {
           try {
             const workspaces = await loadCompanyWorkspaces(session.user.id);
+            if (!active) return;
             const selectedWorkspace = selectCompanyWorkspace(workspaces, requestedCompanyId);
             const companyData = selectedWorkspace?.company || null;
             if (!companyData) throw new Error("No authorized company workspace was found");
@@ -127,6 +140,7 @@ const Dashboard = () => {
 
             setShowExpiredTrialDialog(Boolean(trialExpired && isFreeTier));
           } catch (workspaceError) {
+            if (!active) return;
             console.error("Company workspace verification failed:", workspaceError);
             const hasOfficerAccess = accountRoles.has("officer") || profileData?.role === "officer";
             if (hasOfficerAccess) {
@@ -148,13 +162,18 @@ const Dashboard = () => {
         setProfile(profileData ? { ...profileData, role: effectiveRole } : profileData);
       } catch (error) {
         console.error("Failed to load dashboard:", error);
+        if (active) setAccessError("Your account could not be loaded. Please retry. Your account type has not been changed.");
       } finally {
-        setLoading(false);
+        if (active) {
+          clearTimeout(timer);
+          setLoading(false);
+        }
       }
     };
 
     getProfile();
-  }, [navigate, requestedCompanyId, viewAs]);
+    return () => { active = false; clearTimeout(timer); };
+  }, [navigate, requestedCompanyId, viewAs, retry]);
 
   if (loading) {
     return (
@@ -171,7 +190,7 @@ const Dashboard = () => {
     );
   }
 
-  if (!user) {
+  if (!user && !accessError) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -183,7 +202,7 @@ const Dashboard = () => {
     );
   }
 
-  if (accessError || (profile?.role !== "officer" && profile?.role !== "company")) {
+  if (!user || accessError || (profile?.role !== "officer" && profile?.role !== "company")) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -194,8 +213,8 @@ const Dashboard = () => {
               <CardDescription>{accessError || "Refresh the page to verify your account access."}</CardDescription>
             </CardHeader>
             <CardContent>
-              <button className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground" onClick={() => window.location.reload()}>
-                Refresh account
+              <button className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground" onClick={() => setRetry(value => value + 1)}>
+                Retry loading account
               </button>
             </CardContent>
           </Card>
