@@ -46,6 +46,14 @@ interface CompanyDashboardProps {
   userName: string;
 }
 
+type ApplicantPortalNotification = {
+  id: string;
+  job_application_id: string;
+  title: string;
+  body: string;
+  created_at: string;
+};
+
 const companyTabs = new Set([
   "overview",
   "profile",
@@ -90,6 +98,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
   const [accountProfile, setAccountProfile] = useState<any>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [pendingOnboardingReviews, setPendingOnboardingReviews] = useState(0);
+  const [applicantNotifications, setApplicantNotifications] = useState<ApplicantPortalNotification[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(
     requestedTab && companyTabs.has(requestedTab) ? requestedTab : "overview",
@@ -171,6 +180,30 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("officerId");
     nextParams.delete("officerSource");
+    setSearchParams(nextParams);
+  };
+
+  const completeApplicantNotification = async (notificationId: string) => {
+    const { error } = await (supabase as any).rpc("mark_company_portal_notification_read", {
+      _notification_id: notificationId,
+    });
+    if (error) {
+      toast.error("We couldn't mark that applicant notification complete. Please try again.");
+      return false;
+    }
+    setApplicantNotifications((current) => current.filter((notification) => notification.id !== notificationId));
+    return true;
+  };
+
+  const openApplicantNotification = async (notification: ApplicantPortalNotification) => {
+    const completed = await completeApplicantNotification(notification.id);
+    if (!completed) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", "applicants");
+    nextParams.set("officerId", notification.job_application_id);
+    nextParams.set("officerSource", "applicants");
+    if (companyProfile?.id) nextParams.set("companyId", companyProfile.id);
+    setActiveTab("applicants");
     setSearchParams(nextParams);
   };
 
@@ -281,6 +314,40 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     const refresh = window.setInterval(() => void loadPendingReviews(), 15000);
     return () => window.clearInterval(refresh);
   }, [companyProfile?.id]);
+
+  useEffect(() => {
+    if (!companyProfile?.id) {
+      setApplicantNotifications([]);
+      return;
+    }
+
+    let active = true;
+    const loadApplicantNotifications = async () => {
+      const { data, error } = await (supabase as any)
+        .from("company_portal_notifications")
+        .select("id,job_application_id,title,body,created_at")
+        .eq("company_id", companyProfile.id)
+        .eq("recipient_user_id", userId)
+        .is("read_at", null)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) {
+        console.error("Failed to load applicant notifications", error);
+        return;
+      }
+      if (active) setApplicantNotifications(data || []);
+    };
+
+    void loadApplicantNotifications();
+    const refresh = window.setInterval(() => void loadApplicantNotifications(), 15000);
+    const onFocus = () => void loadApplicantNotifications();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      active = false;
+      window.clearInterval(refresh);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [companyProfile?.id, userId]);
 
   useEffect(() => {
     void supabase.from("profiles").select("email,full_name,username,avatar_url,role").eq("id", userId).maybeSingle().then(({ data }) => setAccountProfile(data));
@@ -421,6 +488,15 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
             {activeTab === "overview" && (
               <div className="mx-auto w-full max-w-7xl space-y-4 p-4 sm:p-5">
                 <div className="border-b pb-3"><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Company workspace</p><h2 className="mt-1 text-xl font-bold">Hiring operations</h2><p className="mt-0.5 text-sm text-muted-foreground">Open a work queue to review and act on current records.</p></div>
+                {applicantNotifications.length > 0 && <section aria-label="New applicant notifications" className="overflow-hidden rounded-lg border border-blue-200 bg-blue-50/70">
+                  <div className="flex items-center gap-3 border-b border-blue-200 bg-blue-100/70 px-4 py-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground"><BellRing className="h-4 w-4" /></span><div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-primary">Applicant review queue</p><h3 className="font-semibold text-blue-950">{applicantNotifications.length} new {applicantNotifications.length === 1 ? "applicant needs" : "applicants need"} review</h3></div></div>
+                  <div className="divide-y divide-blue-200">
+                    {applicantNotifications.map((notification) => <div key={notification.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                      <div className="min-w-0 flex-1"><p className="font-semibold text-foreground">{notification.title}</p><p className="mt-0.5 text-sm text-muted-foreground">{notification.body}</p><p className="mt-1 text-xs text-muted-foreground">Received {new Date(notification.created_at).toLocaleString()}</p></div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-3"><Button type="button" size="sm" onClick={() => void openApplicantNotification(notification)}>Review applicant<ArrowRight className="ml-2 h-4 w-4" /></Button><div className="flex items-center gap-2"><Checkbox id={`complete-applicant-${notification.id}`} checked={false} onCheckedChange={(checked) => { if (checked) void completeApplicantNotification(notification.id); }} /><Label htmlFor={`complete-applicant-${notification.id}`} className="cursor-pointer text-sm">Mark complete</Label></div></div>
+                    </div>)}
+                  </div>
+                </section>}
                 {pendingOnboardingReviews > 0 && <button type="button" onClick={() => selectTab("employment")} className="group flex w-full items-center gap-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left transition-colors hover:bg-amber-100/70">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700"><BellRing className="h-4 w-4" /></span>
                   <span className="min-w-0 flex-1"><span className="block font-semibold text-amber-950">{pendingOnboardingReviews} onboarding {pendingOnboardingReviews === 1 ? "packet is" : "packets are"} ready for review</span><span className="mt-0.5 block text-sm text-amber-900/75">Open Hired officers, review the submitted records, and mark onboarding complete.</span></span>
