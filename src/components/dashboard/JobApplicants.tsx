@@ -511,19 +511,21 @@ const JobApplicants = ({
                 <MessageCircle className="mr-2 h-4 w-4" />
                 Chat
               </Button>
-              <InterviewScheduler
-                companyId={companyId}
-                companyName={companyProfile?.company_name || "The company"}
-                officerId={activeApplication.officer.id}
-                officerName={activeApplication.officerName}
-                jobApplicationId={activeApplication.id}
-                jobTitle={activeApplication.job_posting?.title || "Security Officer"}
-                applicationStatus={activeApplication.status}
-                existingInterview={activeApplication.interview}
-                onChanged={loadApplications}
-              />
+              {(activeApplication.status === "reviewed" || activeApplication.interview) && (
+                <InterviewScheduler
+                  companyId={companyId}
+                  companyName={companyProfile?.company_name || "The company"}
+                  officerId={activeApplication.officer.id}
+                  officerName={activeApplication.officerName}
+                  jobApplicationId={activeApplication.id}
+                  jobTitle={activeApplication.job_posting?.title || "Security Officer"}
+                  applicationStatus={activeApplication.status}
+                  existingInterview={activeApplication.interview}
+                  onChanged={loadApplications}
+                />
+              )}
               {activeApplication.offerHiringApplicationId &&
-              activeApplication.status !== "accepted" ? (
+              activeApplication.status === "interview_completed" ? (
                 <HireButton
                   officerId={activeApplication.officer.id}
                   officerName={activeApplication.officerName}
@@ -1098,7 +1100,19 @@ const JobApplicants = ({
                       >
                         View profile
                       </Button>
-                      {app.status === "accepted" && onboarding.percent === 100 && app.hireId ? (
+                      {app.status === "reviewed" && !app.interview ? (
+                        <InterviewScheduler
+                          companyId={companyId}
+                          companyName={companyProfile?.company_name || "The company"}
+                          officerId={app.officer.id}
+                          officerName={app.officerName}
+                          jobApplicationId={app.id}
+                          jobTitle={app.job_posting?.title || "Security Officer"}
+                          applicationStatus={app.status}
+                          existingInterview={app.interview}
+                          onChanged={loadApplications}
+                        />
+                      ) : app.status === "accepted" && onboarding.percent === 100 && app.hireId ? (
                         <Button
                           size="sm"
                           variant="outline"
@@ -1114,7 +1128,7 @@ const JobApplicants = ({
                         >
                           View onboarding
                         </Button>
-                      ) : app.offerHiringApplicationId && app.status !== "accepted" ? (
+                      ) : app.offerHiringApplicationId && app.status === "interview_completed" ? (
                         <HireButton
                           officerId={app.officer.id}
                           officerName={app.officerName}
@@ -1167,17 +1181,19 @@ const JobApplicants = ({
                             <StickyNote className="mr-1.5 h-3.5 w-3.5" />
                             {app.companyNote?.note ? "View notes" : "Add note"}
                           </Button>
-                          <InterviewScheduler
-                            companyId={companyId}
-                            companyName={companyProfile?.company_name || "The company"}
-                            officerId={app.officer.id}
-                            officerName={app.officerName}
-                            jobApplicationId={app.id}
-                            jobTitle={app.job_posting?.title || "Security Officer"}
-                            applicationStatus={app.status}
-                            existingInterview={app.interview}
-                            onChanged={loadApplications}
-                          />
+                          {(app.status === "reviewed" || app.interview) && (
+                            <InterviewScheduler
+                              companyId={companyId}
+                              companyName={companyProfile?.company_name || "The company"}
+                              officerId={app.officer.id}
+                              officerName={app.officerName}
+                              jobApplicationId={app.id}
+                              jobTitle={app.job_posting?.title || "Security Officer"}
+                              applicationStatus={app.status}
+                              existingInterview={app.interview}
+                              onChanged={loadApplications}
+                            />
+                          )}
                           {app.status === "accepted" && app.onboardingProgress?.packet_id && (
                             <Button
                               size="sm"
