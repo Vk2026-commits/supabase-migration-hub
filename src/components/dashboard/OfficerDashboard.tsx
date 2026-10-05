@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { shouldAutoOpenApplication } from "@/lib/hiringRestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,12 @@ const getPrivateFilePath = (value: string | null | undefined, bucket: string) =>
 
   return decodeURIComponent(path.split("?")[0]);
 };
+
+const hasSubmitted = (applications: any) => (Array.isArray(applications) ? applications : []).some((application: any) =>
+  application.status === "submitted"
+  || Boolean(application.submitted_at)
+  || (application.application_type === "employer_copy" && application.evidence_snapshot_status === "complete")
+);
 
 const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -284,17 +291,28 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
       // Load counts for completion status
       if (data.id) {
+        // The landing-tab decision needs only these three reads; don't gate it
+        // on the rest of the dashboard's counts and interview lookups.
+        const applicationsPromise = Promise.resolve((supabase as any).from("guard_hiring_applications").select("status,application_type,submitted_at,evidence_snapshot_status").eq("officer_id", data.id).order("created_at", { ascending: false }).limit(20));
+        const confirmedHirePromise = Promise.resolve((supabase as any).from("hires").select("employment_confirmed_at,onboarding_reviewed_at,status,created_at").eq("officer_id", data.id).order("created_at", { ascending: false }).limit(1).maybeSingle());
+        const pendingOfferPromise = Promise.resolve((supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle());
+        void Promise.all([applicationsPromise, confirmedHirePromise, pendingOfferPromise]).then(([apps, hire, offer]: any[]) => {
+          if (choseInitialExperience.current || apps.error || hire.error || offer.error) return;
+          choseInitialExperience.current = true;
+          const tab = shouldAutoOpenApplication({ requestedTab, initialTab, hasPendingOffer: Boolean(offer.data?.id), hasSubmittedApplication: hasSubmitted(apps.data), employmentConfirmed: Boolean(hire.data?.employment_confirmed_at) });
+          if (tab) selectTab(tab);
+        });
         const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, confirmedHireResult, pendingOfferResult, acceptedOfferResult, interviewResult, interviewHistoryResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
           supabase.from("work_history").select("id", { count: 'exact' }).eq("officer_id", data.id),
           supabase.from("video_interviews").select("id", { count: 'exact', head: true }).eq("officer_id", data.id),
-          (supabase as any).from("guard_hiring_applications").select("status,application_type,submitted_at,evidence_snapshot_status").eq("officer_id", data.id).order("created_at", { ascending: false }).limit(20),
+          applicationsPromise,
           supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
           (supabase as any).from("officer_onboarding_packets").select("status,company_name,submitted_at").eq("officer_id", data.id).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
           supabase.from("hires").select("id,hiring_application_id,offer_prepared_at,employment_confirmed_at").eq("officer_id", data.id).eq("status", "active").not("offer_prepared_at", "is", null).not("hiring_application_id", "is", null).order("offer_prepared_at", { ascending: false }).limit(1).maybeSingle(),
-          (supabase as any).from("hires").select("employment_confirmed_at,onboarding_reviewed_at,status,created_at").eq("officer_id", data.id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-          (supabase as any).from("employment_offers").select("id,version,status,terms,viewed_at,sent_at").eq("officer_id", data.id).in("status", ["sent", "viewed"]).order("sent_at", { ascending: false }).limit(1).maybeSingle(),
+          confirmedHirePromise,
+          pendingOfferPromise,
           (supabase as any).from("employment_offers").select("id,version,status,terms,accepted_at").eq("officer_id", data.id).in("status", ["accepted", "legacy_accepted"]).order("accepted_at", { ascending: false }).limit(1).maybeSingle(),
           (supabase as any).rpc("get_my_upcoming_interview"),
           (supabase as any).rpc("get_my_interview_history"),
@@ -306,11 +324,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setVideoInterviewCount(videosResult.count || 0);
         setCertificationDocumentComplete((certsResult.data || []).some((cert: any) => Boolean(cert.document_front_url)));
         const storedApplications = Array.isArray(applicationResult.data) ? applicationResult.data : [];
-        const hasSubmittedApplication = storedApplications.some((application: any) =>
-          application.status === "submitted"
-          || Boolean(application.submitted_at)
-          || (application.application_type === "employer_copy" && application.evidence_snapshot_status === "complete")
-        );
+        const hasSubmittedApplication = hasSubmitted(storedApplications);
         setApplicationSubmitted(hasSubmittedApplication);
         setEmployeeOnboardingSubmitted(employeeOnboardingResult.data?.status === "submitted");
         setCompletedOnboardingRecord(employeeOnboardingResult.data?.status === "submitted" ? employeeOnboardingResult.data : null);
@@ -333,11 +347,8 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
         setRequiredPhotosComplete(photoNames.includes("headshot") && photoNames.includes("full-body"));
         if (!choseInitialExperience.current) {
           choseInitialExperience.current = true;
-          if (!requestedTab && pendingOfferResult.data?.id) {
-            selectTab("employee-onboarding");
-          } else if (!requestedTab && (initialTab === "overview" || initialTab === "profile") && !hasSubmittedApplication && !confirmedHireResult.data?.employment_confirmed_at) {
-            selectTab("hiring-application");
-          }
+          const tab = shouldAutoOpenApplication({ requestedTab, initialTab, hasPendingOffer: Boolean(pendingOfferResult.data?.id), hasSubmittedApplication, employmentConfirmed: Boolean(confirmedHireResult.data?.employment_confirmed_at) });
+          if (tab) selectTab(tab);
         }
       }
     }
