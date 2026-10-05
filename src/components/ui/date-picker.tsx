@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 
@@ -36,11 +37,14 @@ export function DatePicker({
   className,
 }: DatePickerProps) {
   const selectedDate = parseDateValue(value);
+  // Controlled so a tap on a day closes the calendar immediately on phones
+  // instead of leaving a full-screen calendar covering the form.
+  const [open, setOpen] = useState(false);
 
   return (
     <div className={cn("min-w-0 space-y-2", className)}>
       {label && <Label htmlFor={id}>{label}{required ? " *" : ""}</Label>}
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             id={id}
@@ -57,12 +61,21 @@ export function DatePicker({
             </span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-auto max-w-[calc(100vw-2rem)] p-0">
+        <PopoverContent align="start" collisionPadding={8} className="w-auto max-w-[calc(100vw-1rem)] max-h-[min(80dvh,34rem)] overflow-y-auto p-0">
+          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+            <span className="min-w-0 truncate text-sm font-medium" aria-live="polite">
+              {selectedDate ? `Selected: ${format(selectedDate, "MMM d, yyyy")}` : "Choose a date"}
+            </span>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Done</Button>
+          </div>
           <Calendar
             mode="single"
             selected={selectedDate}
             defaultMonth={selectedDate || new Date()}
-            onSelect={(date) => onChange(date ? format(date, "yyyy-MM-dd") : "")}
+            onSelect={(date) => {
+              onChange(date ? format(date, "yyyy-MM-dd") : "");
+              if (date) setOpen(false);
+            }}
             captionLayout="dropdown"
             startMonth={firstCalendarMonth}
             endMonth={lastCalendarMonth}
@@ -70,7 +83,7 @@ export function DatePicker({
           />
           {value && (
             <div className="border-t p-2">
-              <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => onChange("")}>
+              <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => { onChange(""); setOpen(false); }}>
                 Clear date
               </Button>
             </div>

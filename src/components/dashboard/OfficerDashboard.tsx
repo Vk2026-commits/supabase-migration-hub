@@ -250,20 +250,13 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
   const loadProfile = async () => {
     // Load profiles table for email
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
+    // Independent user-scoped reads; fetch in parallel.
+    const [{ data: profileData }, { data }] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase.from("officer_profiles").select("*").eq("user_id", userId).maybeSingle(),
+    ]);
     
     setProfile(profileData);
-
-    // Load officer profile
-    const { data } = await supabase
-      .from("officer_profiles")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
 
     if (data) {
       setOfficerProfile(data);
