@@ -480,23 +480,31 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setResumeNotice(null);
     const startedAt = performance.now();
     const input = event.target;
+    const generation = ++resumeUploadGeneration.current;
+    const isCurrent = () => generation === resumeUploadGeneration.current;
     try {
-      const path = `${userId}/resume.${extension}`;
+      // Unique per attempt: storage uploads can't be cancelled, so a timed-out
+      // upload must never be able to overwrite a newer retry or the existing file.
+      const path = resumeObjectPath(userId, extension, crypto.randomUUID().slice(0, 8));
       const previousPath = resumePath;
-      // Upload first so a failed upload never deletes the existing resume.
-      const { error: uploadError } = await withDeadline(supabase.storage.from("resumes").upload(path, file, { upsert: true, contentType: file.type }), 90000);
-      if (uploadError) throw uploadError;
-      const { error: updateError } = await withDeadline(supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId), 20000);
-      if (updateError) throw updateError;
+      const result = await runResumeUpload({
+        isCurrent,
+        hasPrevious: Boolean(previousPath && previousPath !== path),
+        deadline: (operation) => withDeadline(operation, 90000),
+        upload: () => supabase.storage.from("resumes").upload(path, file, { upsert: false, contentType: file.type }) as any,
+        // Cancellable so a timed-out reference update cannot land after a newer retry.
+        persistReference: () => supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId).abortSignal(AbortSignal.timeout(20000)) as any,
+        removePrevious: () => supabase.storage.from("resumes").remove([previousPath]),
+      });
+      if (result === "stale") return;
       setResumePath(path);
-      if (previousPath && previousPath !== path) void supabase.storage.from("resumes").remove([previousPath]);
       setResumeNotice({ tone: "success", text: "Resume uploaded." });
       console.info("[hiring-app] resume upload ok", { ms: Math.round(performance.now() - startedAt) });
     } catch (error: any) {
       console.warn("[hiring-app] resume upload failed", { ms: Math.round(performance.now() - startedAt) });
-      setResumeNotice({ tone: "error", text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.` });
+      if (isCurrent()) setResumeNotice({ tone: "error", text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.` });
     }
-    finally { setUploadingResume(false); input.value = ""; }
+    finally { if (isCurrent()) setUploadingResume(false); input.value = ""; }
   };
   const go = async (step: number) => {
     if (submissionLocked.current) return;
