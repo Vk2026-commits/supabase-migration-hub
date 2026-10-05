@@ -18,6 +18,7 @@ import { useSearchParams } from "@/lib/router-compat";
 import { SignaturePad } from "./SignaturePad";
 import { submissionAttemptKey, submitWithReceipt, withDeadline, type SubmissionReceipt } from "@/lib/hiringSubmission";
 import { formatUsPhone } from "@/lib/phone";
+import { REQUIRED_APPLICATION_STEPS, requirementsMet, resolveRestoreStep, resumeObjectPath, runResumeUpload } from "@/lib/hiringRestore";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Props {
@@ -75,20 +76,7 @@ const initialApplicationStep = (userId: string, urlStep: string | null) => {
 const initialPhotoCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-photos-complete:${userId}`) === "true";
 const initialCertificationCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-certification-complete:${userId}`) === "true";
 
-const requiredStepsList = [0, 1, 2, 3, 6, 9];
-function requirementsMet(step: number, form: GuardApplicationData, shared: SharedData, selectedJobId: string, acknowledged: boolean) {
-  switch (step) {
-    case 0: return Boolean(selectedJobId && form.position);
-    case 1: return Boolean(form.applicantName && form.email && (form.phone || "").replace(/\D/g, "").length === 10 && form.address && form.city && form.state && form.zip);
-    case 2: return Boolean(form.isAdult && form.eligibleToWork && form.driversLicense);
-    case 3: return Boolean((form.education || "").trim() || (form.skills || "").trim());
-    case 4: return (form.workHistory || []).some((item) => Boolean(item.employer?.trim() || item.title?.trim()));
-    case 5: return (form.references || []).some((item) => Boolean(item.name?.trim() || item.phone?.trim() || item.email?.trim()));
-    case 6: return shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule || {}).some((v) => v?.start && v?.end);
-    case 7: case 8: return true;
-    default: return Boolean(form.signature && form.signatureImage && form.signatureDate && acknowledged);
-  }
-}
+const requiredStepsList = REQUIRED_APPLICATION_STEPS;
 
 const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => {
   const id = `application-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -142,6 +130,11 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const completedStepsRef = useRef<number[]>([]);
   const savePendingLicensesRef = useRef<(() => Promise<boolean>) | null>(null);
   const activeOfficerId = officerId || resolvedOfficerId;
+  const officerIdRef = useRef(officerId);
+  officerIdRef.current = officerId;
+  const restoreGeneration = useRef(0);
+  const restoredUserRef = useRef<string | null>(null);
+  const resumeUploadGeneration = useRef(0);
 
   useEffect(() => {
     if (officerId) setResolvedOfficerId(officerId);
@@ -207,8 +200,18 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   }, [completedSteps]);
 
   useEffect(() => {
+    // Only the latest restore for the current user may apply state. A later
+    // officerId arrival does not re-run the restore (that would overwrite edits);
+    // switching accounts clears the previous account's state first.
+    const generation = ++restoreGeneration.current;
     let mounted = true;
+    const isLive = () => mounted && generation === restoreGeneration.current;
+    if (restoredUserRef.current !== userId) {
+      restoredUserRef.current = userId;
+      setLoaded(false); setForm(initialForm); setMasterId(null); masterIdRef.current = null; setResumePath(""); setResumeNotice(null);
+    }
     setLoadError(null);
+    const officerId = officerIdRef.current;
     const startedAt = performance.now();
     (async () => {
      try {
@@ -232,7 +235,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         Promise.all([Promise.all(requests), ensurePromise]),
         15000,
       );
-      if (!mounted) return;
+      if (!isLive()) return;
       if (!officerId) {
         if (loadingOfficerId) setResolvedOfficerId(loadingOfficerId);
         else if (onEnsureProfile) setSaveError("We couldn't create the officer record needed to save this application.");
@@ -284,10 +287,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const restoredForm = { ...initialForm, ...draft, phone: draft.phone || officer?.phone || "", address: draft.address || officer?.address_street || "", city: draft.city || officer?.address_city || "", state: draft.state || officer?.address_state || "", zip: draft.zip || officer?.address_zip || "", applicantName: draft.applicantName || profile?.full_name || "", email: draft.email || profile?.email || "" } as GuardApplicationData;
       const restoredShared = (draft as any).availability as SharedData | undefined || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} };
       const restoredJob = searchParams.get("job") || (draft as any).jobPostingId || "";
-      const firstIncomplete = master && master.status !== "submitted"
-        ? requiredStepsList.find((step) => !requirementsMet(step, restoredForm, restoredShared, restoredJob, false))
-        : undefined;
-      const restoredStep = urlStep ?? firstIncomplete ?? savedStep;
+      const restoredStep = resolveRestoreStep({ urlStep, savedStep, hasDraft: Boolean(master), submitted: master?.status === "submitted", form: restoredForm, shared: restoredShared, selectedJobId: restoredJob });
       masterIdRef.current = master?.id || null;
       submittedAtRef.current = master?.submitted_at || null;
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
@@ -316,7 +316,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
           : Promise.resolve({ data: [] }),
         (supabase as any).rpc("list_active_hiring_destinations"),
       ]).then(([workResult, jobsResult]) => {
-        if (!mounted) return;
+        if (!isLive()) return;
         const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
         if (canonicalWork.length) setForm((current) => ({ ...current, workHistory: current.workHistory.some((item) => item.employer?.trim()) ? current.workHistory : canonicalWork }));
         const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({ id: item.id, companyId: item.company_id, companyName: item.company_name, position: item.position, city: item.city || "", state: item.state || "" }));
@@ -333,13 +333,13 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         }
       }).catch((error) => console.warn("Secondary application data is still loading", error));
      } catch (error: any) {
-      if (!mounted) return;
+      if (!isLive()) return;
       console.warn("[hiring-app] restore failed", { ms: Math.round(performance.now() - startedAt), reason: error?.message?.slice(0, 80) });
       setLoadError("Loading your saved application is taking too long.");
      }
     })();
     return () => { mounted = false; };
-  }, [userId, officerId, loadAttempt]);
+  }, [userId, loadAttempt]);
 
   const syncShared = async (includeWorkHistory = false) => {
     if (!activeOfficerId) throw new Error("Your officer profile is not ready yet");
@@ -480,23 +480,31 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setResumeNotice(null);
     const startedAt = performance.now();
     const input = event.target;
+    const generation = ++resumeUploadGeneration.current;
+    const isCurrent = () => generation === resumeUploadGeneration.current;
     try {
-      const path = `${userId}/resume.${extension}`;
+      // Unique per attempt: storage uploads can't be cancelled, so a timed-out
+      // upload must never be able to overwrite a newer retry or the existing file.
+      const path = resumeObjectPath(userId, extension, crypto.randomUUID().slice(0, 8));
       const previousPath = resumePath;
-      // Upload first so a failed upload never deletes the existing resume.
-      const { error: uploadError } = await withDeadline(supabase.storage.from("resumes").upload(path, file, { upsert: true, contentType: file.type }), 90000);
-      if (uploadError) throw uploadError;
-      const { error: updateError } = await withDeadline(supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId), 20000);
-      if (updateError) throw updateError;
+      const result = await runResumeUpload({
+        isCurrent,
+        hasPrevious: Boolean(previousPath && previousPath !== path),
+        deadline: (operation) => withDeadline(operation, 90000),
+        upload: () => supabase.storage.from("resumes").upload(path, file, { upsert: false, contentType: file.type }) as any,
+        // Cancellable so a timed-out reference update cannot land after a newer retry.
+        persistReference: () => supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId).abortSignal(AbortSignal.timeout(20000)) as any,
+        removePrevious: () => supabase.storage.from("resumes").remove([previousPath]),
+      });
+      if (result === "stale") return;
       setResumePath(path);
-      if (previousPath && previousPath !== path) void supabase.storage.from("resumes").remove([previousPath]);
       setResumeNotice({ tone: "success", text: "Resume uploaded." });
       console.info("[hiring-app] resume upload ok", { ms: Math.round(performance.now() - startedAt) });
     } catch (error: any) {
       console.warn("[hiring-app] resume upload failed", { ms: Math.round(performance.now() - startedAt) });
-      setResumeNotice({ tone: "error", text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.` });
+      if (isCurrent()) setResumeNotice({ tone: "error", text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.` });
     }
-    finally { setUploadingResume(false); input.value = ""; }
+    finally { if (isCurrent()) setUploadingResume(false); input.value = ""; }
   };
   const go = async (step: number) => {
     if (submissionLocked.current) return;
@@ -642,7 +650,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   if (!loaded && loadError) {
-    return <div role="alert" className="mx-auto flex min-h-[240px] max-w-4xl flex-col items-center justify-center gap-4 rounded-2xl border bg-card p-6 text-center"><p className="font-semibold">{loadError}</p><p className="text-sm text-muted-foreground">Nothing was changed. Your saved progress is still on file.</p><Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Try again</Button></div>;
+    return <div role="alert" className="mx-auto flex min-h-[240px] max-w-4xl flex-col items-center justify-center gap-4 rounded-2xl border bg-card p-6 text-center"><p className="font-semibold">{loadError}</p><p className="text-sm text-muted-foreground">Nothing was changed on this page. Check your connection, then try again.</p><Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Try again</Button></div>;
   }
   if (!loaded) {
     return <div className="mx-auto flex min-h-[360px] max-w-4xl items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">Preparing your application…</div>;
@@ -712,7 +720,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional professional references (not relatives).</p>{form.references.map((r, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Reference {i + 1}</p><Field label="Name" value={r.name} onChange={v => updateList("references", i, "name", v)} /><Field label="Relationship" value={r.relationship} onChange={v => updateList("references", i, "relationship", v)} /><Field label="Phone" type="tel" value={r.phone} onChange={v => updateList("references", i, "phone", v)} /><Field label="Email" type="email" value={r.email} onChange={v => updateList("references", i, "email", v)} /></div>)}</div>}
         {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
         {currentStep === 7 && <OfficerPhotos userId={userId} embedded optional onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
-        {currentStep === 8 && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 sm:flex-row sm:items-center sm:justify-between"><p><span className="font-semibold">This step is optional.</span> If you don’t have a security license or certification yet, you can still submit your application.</p><Button type="button" variant="outline" className="shrink-0 bg-background" onClick={skipCredentials}>I don’t have a license yet — skip</Button></div>}
+        {currentStep === 8 && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 sm:flex-row sm:items-center sm:justify-between"><p><span className="font-semibold">This step is optional.</span> If you don’t have a security license or certification yet, you can still submit your application.</p><Button type="button" variant="outline" className="h-auto min-h-10 w-full max-w-full whitespace-normal bg-background py-2 text-center sm:w-auto sm:shrink-0" onClick={skipCredentials}>I don’t have a license yet — skip</Button></div>}
         {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={updateCertifications} embedded onRegisterSave={(save) => { savePendingLicensesRef.current = save; }} />}
         {currentStep === 9 && <div className="space-y-8"><section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">New-hire paperwork comes later</p><p className="mt-1">Form I-9, Form W-4, payroll, and company policies are completed only after you accept an employment offer.</p></section><section className="space-y-5"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Printed full legal name" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5"><SignaturePad value={form.signatureImage} suggestedName={form.signature || form.applicantName} onChange={value => update("signatureImage", value)} /></div><div className={`rounded-xl border p-4 text-sm ${complete ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}><p className="font-semibold">Before you submit</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{signatureChecklist.map((item) => <p key={item.label} className={item.complete ? "text-green-800" : "font-semibold text-amber-900"}>{item.complete ? "✓" : "○"} {item.label}{item.complete ? " complete" : " required"}</p>)}</div>{missingRequiredSteps.some((step) => step !== 9) && <p className="mt-3 font-semibold text-amber-900">Also needed: {missingRequiredSteps.filter((step) => step !== 9).map((step) => requiredStepLabels[step]).join(", ")}.</p>}<p className="mt-3 text-muted-foreground">Resume, photos, and credentials are optional and do not prevent submission.</p></div></section></div>}
       </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={pdfApplication} resubmitting={editingSubmitted} optionalStep={(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete)} /></main></div>
