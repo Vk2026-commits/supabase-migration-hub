@@ -49,7 +49,7 @@ const steps = [
   ["Eligibility", "Confirm your work credentials"], ["Qualifications", "Share your education and skills"],
   ["Work history", "Add your recent experience (optional)"], ["References", "Add professional references (optional)"],
   ["Availability", "Tell employers when you can work"], ["Photos", "Add optional professional photos"],
-  ["License or certification", "Add credentials when applicable"], ["Review and signature", "Review and certify"],
+  ["License or certification", "Optional — add credentials if you have them"], ["Review and signature", "Review and certify"],
 ];
 const initialForm: GuardApplicationData = {
   applicantName: "", email: "", phone: "", address: "", city: "", state: "", zip: "",
@@ -75,6 +75,21 @@ const initialApplicationStep = (userId: string, urlStep: string | null) => {
 const initialPhotoCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-photos-complete:${userId}`) === "true";
 const initialCertificationCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-certification-complete:${userId}`) === "true";
 
+const requiredStepsList = [0, 1, 2, 3, 6, 9];
+function requirementsMet(step: number, form: GuardApplicationData, shared: SharedData, selectedJobId: string, acknowledged: boolean) {
+  switch (step) {
+    case 0: return Boolean(selectedJobId && form.position);
+    case 1: return Boolean(form.applicantName && form.email && (form.phone || "").replace(/\D/g, "").length === 10 && form.address && form.city && form.state && form.zip);
+    case 2: return Boolean(form.isAdult && form.eligibleToWork && form.driversLicense);
+    case 3: return Boolean((form.education || "").trim() || (form.skills || "").trim());
+    case 4: return (form.workHistory || []).some((item) => Boolean(item.employer?.trim() || item.title?.trim()));
+    case 5: return (form.references || []).some((item) => Boolean(item.name?.trim() || item.phone?.trim() || item.email?.trim()));
+    case 6: return shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule || {}).some((v) => v?.start && v?.end);
+    case 7: case 8: return true;
+    default: return Boolean(form.signature && form.signatureImage && form.signatureDate && acknowledged);
+  }
+}
+
 const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => {
   const id = `application-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   if (type === "date") {
@@ -99,6 +114,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const [jobs, setJobs] = useState<HiringDestination[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [resumeNotice, setResumeNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -190,15 +208,17 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
 
   useEffect(() => {
     let mounted = true;
+    setLoadError(null);
+    const startedAt = performance.now();
     (async () => {
-      let loadingOfficerId = officerId;
-      if (!loadingOfficerId && onEnsureProfile) {
-        const ensuredProfile = await onEnsureProfile();
-        if (!mounted) return;
-        loadingOfficerId = ensuredProfile?.id || null;
-        if (loadingOfficerId) setResolvedOfficerId(loadingOfficerId);
-        else setSaveError("We couldn't create the officer record needed to save this application.");
-      }
+     try {
+      // Draft reads are scoped by the signed-in userId, so they do not need to
+      // wait for the officer record; resolve both in parallel.
+      const ensurePromise: Promise<string | null> = officerId
+        ? Promise.resolve(officerId)
+        : onEnsureProfile
+          ? onEnsureProfile().then((p: any) => p?.id || null).catch(() => null)
+          : Promise.resolve(null);
       const appTable = (supabase as any).from("guard_hiring_applications");
       // Only wait for the four records required to paint the saved draft.
       // Work history and hiring destinations load after the form is visible.
@@ -208,8 +228,22 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         appTable.select("id,status,current_step,application_data,created_at,submitted_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.auth.getSession(),
       ];
-      const [profileResult, officerResult, masterResult, authResult] = await Promise.all(requests);
+      const [[profileResult, officerResult, masterResult, authResult], loadingOfficerId] = await withDeadline(
+        Promise.all([Promise.all(requests), ensurePromise]),
+        15000,
+      );
       if (!mounted) return;
+      if (!officerId) {
+        if (loadingOfficerId) setResolvedOfficerId(loadingOfficerId);
+        else if (onEnsureProfile) setSaveError("We couldn't create the officer record needed to save this application.");
+      }
+      // Never show an empty "new" application when the saved draft could not
+      // be read; surface a recoverable error instead.
+      if (masterResult.error || profileResult.error || officerResult.error) {
+        console.warn("[hiring-app] restore failed", { ms: Math.round(performance.now() - startedAt), code: (masterResult.error || profileResult.error || officerResult.error)?.code });
+        setLoadError("We couldn't load your saved application.");
+        return;
+      }
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
       const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
@@ -245,7 +279,15 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       setShared(savedAvailability || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} });
       const savedStep = Math.min(Number(master?.current_step || 0), 9);
       const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
-      const restoredStep = urlStep ?? savedStep;
+      // Without an explicit deep link, resume at the first unfinished required
+      // section so a returning applicant does not have to hunt for it.
+      const restoredForm = { ...initialForm, ...draft, phone: draft.phone || officer?.phone || "", address: draft.address || officer?.address_street || "", city: draft.city || officer?.address_city || "", state: draft.state || officer?.address_state || "", zip: draft.zip || officer?.address_zip || "", applicantName: draft.applicantName || profile?.full_name || "", email: draft.email || profile?.email || "" } as GuardApplicationData;
+      const restoredShared = (draft as any).availability as SharedData | undefined || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} };
+      const restoredJob = searchParams.get("job") || (draft as any).jobPostingId || "";
+      const firstIncomplete = master && master.status !== "submitted"
+        ? requiredStepsList.find((step) => !requirementsMet(step, restoredForm, restoredShared, restoredJob, false))
+        : undefined;
+      const restoredStep = urlStep ?? (firstIncomplete !== undefined ? Math.min(firstIncomplete, Math.max(savedStep, 0) >= firstIncomplete ? firstIncomplete : savedStep) : savedStep);
       masterIdRef.current = master?.id || null;
       submittedAtRef.current = master?.submitted_at || null;
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
@@ -265,6 +307,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const savedJobId = referredJobId || (draft as any).jobPostingId || "";
       setSelectedJobId(savedJobId);
       setLoaded(true);
+      console.info("[hiring-app] restore ready", { ms: Math.round(performance.now() - startedAt), resumedStep: restoredStep + 1 });
 
       // Secondary records hydrate the already-visible application.
       void Promise.all([
@@ -289,9 +332,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
           setForm((current) => ({ ...current, companyName: activeDestination.companyName, position: activeDestination.position, companyCity: activeDestination.city, companyState: activeDestination.state }));
         }
       }).catch((error) => console.warn("Secondary application data is still loading", error));
+     } catch (error: any) {
+      if (!mounted) return;
+      console.warn("[hiring-app] restore failed", { ms: Math.round(performance.now() - startedAt), reason: error?.message?.slice(0, 80) });
+      setLoadError("Loading your saved application is taking too long.");
+     }
     })();
     return () => { mounted = false; };
-  }, [userId, officerId]);
+  }, [userId, officerId, loadAttempt]);
 
   const syncShared = async (includeWorkHistory = false) => {
     if (!activeOfficerId) throw new Error("Your officer profile is not ready yet");
@@ -381,26 +429,13 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const availabilityComplete = shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule).some(v => v.start && v.end);
   const photosComplete = photosSaved;
   const certificationComplete = certificationSaved;
-  const stepRequirementsMet = (step: number) => step === 0
-    ? Boolean(selectedJobId && form.position)
-    : step === 1
-      ? Boolean(form.applicantName && form.email && form.phone.replace(/\D/g, "").length === 10 && form.address && form.city && form.state && form.zip)
-      : step === 2
-        ? Boolean(form.isAdult && form.eligibleToWork && form.driversLicense)
-        : step === 3
-          ? Boolean(form.education.trim() || form.skills.trim())
-          : step === 4
-            ? form.workHistory.some((item) => Boolean(item.employer?.trim() || item.title?.trim()))
-            : step === 5
-              ? form.references.some((item) => Boolean(item.name?.trim() || item.phone?.trim() || item.email?.trim()))
-              : step === 6
-                ? availabilityComplete
-                : step === 7
-                  ? photosComplete
-                  : step === 8
-                    ? certificationComplete
-                    : Boolean(form.signature && form.signatureImage && form.signatureDate && acknowledged);
-  const requiredSteps = [0, 1, 2, 3, 6, 9];
+  const stepRequirementsMet = (step: number) => step === 7
+    ? photosComplete
+    : step === 8
+      ? certificationComplete
+      : requirementsMet(step, form, shared, selectedJobId, acknowledged);
+  void availabilityComplete;
+  const requiredSteps = requiredStepsList;
   const stepStatus = (step: number): "not_started" | "in_progress" | "completed" => {
     if (masterStatus === "submitted" || (completedSteps.includes(step) && stepRequirementsMet(step))) return "completed";
     if (visitedSteps.includes(step)) return "in_progress";
@@ -436,22 +471,32 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const updateList = (key: "workHistory" | "references", index: number, field: string, value: string) => setForm(current => ({ ...current, [key]: current[key].map((item, i) => i === index ? { ...item, [field]: value } : item) }));
   const uploadResume = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !activeOfficerId) return;
+    if (!file) return;
+    if (!activeOfficerId) { setResumeNotice({ tone: "error", text: "Your officer profile is still loading. Try the upload again in a moment." }); event.target.value = ""; return; }
     if (file.size > 10 * 1024 * 1024) { toast.error("Resume must be 10 MB or smaller"); return; }
     const extension = file.name.split(".").pop()?.toLowerCase();
     if (!extension || !["pdf", "doc", "docx"].includes(extension)) { toast.error("Upload a PDF, DOC, or DOCX resume"); return; }
     setUploadingResume(true);
+    setResumeNotice(null);
+    const startedAt = performance.now();
+    const input = event.target;
     try {
       const path = `${userId}/resume.${extension}`;
-      if (resumePath && resumePath !== path) await supabase.storage.from("resumes").remove([resumePath]);
-      const { error: uploadError } = await supabase.storage.from("resumes").upload(path, file, { upsert: true, contentType: file.type });
+      const previousPath = resumePath;
+      // Upload first so a failed upload never deletes the existing resume.
+      const { error: uploadError } = await withDeadline(supabase.storage.from("resumes").upload(path, file, { upsert: true, contentType: file.type }), 90000);
       if (uploadError) throw uploadError;
-      const { error: updateError } = await supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId);
+      const { error: updateError } = await withDeadline(supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId), 20000);
       if (updateError) throw updateError;
       setResumePath(path);
-      toast.success("Resume uploaded");
-    } catch (error: any) { toast.error(error.message || "Resume could not be uploaded"); }
-    finally { setUploadingResume(false); event.target.value = ""; }
+      if (previousPath && previousPath !== path) void supabase.storage.from("resumes").remove([previousPath]);
+      setResumeNotice({ tone: "success", text: "Resume uploaded." });
+      console.info("[hiring-app] resume upload ok", { ms: Math.round(performance.now() - startedAt) });
+    } catch (error: any) {
+      console.warn("[hiring-app] resume upload failed", { ms: Math.round(performance.now() - startedAt) });
+      setResumeNotice({ tone: "error", text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.` });
+    }
+    finally { setUploadingResume(false); input.value = ""; }
   };
   const go = async (step: number) => {
     if (submissionLocked.current) return;
@@ -478,6 +523,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     // of being rewritten on every Back or Continue action.
     void saveDraft(nextStep);
   };
+  // Credentials are optional: skipping never saves or fabricates a credential,
+  // and partially typed fields are simply left unsaved.
+  const skipCredentials = () => { void go(currentStep + 1); };
   const next = async () => {
     if (currentStep === 8 && savePendingLicensesRef.current) {
       const licensesSaved = await savePendingLicensesRef.current();
@@ -589,6 +637,9 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setSearchParams(nextParams, { replace: true });
   };
 
+  if (!loaded && loadError) {
+    return <div role="alert" className="mx-auto flex min-h-[240px] max-w-4xl flex-col items-center justify-center gap-4 rounded-2xl border bg-card p-6 text-center"><p className="font-semibold">{loadError}</p><p className="text-sm text-muted-foreground">Nothing was changed. Your saved progress is still on file.</p><Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Try again</Button></div>;
+  }
   if (!loaded) {
     return <div className="mx-auto flex min-h-[360px] max-w-4xl items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">Preparing your application…</div>;
   }
@@ -650,13 +701,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     <div className="grid gap-6 lg:grid-cols-[270px_minmax(0,1fr)]"><aside className="hidden lg:block"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => { const status = stepStatus(i); return <button key={s[0]} type="button" onClick={() => void go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : status === "completed" ? "bg-green-100 text-green-700" : status === "in_progress" ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{status === "completed" ? <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} /> : status === "in_progress" ? <PlayCircle className="h-4 w-4" aria-label={`Step ${i + 1} in progress`} /> : i + 1}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{status === "completed" ? "Completed" : status === "in_progress" ? "In progress" : "Not started"}</span></span></button>; })}</nav></aside>
       <main className="min-w-0"><div className="mb-4 space-y-3 lg:hidden"><div className="flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{stepStatus(currentStep) === "completed" && <Check className="h-4 w-4" />}Step {currentStep + 1} of 10</span><span className="text-sm text-muted-foreground">{progress}% required complete</span></div><select aria-label="Application section" className="h-12 w-full rounded-xl border bg-background px-3 font-medium" value={currentStep} onChange={(event) => void go(Number(event.target.value))}>{steps.map((step, index) => <option key={step[0]} value={index}>{index + 1}. {step[0]} — {stepStatus(index) === "completed" ? "Completed" : stepStatus(index) === "in_progress" ? "In progress" : "Not started"}</option>)}</select></div><Card className="min-w-0 rounded-2xl shadow-sm"><CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="break-words text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader><CardContent className="min-w-0 px-5 py-7 sm:px-8 sm:py-9">
         {currentStep === 0 && <div className="space-y-6"><div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Current hiring destination</p><h3 className="mt-2 text-xl font-bold">{selectedJobId ? form.companyName : "Choose a hiring company"}</h3><p className="mt-1 text-sm text-muted-foreground">{selectedJobId ? `${form.position} · ${[form.companyCity, form.companyState].filter(Boolean).join(", ")}` : "Select an active position below."}</p><p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Please make sure this is the company and position you intend to apply for before continuing.</p></div><div className="grid gap-5 md:grid-cols-2"><div className="min-w-0 space-y-2 md:col-span-2"><Label>Company and job location *</Label><select className="h-12 w-full min-w-0 rounded-lg border bg-background px-4" value={selectedJobId} onChange={e => { const job = jobs.find(item => item.id === e.target.value); setSelectedJobId(e.target.value); if (job) setForm(c => ({ ...c, companyName: job.companyName, position: job.position, companyCity: job.city, companyState: job.state })); }}><option value="">Select a company and position</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} — {j.position}</option>)}</select><p className="text-sm text-muted-foreground">Companies appear here after they create an active job posting.</p></div><Field label="Position applied for" value={form.position} onChange={v => update("position", v)} required /><Field label="Available start date" value={form.startDate} onChange={v => update("startDate", v)} type="date" /></div></div>}
-        {currentStep === 1 && <div className="space-y-5"><p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">Information entered here is the same information shown in your Profile tab.</p><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name" value={form.applicantName} onChange={v => update("applicantName", v)} required /><Field label="Email" value={form.email} onChange={v => update("email", v)} type="email" required /><Field label="Phone" value={form.phone} onChange={v => update("phone", v)} type="tel" required /></div><AddressAutocomplete value={{ street: form.address, unit: "", city: form.city, state: form.state, zip: form.zip }} onChange={a => setForm(c => ({ ...c, address: a.street, city: a.city, state: a.state, zip: a.zip }))} /><div className="rounded-xl border p-4"><Label htmlFor="application-resume" className="text-base">Upload Resume <span className="font-normal text-muted-foreground">(optional)</span></Label><p className="mt-1 text-sm text-muted-foreground">PDF, DOC, or DOCX, up to 10 MB. Employers can download the resume with your submitted application.</p><div className="mt-4 flex flex-wrap items-center gap-3"><Input id="application-resume" type="file" accept=".pdf,.doc,.docx" onChange={uploadResume} disabled={uploadingResume} className="max-w-md" /><span className="text-sm font-medium">{uploadingResume ? "Uploading…" : resumePath ? "✓ Resume uploaded" : "No resume uploaded"}</span></div></div></div>}
+        {currentStep === 1 && <div className="space-y-5"><p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">Information entered here is the same information shown in your Profile tab.</p><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name" value={form.applicantName} onChange={v => update("applicantName", v)} required /><Field label="Email" value={form.email} onChange={v => update("email", v)} type="email" required /><Field label="Phone" value={form.phone} onChange={v => update("phone", v)} type="tel" required /></div><AddressAutocomplete value={{ street: form.address, unit: "", city: form.city, state: form.state, zip: form.zip }} onChange={a => setForm(c => ({ ...c, address: a.street, city: a.city, state: a.state, zip: a.zip }))} /><div className="rounded-xl border p-4"><Label htmlFor="application-resume" className="text-base">Upload Resume <span className="font-normal text-muted-foreground">(optional)</span></Label><p className="mt-1 text-sm text-muted-foreground">PDF, DOC, or DOCX, up to 10 MB. Employers can download the resume with your submitted application.</p><div className="mt-4 flex flex-wrap items-center gap-3"><Input id="application-resume" type="file" accept=".pdf,.doc,.docx" onChange={uploadResume} disabled={uploadingResume} className="max-w-md" /><span className="text-sm font-medium" aria-live="polite">{uploadingResume ? "Uploading…" : resumePath ? "✓ Resume on file" : "No resume uploaded"}</span></div>{resumeNotice && <div role={resumeNotice.tone === "error" ? "alert" : "status"} className={`mt-3 flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-sm ${resumeNotice.tone === "error" ? "bg-destructive/10 text-destructive" : "bg-green-50 text-green-800"}`}><span>{resumeNotice.text}</span><button type="button" aria-label="Dismiss message" className="shrink-0" onClick={() => setResumeNotice(null)}><X className="h-4 w-4" /></button></div>}</div></div>}
         {currentStep === 2 && <div className="grid gap-7 md:grid-cols-2"><YesNo label="Are you 18 years of age or older?" value={form.isAdult} onChange={v => update("isAdult", v)} /><YesNo label="Can you provide proof that you may work in the U.S.?" value={form.eligibleToWork} onChange={v => update("eligibleToWork", v)} /><YesNo label="Do you have a valid driver's license?" value={form.driversLicense} onChange={v => update("driversLicense", v)} /><Field label="Security license number (optional)" value={form.securityLicenseNumber} onChange={v => update("securityLicenseNumber", v)} /><div className="space-y-2"><Label htmlFor="security-license-state">Security license state (optional)</Label><select id="security-license-state" className="h-12 w-full rounded-lg border bg-background px-4" value={form.securityLicenseState} onChange={e => update("securityLicenseState", e.target.value)}><option value="">Select state</option>{states.map(state => <option key={state} value={state}>{state}</option>)}</select></div></div>}
         {currentStep === 3 && <div className="space-y-6"><div className="space-y-2"><Label>Highest education, school, diploma, or degree</Label><Textarea value={form.education} onChange={e => update("education", e.target.value)} /></div><div className="space-y-3"><Label>Security training, skills, and equipment</Label><div className="grid gap-3 sm:grid-cols-2">{skillOptions.map(skill => { const selected = form.skills.split(",").map(item => item.trim()).filter(Boolean).includes(skill); return <label key={skill} className="flex items-center gap-2 rounded-lg border p-3"><Checkbox checked={selected} onCheckedChange={checked => { const current = form.skills.split(",").map(item => item.trim()).filter(Boolean); update("skills", (checked ? Array.from(new Set([...current, skill])) : current.filter(item => item !== skill)).join(", ")); }} />{skill}</label>; })}</div><p className="text-sm text-muted-foreground">Select every qualification that applies.</p></div></div>}
         {currentStep === 4 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional. Entries save to Work History and can be edited there later.</p>{form.workHistory.map((j, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><div className="flex items-center justify-between md:col-span-2"><p className="font-semibold text-primary">Employer {i + 1}</p>{form.workHistory.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => setForm(current => ({ ...current, workHistory: current.workHistory.filter((_, index) => index !== i) }))}><X className="mr-1 h-4 w-4" />Remove</Button>}</div><Field label="Employer" value={j.employer || ""} onChange={v => updateList("workHistory", i, "employer", v)} /><Field label="Job title" value={j.title || ""} onChange={v => updateList("workHistory", i, "title", v)} /><Field label="Start date" type="date" value={j.startDate || ""} onChange={v => updateList("workHistory", i, "startDate", v)} /><Field label="End date" type="date" value={j.endDate || ""} onChange={v => updateList("workHistory", i, "endDate", v)} /><Field label="Supervisor" value={j.supervisor || ""} onChange={v => updateList("workHistory", i, "supervisor", v)} /><Field label="Supervisor phone" type="tel" value={j.phone || ""} onChange={v => updateList("workHistory", i, "phone", v)} /></div>)}<Button type="button" variant="outline" onClick={() => setForm(current => ({ ...current, workHistory: [...current.workHistory, { ...blankJob }] }))}><Plus className="mr-2 h-4 w-4" />Add Another Employer</Button></div>}
         {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional professional references (not relatives).</p>{form.references.map((r, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Reference {i + 1}</p><Field label="Name" value={r.name} onChange={v => updateList("references", i, "name", v)} /><Field label="Relationship" value={r.relationship} onChange={v => updateList("references", i, "relationship", v)} /><Field label="Phone" type="tel" value={r.phone} onChange={v => updateList("references", i, "phone", v)} /><Field label="Email" type="email" value={r.email} onChange={v => updateList("references", i, "email", v)} /></div>)}</div>}
         {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
         {currentStep === 7 && <OfficerPhotos userId={userId} embedded optional onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
+        {currentStep === 8 && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 sm:flex-row sm:items-center sm:justify-between"><p><span className="font-semibold">This step is optional.</span> If you don’t have a security license or certification yet, you can still submit your application.</p><Button type="button" variant="outline" className="shrink-0 bg-background" onClick={skipCredentials}>I don’t have a license yet — skip</Button></div>}
         {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={updateCertifications} embedded onRegisterSave={(save) => { savePendingLicensesRef.current = save; }} />}
         {currentStep === 9 && <div className="space-y-8"><section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">New-hire paperwork comes later</p><p className="mt-1">Form I-9, Form W-4, payroll, and company policies are completed only after you accept an employment offer.</p></section><section className="space-y-5"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Printed full legal name" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5"><SignaturePad value={form.signatureImage} suggestedName={form.signature || form.applicantName} onChange={value => update("signatureImage", value)} /></div><div className={`rounded-xl border p-4 text-sm ${complete ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}><p className="font-semibold">Before you submit</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{signatureChecklist.map((item) => <p key={item.label} className={item.complete ? "text-green-800" : "font-semibold text-amber-900"}>{item.complete ? "✓" : "○"} {item.label}{item.complete ? " complete" : " required"}</p>)}</div>{missingRequiredSteps.some((step) => step !== 9) && <p className="mt-3 font-semibold text-amber-900">Also needed: {missingRequiredSteps.filter((step) => step !== 9).map((step) => requiredStepLabels[step]).join(", ")}.</p>}<p className="mt-3 text-muted-foreground">Resume, photos, and credentials are optional and do not prevent submission.</p></div></section></div>}
       </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={pdfApplication} resubmitting={editingSubmitted} optionalStep={(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete)} /></main></div>
