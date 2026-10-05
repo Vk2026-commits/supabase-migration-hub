@@ -378,7 +378,20 @@ const JobApplicants = ({ companyId, subscriptionTier, onNavigateToSubscriptions,
                 </div>
 
                 <div className="min-w-0">
-                  <Badge variant="outline" className={`max-w-full whitespace-normal text-left leading-snug ${nextStep.tone}`}>{nextStep.label.replace(/^Next:\s*/, "")}</Badge>
+                  {nextStep.label === "Next: Review application" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-300 bg-amber-50 text-amber-900 hover:border-amber-400 hover:bg-amber-100"
+                      onClick={() => setReviewApplication(app)}
+                      aria-label={`Review application for ${app.officerName || "officer"}`}
+                    >
+                      Review application
+                    </Button>
+                  ) : (
+                    <Badge variant="outline" className={`max-w-full whitespace-normal text-left leading-snug ${nextStep.tone}`}>{nextStep.label.replace(/^Next:\s*/, "")}</Badge>
+                  )}
                 </div>
                 <div className="min-w-0">{app.status === "accepted" ? <div className="flex items-center gap-2"><Badge variant="outline" className={`shrink-0 whitespace-nowrap ${onboarding.percent === 100 ? "border-green-200 bg-green-50 text-green-800" : "border-blue-200 bg-blue-50 text-blue-800"}`}>{onboarding.percent}%</Badge><span className="text-xs leading-snug text-muted-foreground">{onboarding.percent === 100 ? "Complete" : onboarding.label.replace("Onboarding: ", "")}</span></div> : <span className="text-xs text-muted-foreground">Not started</span>}</div>
 
