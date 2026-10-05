@@ -141,6 +141,12 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
       tone: "border-red-300 bg-red-50 text-red-800",
     };
 
+  if (app.interview?.status === "expired" || app.interview?.response_status === "expired")
+    return {
+      label: "Interview response window expired — send a new request",
+      tone: "border-amber-300 bg-amber-50 text-amber-800",
+    };
+
   if (app.interview?.status === "scheduled") {
     if (
       app.interview.response_status === "accepted" &&

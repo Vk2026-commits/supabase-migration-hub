@@ -327,20 +327,31 @@ const emailContentFor = (workflow: Workflow, actionUrl: string) => {
       };
     case "interview_response_company":
       return {
-        subject: `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} the interview request`,
+        subject:
+          response === "expired"
+            ? `Interview request expired for ${clean(context.officer_name) || "a candidate"}`
+            : `${clean(context.officer_name) || "A candidate"} ${response === "accepted" ? "accepted" : "declined"} the interview request`,
         eyebrow: "Interview response",
-        title: `Interview ${response === "accepted" ? "accepted" : "declined"}`,
+        title:
+          response === "expired"
+            ? "The interview request expired"
+            : `Interview ${response === "accepted" ? "accepted" : "declined"}`,
         paragraphs:
-          response === "accepted"
+          response === "expired"
             ? [
-                `${officerName} accepted the interview request for ${position}. The interview is now confirmed.`,
-                ...confirmedInterviewDetails,
-                "A calendar invitation is attached for the company calendar. Open Applicants if you need to update the interview or contact the candidate.",
+                `${officerName} did not respond before the scheduled interview time for ${position}.`,
+                "The original request is closed. Open Applicants to send a new interview invitation with a future time or close the application.",
               ]
-            : [
-                `${officerName} declined the interview request for ${position}.`,
-                "Open Applicants to review the candidate and decide the next step.",
-              ],
+            : response === "accepted"
+              ? [
+                  `${officerName} accepted the interview request for ${position}. The interview is now confirmed.`,
+                  ...confirmedInterviewDetails,
+                  "A calendar invitation is attached for the company calendar. Open Applicants if you need to update the interview or contact the candidate.",
+                ]
+              : [
+                  `${officerName} declined the interview request for ${position}.`,
+                  "Open Applicants to review the candidate and decide the next step.",
+                ],
         cta: "View applicant",
         note: "This secure link works once. Sign in with your We Find Guards account if prompted.",
       };
@@ -569,6 +580,25 @@ const actionIsComplete = async (admin: ReturnType<typeof createClient>, workflow
       .limit(1)
       .maybeSingle();
     return Boolean(data);
+  }
+
+  if (
+    workflow.kind === "interview_scheduled_officer" ||
+    workflow.kind === "interview_updated_officer"
+  ) {
+    const interviewId = clean(workflow.context?.interview_id);
+    if (!interviewId) return true;
+    const { data } = await admin
+      .from("interview_schedules")
+      .select("status,response_status,scheduled_at")
+      .eq("id", interviewId)
+      .maybeSingle();
+    if (!data) return true;
+    return (
+      data.status !== "scheduled" ||
+      data.response_status !== "pending" ||
+      new Date(data.scheduled_at).getTime() <= Date.now()
+    );
   }
 
   if (workflow.kind === "offer_action") {

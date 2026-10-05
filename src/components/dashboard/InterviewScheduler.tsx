@@ -147,13 +147,22 @@ export function InterviewScheduler({
     setInstructionTemplate("");
     setChangeReason("");
     if (interview) {
+      const responseExpired =
+        interview.status === "expired" ||
+        interview.response_status === "expired" ||
+        (interview.response_status === "pending" &&
+          new Date(interview.scheduled_at).getTime() <= Date.now());
       const scheduled = new Date(interview.scheduled_at);
       setType(interview.interview_type);
       setDate(
-        `${scheduled.getFullYear()}-${String(scheduled.getMonth() + 1).padStart(2, "0")}-${String(scheduled.getDate()).padStart(2, "0")}`,
+        responseExpired
+          ? ""
+          : `${scheduled.getFullYear()}-${String(scheduled.getMonth() + 1).padStart(2, "0")}-${String(scheduled.getDate()).padStart(2, "0")}`,
       );
       setTime(
-        `${String(scheduled.getHours()).padStart(2, "0")}:${String(scheduled.getMinutes()).padStart(2, "0")}`,
+        responseExpired
+          ? ""
+          : `${String(scheduled.getHours()).padStart(2, "0")}:${String(scheduled.getMinutes()).padStart(2, "0")}`,
       );
       setDestination(
         interview.interview_type === "video"
@@ -238,10 +247,11 @@ export function InterviewScheduler({
         attendance_confirmed_at: null,
         attendance_confirmed_by: null,
       };
-      if (existing && !changeReason.trim()) throw new Error("Add a reason for the reschedule request");
-      const result = existing
+      if (activeInterview && !changeReason.trim())
+        throw new Error("Add a reason for the reschedule request");
+      const result = activeInterview
         ? await (supabase as any).rpc("request_interview_change", {
-            _interview_id: existing.id,
+            _interview_id: activeInterview.id,
             _request_type: "reschedule",
             _reason: changeReason.trim(),
             _proposed_scheduled_at: scheduledAt.toISOString(),
@@ -252,12 +262,12 @@ export function InterviewScheduler({
         : await (supabase as any).from("interview_schedules").insert(values);
       if (result.error) throw result.error;
 
-      const verb = existing ? "reschedule requested for" : "scheduled for";
+      const verb = activeInterview ? "reschedule requested for" : "scheduled for";
       const detail =
         type === "video"
           ? `Join online: ${submittedDestination}`
           : `Location: ${submittedDestination}`;
-      const message = `${companyName} ${verb} your ${type === "video" ? "video" : "in-person"} interview for ${jobTitle}: ${scheduledAt.toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. ${detail}${existing ? ` Reason: ${changeReason.trim()}` : ""}${submittedNotes ? ` Notes: ${submittedNotes}` : ""}`;
+      const message = `${companyName} ${verb} your ${type === "video" ? "video" : "in-person"} interview for ${jobTitle}: ${scheduledAt.toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. ${detail}${activeInterview ? ` Reason: ${changeReason.trim()}` : ""}${submittedNotes ? ` Notes: ${submittedNotes}` : ""}`;
       const { error: messageError } = await supabase.from("messages").insert({
         company_id: companyId,
         officer_id: officerId,
@@ -280,7 +290,11 @@ export function InterviewScheduler({
           );
       }
 
-      toast.success(existing ? `Reschedule request sent to ${officerName}` : `Interview scheduled for ${officerName}`);
+      toast.success(
+        existing
+          ? `Reschedule request sent to ${officerName}`
+          : `Interview scheduled for ${officerName}`,
+      );
       setOpen(false);
       onChanged();
     } catch (error: any) {
@@ -332,7 +346,11 @@ export function InterviewScheduler({
         _decision: decision,
       });
       if (error) throw error;
-      toast.success(decision === "accepted" ? "Officer’s reschedule request accepted" : "Officer’s reschedule request declined");
+      toast.success(
+        decision === "accepted"
+          ? "Officer’s reschedule request accepted"
+          : "Officer’s reschedule request declined",
+      );
       setOpen(false);
       onChanged();
     } catch (error: any) {
@@ -346,7 +364,9 @@ export function InterviewScheduler({
     if (!existing?.id) return;
     setSaving(true);
     try {
-      const { error } = await (supabase as any).rpc("dismiss_interview_notice", { _interview_id: existing.id });
+      const { error } = await (supabase as any).rpc("dismiss_interview_notice", {
+        _interview_id: existing.id,
+      });
       if (error) throw error;
       toast.success("Cancellation notice dismissed");
       setOpen(false);
@@ -377,13 +397,45 @@ export function InterviewScheduler({
     }
   };
 
-  const interviewHasStarted = Boolean(existing && new Date(existing.scheduled_at).getTime() <= Date.now());
-  const needsAttendance = Boolean(existing && existing.response_status === "accepted" && existing.attendance_status === "pending" && interviewHasStarted);
-  const attendanceLabel = existing?.attendance_status === "attended" ? "Attended" : existing?.attendance_status === "no_show" ? "No-show" : null;
-  const officerRequestedReschedule = existing?.change_request_type === "reschedule" && existing?.change_requested_by === "officer" && existing?.change_request_status === "pending";
-  const companyRequestedReschedule = existing?.change_request_type === "reschedule" && existing?.change_requested_by === "company" && existing?.change_request_status === "pending";
+  const responseExpired = Boolean(
+    existing &&
+    (existing.status === "expired" ||
+      existing.response_status === "expired" ||
+      (existing.response_status === "pending" &&
+        new Date(existing.scheduled_at).getTime() <= Date.now())),
+  );
+  const activeInterview = responseExpired ? null : existing;
+  const interviewHasStarted = Boolean(
+    existing && new Date(existing.scheduled_at).getTime() <= Date.now(),
+  );
+  const needsAttendance = Boolean(
+    existing &&
+    existing.response_status === "accepted" &&
+    existing.attendance_status === "pending" &&
+    interviewHasStarted,
+  );
+  const attendanceLabel =
+    existing?.attendance_status === "attended"
+      ? "Attended"
+      : existing?.attendance_status === "no_show"
+        ? "No-show"
+        : null;
+  const officerRequestedReschedule =
+    existing?.change_request_type === "reschedule" &&
+    existing?.change_requested_by === "officer" &&
+    existing?.change_request_status === "pending";
+  const companyRequestedReschedule =
+    existing?.change_request_type === "reschedule" &&
+    existing?.change_requested_by === "company" &&
+    existing?.change_request_status === "pending";
   const officerCancelled = existing?.status === "cancelled" && existing?.cancelled_by === "officer";
-  const showScheduleForm = !needsAttendance && !officerRequestedReschedule && !companyRequestedReschedule && !officerCancelled && !attendanceLabel;
+  const showScheduleForm =
+    responseExpired ||
+    (!needsAttendance &&
+      !officerRequestedReschedule &&
+      !companyRequestedReschedule &&
+      !officerCancelled &&
+      !attendanceLabel);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -391,222 +443,337 @@ export function InterviewScheduler({
         <Button
           size="sm"
           variant="outline"
-          className={needsAttendance
-            ? "h-9 border-amber-200 bg-amber-50 px-3 text-xs text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
-            : "h-9 border-violet-200 bg-violet-50 px-3 text-xs text-violet-800 hover:border-violet-300 hover:bg-violet-100 hover:text-violet-900"}
+          className={
+            needsAttendance
+              ? "h-9 border-amber-200 bg-amber-50 px-3 text-xs text-amber-800 hover:border-amber-300 hover:bg-amber-100 hover:text-amber-900"
+              : "h-9 border-violet-200 bg-violet-50 px-3 text-xs text-violet-800 hover:border-violet-300 hover:bg-violet-100 hover:text-violet-900"
+          }
         >
           <LinkIcon className="mr-1.5 h-3.5 w-3.5" />
-          {existingInterview?.attendance_status === "attended" || existingInterview?.attendance_status === "no_show"
-            ? "Interview record"
-            : existingInterview?.status === "cancelled" && existingInterview?.cancelled_by === "officer" && !existingInterview?.cancellation_company_dismissed_at
-              ? "Cancellation notice"
-            : existingInterview?.change_requested_by === "officer" && existingInterview?.change_request_status === "pending"
-              ? "Review change request"
-            : existingInterview?.response_status === "accepted" && new Date(existingInterview.scheduled_at).getTime() <= Date.now()
-              ? "Confirm attendance"
-              : existingInterview?.status === "scheduled" ? "Manage interview" : "Schedule interview"}
+          {responseExpired
+            ? "Send new interview"
+            : existingInterview?.attendance_status === "attended" ||
+                existingInterview?.attendance_status === "no_show"
+              ? "Interview record"
+              : existingInterview?.status === "cancelled" &&
+                  existingInterview?.cancelled_by === "officer" &&
+                  !existingInterview?.cancellation_company_dismissed_at
+                ? "Cancellation notice"
+                : existingInterview?.change_requested_by === "officer" &&
+                    existingInterview?.change_request_status === "pending"
+                  ? "Review change request"
+                  : existingInterview?.response_status === "accepted" &&
+                      new Date(existingInterview.scheduled_at).getTime() <= Date.now()
+                    ? "Confirm attendance"
+                    : existingInterview?.status === "scheduled"
+                      ? "Manage interview"
+                      : "Schedule interview"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[88vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {existing ? "Manage" : "Schedule"} interview with {officerName}
+            {activeInterview ? "Manage" : "Schedule"} interview with {officerName}
           </DialogTitle>
           <DialogDescription>
-            {existing
+            {activeInterview
               ? "Review the officer’s response and confirm whether they attended after the scheduled interview begins."
-              : "Select whether this interview will be online or in person, then send the details to the officer."}
+              : responseExpired
+                ? "The prior interview request expired without a response. Send a new invitation with a future time."
+                : "Select whether this interview will be online or in person, then send the details to the officer."}
           </DialogDescription>
         </DialogHeader>
         {existing && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
             <span>Officer response:</span>
             <Badge variant={existing.response_status === "accepted" ? "default" : "secondary"}>
-              {existing.response_status === "accepted"
-                ? "Accepted"
-                : existing.response_status === "declined"
-                  ? "Declined"
-                  : "Awaiting response"}
+              {responseExpired
+                ? "Response window expired"
+                : existing.response_status === "accepted"
+                  ? "Accepted"
+                  : existing.response_status === "declined"
+                    ? "Declined"
+                    : "Awaiting response"}
             </Badge>
-            {attendanceLabel && <><span className="ml-2">Attendance:</span><Badge variant={attendanceLabel === "Attended" ? "default" : "destructive"}>{attendanceLabel}</Badge></>}
+            {attendanceLabel && (
+              <>
+                <span className="ml-2">Attendance:</span>
+                <Badge variant={attendanceLabel === "Attended" ? "default" : "destructive"}>
+                  {attendanceLabel}
+                </Badge>
+              </>
+            )}
           </div>
         )}
         {needsAttendance && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="font-semibold text-amber-950">Did {officerName} attend this interview?</p>
-            <p className="mt-1 text-sm text-amber-900/80">Record the result so the company and officer histories stay accurate.</p>
+            <p className="mt-1 text-sm text-amber-900/80">
+              Record the result so the company and officer histories stay accurate.
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void recordAttendance("attended")} disabled={saving}><UserCheck className="mr-2 h-4 w-4" />Mark attended</Button>
-              <Button type="button" variant="destructive" onClick={() => void recordAttendance("no_show")} disabled={saving}><UserX className="mr-2 h-4 w-4" />Mark no-show</Button>
+              <Button
+                type="button"
+                onClick={() => void recordAttendance("attended")}
+                disabled={saving}
+              >
+                <UserCheck className="mr-2 h-4 w-4" />
+                Mark attended
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => void recordAttendance("no_show")}
+                disabled={saving}
+              >
+                <UserX className="mr-2 h-4 w-4" />
+                Mark no-show
+              </Button>
             </div>
+          </div>
+        )}
+        {responseExpired && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="font-semibold text-amber-950">
+              The officer did not respond before the interview time
+            </p>
+            <p className="mt-1 text-sm text-amber-900/80">
+              The old request is closed and cannot be accepted. Choose a new future time below to
+              send the officer a fresh interview invitation.
+            </p>
           </div>
         )}
         {officerRequestedReschedule && (
           <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
-            <p className="font-semibold text-violet-950">{officerName} requested a different interview time</p>
-            <p className="mt-1 text-sm text-violet-900/80">Proposed: {new Date(existing.proposed_scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}</p>
-            <p className="mt-2 whitespace-pre-line text-sm"><strong>Reason:</strong> {existing.change_reason}</p>
+            <p className="font-semibold text-violet-950">
+              {officerName} requested a different interview time
+            </p>
+            <p className="mt-1 text-sm text-violet-900/80">
+              Proposed:{" "}
+              {new Date(existing.proposed_scheduled_at).toLocaleString([], {
+                dateStyle: "full",
+                timeStyle: "short",
+              })}
+            </p>
+            <p className="mt-2 whitespace-pre-line text-sm">
+              <strong>Reason:</strong> {existing.change_reason}
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button type="button" onClick={() => void respondToOfficerChange("accepted")} disabled={saving}>Accept new time</Button>
-              <Button type="button" variant="outline" onClick={() => void respondToOfficerChange("declined")} disabled={saving}>Keep current time</Button>
+              <Button
+                type="button"
+                onClick={() => void respondToOfficerChange("accepted")}
+                disabled={saving}
+              >
+                Accept new time
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void respondToOfficerChange("declined")}
+                disabled={saving}
+              >
+                Keep current time
+              </Button>
             </div>
           </div>
         )}
         {companyRequestedReschedule && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
             <strong>Waiting for {officerName}</strong>
-            <p className="mt-1">Your proposed time is {new Date(existing.proposed_scheduled_at).toLocaleString([], { dateStyle: "full", timeStyle: "short" })}. The current appointment remains active until the officer accepts.</p>
+            <p className="mt-1">
+              Your proposed time is{" "}
+              {new Date(existing.proposed_scheduled_at).toLocaleString([], {
+                dateStyle: "full",
+                timeStyle: "short",
+              })}
+              . The current appointment remains active until the officer accepts.
+            </p>
           </div>
         )}
         {officerCancelled && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-4">
             <p className="font-semibold text-red-950">{officerName} canceled the interview</p>
-            <p className="mt-1 whitespace-pre-line text-sm text-red-900"><strong>Reason:</strong> {existing.cancellation_reason}</p>
-            {!existing.cancellation_company_dismissed_at && <Button type="button" variant="outline" className="mt-3" onClick={() => void dismissCancellation()} disabled={saving}>Dismiss notice</Button>}
+            <p className="mt-1 whitespace-pre-line text-sm text-red-900">
+              <strong>Reason:</strong> {existing.cancellation_reason}
+            </p>
+            {!existing.cancellation_company_dismissed_at && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3"
+                onClick={() => void dismissCancellation()}
+                disabled={saving}
+              >
+                Dismiss notice
+              </Button>
+            )}
           </div>
         )}
-        {showScheduleForm && <form onSubmit={schedule} className="space-y-5">
-          <div className="space-y-2">
-            <Label htmlFor="interview-type">Interview format</Label>
-            <select
-              id="interview-type"
-              className="h-11 w-full rounded-md border bg-background px-3"
-              value={type}
-              onChange={(event) => changeInterviewType(event.target.value as InterviewType)}
-            >
-              <option value="video">Online/video interview</option>
-              <option value="in_person">In-person interview</option>
-            </select>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
+        {showScheduleForm && (
+          <form onSubmit={schedule} className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="interview-date">Date</Label>
-              <Input
-                id="interview-date"
-                name="interview_date"
-                type="date"
-                value={date}
-                onChange={(event) => setDate(event.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="interview-time">Time</Label>
+              <Label htmlFor="interview-type">Interview format</Label>
               <select
-                id="interview-time"
-                name="interview_time"
+                id="interview-type"
                 className="h-11 w-full rounded-md border bg-background px-3"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
-                required
+                value={type}
+                onChange={(event) => changeInterviewType(event.target.value as InterviewType)}
               >
-                <option value="" disabled>
-                  Select a time
-                </option>
-                {time && !TIME_OPTIONS.some((option) => option.value === time) && (
-                  <option value={time}>{formatTimeLabel(time)}</option>
-                )}
-                {TIME_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                <option value="video">Online/video interview</option>
+                <option value="in_person">In-person interview</option>
               </select>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="interview-destination" className="flex items-center gap-2">
-              {type === "video" ? <LinkIcon className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
-              {type === "video" ? "Video meeting link" : "Interview location"}
-            </Label>
-            <Input
-              id="interview-destination"
-              name="interview_destination"
-              type={type === "video" ? "url" : "text"}
-              value={destination}
-              onChange={(event) => setDestination(event.target.value)}
-              placeholder={
-                type === "video"
-                  ? "https://meet.example.com/..."
-                  : "Street address or office location"
-              }
-              required
-            />
-            {type === "in_person" && companyAddress && destination !== companyAddress && (
-              <button
-                type="button"
-                className="text-xs font-medium text-primary hover:underline"
-                onClick={() => setDestination(companyAddress)}
-              >
-                Use company address
-              </button>
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="interview-template">Instruction template</Label>
-            <select
-              id="interview-template"
-              className="h-11 w-full rounded-md border bg-background px-3"
-              value={instructionTemplate}
-              onChange={(event) =>
-                applyInstructionTemplate(event.target.value as InstructionTemplate)
-              }
-            >
-              <option value="">Custom instructions</option>
-              <option value="items_to_bring">Items to bring</option>
-              <option value="scheduling_follow_up">Interview confirmation</option>
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Select a template, then edit the message below if needed.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="interview-notes">Instructions (optional)</Label>
-            <Textarea
-              id="interview-notes"
-              name="interview_notes"
-              value={notes}
-              onChange={(event) => {
-                setNotes(event.target.value);
-                setInstructionTemplate("");
-              }}
-              placeholder="Parking, check-in, what to bring, or other instructions"
-              className="min-h-40"
-            />
-          </div>
-          {existing?.status === "scheduled" && !attendanceLabel && (
-            <div className="space-y-2">
-              <Label htmlFor="interview-change-reason">Reason for rescheduling or cancellation *</Label>
-              <Textarea
-                id="interview-change-reason"
-                value={changeReason}
-                onChange={(event) => setChangeReason(event.target.value)}
-                placeholder="Explain why the interview time needs to change or why it is being canceled."
-              />
-              <p className="text-xs text-muted-foreground">This reason is shown to the officer.</p>
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:justify-between">
-            {existing?.status === "scheduled" && !interviewHasStarted ? (
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={() => void cancelInterview()}
-                  disabled={saving}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Cancel
-                </Button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="interview-date">Date</Label>
+                <Input
+                  id="interview-date"
+                  name="interview_date"
+                  type="date"
+                  value={date}
+                  onChange={(event) => setDate(event.target.value)}
+                  required
+                />
               </div>
-            ) : (
-              <span />
+              <div className="space-y-2">
+                <Label htmlFor="interview-time">Time</Label>
+                <select
+                  id="interview-time"
+                  name="interview_time"
+                  className="h-11 w-full rounded-md border bg-background px-3"
+                  value={time}
+                  onChange={(event) => setTime(event.target.value)}
+                  required
+                >
+                  <option value="" disabled>
+                    Select a time
+                  </option>
+                  {time && !TIME_OPTIONS.some((option) => option.value === time) && (
+                    <option value={time}>{formatTimeLabel(time)}</option>
+                  )}
+                  {TIME_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="interview-destination" className="flex items-center gap-2">
+                {type === "video" ? (
+                  <LinkIcon className="h-4 w-4" />
+                ) : (
+                  <MapPin className="h-4 w-4" />
+                )}
+                {type === "video" ? "Video meeting link" : "Interview location"}
+              </Label>
+              <Input
+                id="interview-destination"
+                name="interview_destination"
+                type={type === "video" ? "url" : "text"}
+                value={destination}
+                onChange={(event) => setDestination(event.target.value)}
+                placeholder={
+                  type === "video"
+                    ? "https://meet.example.com/..."
+                    : "Street address or office location"
+                }
+                required
+              />
+              {type === "in_person" && companyAddress && destination !== companyAddress && (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary hover:underline"
+                  onClick={() => setDestination(companyAddress)}
+                >
+                  Use company address
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="interview-template">Instruction template</Label>
+              <select
+                id="interview-template"
+                className="h-11 w-full rounded-md border bg-background px-3"
+                value={instructionTemplate}
+                onChange={(event) =>
+                  applyInstructionTemplate(event.target.value as InstructionTemplate)
+                }
+              >
+                <option value="">Custom instructions</option>
+                <option value="items_to_bring">Items to bring</option>
+                <option value="scheduling_follow_up">Interview confirmation</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Select a template, then edit the message below if needed.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="interview-notes">Instructions (optional)</Label>
+              <Textarea
+                id="interview-notes"
+                name="interview_notes"
+                value={notes}
+                onChange={(event) => {
+                  setNotes(event.target.value);
+                  setInstructionTemplate("");
+                }}
+                placeholder="Parking, check-in, what to bring, or other instructions"
+                className="min-h-40"
+              />
+            </div>
+            {activeInterview?.status === "scheduled" && !attendanceLabel && (
+              <div className="space-y-2">
+                <Label htmlFor="interview-change-reason">
+                  Reason for rescheduling or cancellation *
+                </Label>
+                <Textarea
+                  id="interview-change-reason"
+                  value={changeReason}
+                  onChange={(event) => setChangeReason(event.target.value)}
+                  placeholder="Explain why the interview time needs to change or why it is being canceled."
+                />
+                <p className="text-xs text-muted-foreground">
+                  This reason is shown to the officer.
+                </p>
+              </div>
             )}
-            <Button type="submit" disabled={saving || Boolean(attendanceLabel) || existing?.status === "cancelled" || officerRequestedReschedule || companyRequestedReschedule}>
-              {saving ? "Saving…" : existing ? "Request reschedule" : "Send interview request"}
-            </Button>
-          </DialogFooter>
-        </form>}
+            <DialogFooter className="gap-2 sm:justify-between">
+              {activeInterview?.status === "scheduled" && !interviewHasStarted ? (
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => void cancelInterview()}
+                    disabled={saving}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <span />
+              )}
+              <Button
+                type="submit"
+                disabled={
+                  saving ||
+                  Boolean(attendanceLabel) ||
+                  activeInterview?.status === "cancelled" ||
+                  officerRequestedReschedule ||
+                  companyRequestedReschedule
+                }
+              >
+                {saving
+                  ? "Saving…"
+                  : activeInterview
+                    ? "Request reschedule"
+                    : "Send interview request"}
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
