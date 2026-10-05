@@ -186,8 +186,8 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
       tone: "border-blue-300 bg-blue-50 text-blue-800",
     },
     interview_scheduled: {
-      label: "Next: Complete interview",
-      tone: "border-violet-300 bg-violet-50 text-violet-800",
+      label: "Waiting for interview response",
+      tone: "border-blue-300 bg-blue-50 text-blue-800",
     },
     interview_completed: {
       label: "Next: Send offer",
