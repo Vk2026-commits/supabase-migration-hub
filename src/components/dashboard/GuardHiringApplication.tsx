@@ -287,7 +287,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const firstIncomplete = master && master.status !== "submitted"
         ? requiredStepsList.find((step) => !requirementsMet(step, restoredForm, restoredShared, restoredJob, false))
         : undefined;
-      const restoredStep = urlStep ?? (firstIncomplete !== undefined ? Math.min(firstIncomplete, Math.max(savedStep, 0) >= firstIncomplete ? firstIncomplete : savedStep) : savedStep);
+      const restoredStep = urlStep ?? firstIncomplete ?? savedStep;
       masterIdRef.current = master?.id || null;
       submittedAtRef.current = master?.submitted_at || null;
       setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
@@ -529,7 +529,11 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const next = async () => {
     if (currentStep === 8 && savePendingLicensesRef.current) {
       const licensesSaved = await savePendingLicensesRef.current();
-      if (!licensesSaved) return;
+      if (!licensesSaved) {
+        // Never trap the applicant on an optional step because of a partial entry.
+        toast("Credential not saved", { description: "Finish the entry, or skip this optional step. Unsaved credential details will not be kept.", action: { label: "Skip without saving", onClick: skipCredentials } });
+        return;
+      }
     }
     // Photos and credentials are recommended, but they are not required to
     // submit a hiring application. Do not trap applicants on those screens
