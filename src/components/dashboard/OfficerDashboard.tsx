@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { shouldAutoOpenApplication } from "@/lib/hiringRestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,9 +24,6 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { OfficerSidebar } from "./OfficerSidebar";
 import { useExpiringCredentials } from "@/hooks/useExpiringCredentials";
 import { AddressAutocomplete } from "./AddressAutocomplete";
-import { GuardHiringApplication } from "./GuardHiringApplication";
-import { OfficerEmployeeOnboarding } from "./OfficerEmployeeOnboarding";
-import { OfficerOfferReview } from "./OfficerOfferReview";
 import { useSearchParams } from "@/lib/router-compat";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { formatUsPhone } from "@/lib/phone";
@@ -38,6 +35,12 @@ interface OfficerDashboardProps {
   userId: string;
   initialTab?: string;
 }
+
+const GuardHiringApplication = lazy(() => import("./GuardHiringApplication").then((module) => ({ default: module.GuardHiringApplication })));
+const OfficerEmployeeOnboarding = lazy(() => import("./OfficerEmployeeOnboarding").then((module) => ({ default: module.OfficerEmployeeOnboarding })));
+const OfficerOfferReview = lazy(() => import("./OfficerOfferReview").then((module) => ({ default: module.OfficerOfferReview })));
+
+const PanelLoading = () => <div className="mx-auto flex min-h-40 w-full max-w-4xl items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">Opening your workspace…</div>;
 
 const officerTabs = new Set(["overview", "hiring-application", "employee-onboarding", "profile", "availability", "photos", "certifications", "work-history", "interview-history", "videos", "find-jobs", "messages", "account"]);
 
@@ -84,7 +87,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const [uploadingResume, setUploadingResume] = useState(false);
   const [certCount, setCertCount] = useState(0);
   const [trainingCount, setTrainingCount] = useState(0);
-  const expiringItems = useExpiringCredentials(userId, "officer");
+  const expiringItems = useExpiringCredentials(userId, "officer", undefined, activeTab !== "hiring-application");
   const urgentExpiring = expiringItems.some((item) => item.daysLeft <= 30);
   const [photoCount, setPhotoCount] = useState(0);
   const [workHistoryCount, setWorkHistoryCount] = useState(0);
@@ -265,7 +268,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     return ensureOfficerProfilePromise.current;
   };
 
-  const loadProfile = async () => {
+  const loadProfile = async (includeDashboardMetrics = activeTab !== "hiring-application") => {
     // Load profiles table for email
     // Independent user-scoped reads; fetch in parallel.
     const [{ data: profileData }, { data }] = await Promise.all([
@@ -312,6 +315,10 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           const tab = shouldAutoOpenApplication({ requestedTab, initialTab, hasPendingOffer: Boolean(offer.data?.id), hasSubmittedApplication: hasSubmitted(apps.data), employmentConfirmed: Boolean(hire.data?.employment_confirmed_at) });
           if (tab) selectTab(tab);
         });
+        // The saved hiring application owns its own data loading. On a mobile
+        // return to that screen, leave nonessential dashboard counts, storage
+        // listings, and interview history until the draft is already usable.
+        if (!includeDashboardMetrics) return;
         const [certsResult, trainingsResult, workResult, videosResult, applicationResult, photosResult, employeeOnboardingResult, preparedOfferResult, confirmedHireResult, pendingOfferResult, acceptedOfferResult, interviewResult, interviewHistoryResult] = await Promise.all([
           supabase.from("certifications").select("id,document_front_url", { count: 'exact' }).eq("officer_id", data.id).neq("certification_type", "training"),
           supabase.from("certifications").select("id", { count: 'exact' }).eq("officer_id", data.id).eq("certification_type", "training"),
@@ -1370,12 +1377,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                   </CardContent>
                 </Card>
               ) : (
-                <GuardHiringApplication
-                  userId={userId}
-                  officerId={officerProfile?.id || null}
-                  onEnsureProfile={ensureOfficerProfile}
-                  onChanged={loadProfile}
-                />
+                <Suspense fallback={<PanelLoading />}>
+                  <GuardHiringApplication
+                    userId={userId}
+                    officerId={officerProfile?.id || null}
+                    onEnsureProfile={ensureOfficerProfile}
+                    onChanged={loadProfile}
+                  />
+                </Suspense>
               )
             )}
 
@@ -1390,16 +1399,20 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             )}
 
             {activeTab === "employee-onboarding" && pendingEmploymentOffer && (
-              <OfficerOfferReview offer={pendingEmploymentOffer} officerName={profile?.full_name || ""} onChanged={loadProfile} />
+              <Suspense fallback={<PanelLoading />}>
+                <OfficerOfferReview offer={pendingEmploymentOffer} officerName={profile?.full_name || ""} onChanged={loadProfile} />
+              </Suspense>
             )}
 
             {activeTab === "employee-onboarding" && !pendingEmploymentOffer && (!onboardingOfferLoaded || onboardingOfferAvailable) && (
-              <OfficerEmployeeOnboarding
-                userId={userId}
-                officerId={officerProfile?.id || null}
-                onEnsureProfile={ensureOfficerProfile}
-                onChanged={loadProfile}
-              />
+              <Suspense fallback={<PanelLoading />}>
+                <OfficerEmployeeOnboarding
+                  userId={userId}
+                  officerId={officerProfile?.id || null}
+                  onEnsureProfile={ensureOfficerProfile}
+                  onChanged={loadProfile}
+                />
+              </Suspense>
             )}
 
             {activeTab === "find-jobs" && (

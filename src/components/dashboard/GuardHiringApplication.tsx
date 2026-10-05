@@ -141,6 +141,10 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   }, [officerId]);
 
   useEffect(() => {
+    // Photos and credentials are optional. Do not make a returning applicant
+    // wait on their storage and certification records before the saved draft
+    // becomes visible on a mobile connection.
+    if (currentStep !== 7 && currentStep !== 8) return;
     let mounted = true;
     Promise.all([
       supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
@@ -163,7 +167,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       }
     }).catch((error) => console.error("Application completion status could not be loaded", error));
     return () => { mounted = false; };
-  }, [userId, activeOfficerId]);
+  }, [userId, activeOfficerId, currentStep]);
 
   useEffect(() => {
     masterIdRef.current = masterId;
@@ -215,31 +219,20 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     const startedAt = performance.now();
     (async () => {
      try {
-      // Draft reads are scoped by the signed-in userId, so they do not need to
-      // wait for the officer record; resolve both in parallel.
-      const ensurePromise: Promise<string | null> = officerId
-        ? Promise.resolve(officerId)
-        : onEnsureProfile
-          ? onEnsureProfile().then((p: any) => p?.id || null).catch(() => null)
-          : Promise.resolve(null);
+      // Draft reads are scoped by the signed-in userId. Returning applicants
+      // must not wait on another officer-profile lookup before their saved
+      // application can be restored.
       const appTable = (supabase as any).from("guard_hiring_applications");
       // Only wait for the four records required to paint the saved draft.
       // Work history and hiring destinations load after the form is visible.
       const requests: any[] = [
         supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
         supabase.from("officer_profiles").select("phone,address_street,address_unit,address_city,address_state,address_zip,employment_type,shift_preference,availability_schedule,resume_url").eq("user_id", userId).maybeSingle(),
-        appTable.select("id,status,current_step,application_data,created_at,submitted_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        appTable.select("id,officer_id,status,current_step,application_data,created_at,submitted_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.auth.getSession(),
       ];
-      const [[profileResult, officerResult, masterResult, authResult], loadingOfficerId] = await withDeadline(
-        Promise.all([Promise.all(requests), ensurePromise]),
-        15000,
-      );
+      const [profileResult, officerResult, masterResult, authResult] = await withDeadline(Promise.all(requests), 12000);
       if (!isLive()) return;
-      if (!officerId) {
-        if (loadingOfficerId) setResolvedOfficerId(loadingOfficerId);
-        else if (onEnsureProfile) setSaveError("We couldn't create the officer record needed to save this application.");
-      }
       // Never show an empty "new" application when the saved draft could not
       // be read; surface a recoverable error instead.
       if (masterResult.error || profileResult.error || officerResult.error) {
@@ -248,6 +241,18 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         return;
       }
       const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
+      const restoredOfficerId = officerId || officer?.id || master?.officer_id || null;
+      if (restoredOfficerId) {
+        setResolvedOfficerId(restoredOfficerId);
+      } else if (onEnsureProfile) {
+        // New accounts still create their officer profile, but this background
+        // work no longer blocks a saved application's first render.
+        void onEnsureProfile().then((created: any) => {
+          if (isLive() && created?.id) setResolvedOfficerId(created.id);
+        }).catch(() => {
+          if (isLive()) setSaveError("We couldn't create the officer record needed to save this application.");
+        });
+      }
       const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
       const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
       if (savedPhotoCompletion) {
@@ -311,8 +316,8 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
 
       // Secondary records hydrate the already-visible application.
       void Promise.all([
-        loadingOfficerId && !draft.workHistory?.length
-          ? supabase.from("work_history").select("*").eq("officer_id", loadingOfficerId).order("start_date", { ascending: false })
+        restoredOfficerId && !draft.workHistory?.length
+          ? supabase.from("work_history").select("*").eq("officer_id", restoredOfficerId).order("start_date", { ascending: false })
           : Promise.resolve({ data: [] }),
         (supabase as any).rpc("list_active_hiring_destinations"),
       ]).then(([workResult, jobsResult]) => {

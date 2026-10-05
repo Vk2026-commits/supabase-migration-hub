@@ -30,7 +30,7 @@ const usernameSchema = z
 const isTemporaryAuthFailure = (error: unknown) => {
   const status = Number((error as { status?: number } | null)?.status || 0);
   const message = error instanceof Error ? error.message : String(error || "");
-  return status >= 500 || /(?:http\s*)?5\d\d|gateway|timed?\s*out|failed to fetch|network request/i.test(message);
+  return status >= 500 || /(?:http\s*)?5\d\d|gateway|timed?\s*out|failed to fetch|network request|abort(?:ed|error)?|signal/i.test(message);
 };
 
 const signInWithRecovery = (email: string, password: string) => authDeadline((async () => {
@@ -202,7 +202,12 @@ const Auth = () => {
         navigate(nextPath || "/dashboard");
       }
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "An error occurred");
+      const message = error instanceof Error ? error.message : "An error occurred";
+      toast.error(
+        isTemporaryAuthFailure(error)
+          ? "The sign-in service is temporarily unavailable. Please try again in a moment."
+          : message,
+      );
     } finally {
       setLoading(false);
     }

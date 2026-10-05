@@ -17,12 +17,13 @@ const daysUntil = (date: string) => {
   return Math.ceil((expiry.getTime() - today.getTime()) / 86_400_000);
 };
 
-export const useExpiringCredentials = (userId: string, mode: "officer" | "company", companyId?: string) => {
+export const useExpiringCredentials = (userId: string, mode: "officer" | "company", companyId?: string, enabled = true) => {
   const [items, setItems] = useState<ExpiringItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setItems([]);
+    if (!enabled) return () => { cancelled = true; };
 
     const load = async () => {
       try {
@@ -108,7 +109,7 @@ export const useExpiringCredentials = (userId: string, mode: "officer" | "compan
     return () => {
       cancelled = true;
     };
-  }, [userId, mode, companyId]);
+  }, [userId, mode, companyId, enabled]);
 
   return items;
 };
