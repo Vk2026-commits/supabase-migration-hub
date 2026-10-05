@@ -19,7 +19,6 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as GetStartedRouteImport } from './routes/get-started'
 import { Route as NotificationActionRouteImport } from './routes/notification-action'
 import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as QaFixtureHiringRouteImport } from './routes/qa-fixture-hiring'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as JobsJobIdRouteImport } from './routes/jobs.$jobId'
 
@@ -73,11 +72,6 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const QaFixtureHiringRoute = QaFixtureHiringRouteImport.update({
-  id: '/qa-fixture-hiring',
-  path: '/qa-fixture-hiring',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -100,7 +94,6 @@ export interface FileRoutesByFullPath {
   '/get-started': typeof GetStartedRoute
   '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
-  '/qa-fixture-hiring': typeof QaFixtureHiringRoute
   '/reset-password': typeof ResetPasswordRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
 }
@@ -115,7 +108,6 @@ export interface FileRoutesByTo {
   '/get-started': typeof GetStartedRoute
   '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
-  '/qa-fixture-hiring': typeof QaFixtureHiringRoute
   '/reset-password': typeof ResetPasswordRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
 }
@@ -131,7 +123,6 @@ export interface FileRoutesById {
   '/get-started': typeof GetStartedRoute
   '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
-  '/qa-fixture-hiring': typeof QaFixtureHiringRoute
   '/reset-password': typeof ResetPasswordRoute
   '/jobs/$jobId': typeof JobsJobIdRoute
 }
@@ -148,7 +139,6 @@ export interface FileRouteTypes {
     | '/get-started'
     | '/notification-action'
     | '/privacy'
-    | '/qa-fixture-hiring'
     | '/reset-password'
     | '/jobs/$jobId'
   fileRoutesByTo: FileRoutesByTo
@@ -163,7 +153,6 @@ export interface FileRouteTypes {
     | '/get-started'
     | '/notification-action'
     | '/privacy'
-    | '/qa-fixture-hiring'
     | '/reset-password'
     | '/jobs/$jobId'
   id:
@@ -178,7 +167,6 @@ export interface FileRouteTypes {
     | '/get-started'
     | '/notification-action'
     | '/privacy'
-    | '/qa-fixture-hiring'
     | '/reset-password'
     | '/jobs/$jobId'
   fileRoutesById: FileRoutesById
@@ -194,7 +182,6 @@ export interface RootRouteChildren {
   GetStartedRoute: typeof GetStartedRoute
   NotificationActionRoute: typeof NotificationActionRoute
   PrivacyRoute: typeof PrivacyRoute
-  QaFixtureHiringRoute: typeof QaFixtureHiringRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   JobsJobIdRoute: typeof JobsJobIdRoute
 }
@@ -271,13 +258,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/qa-fixture-hiring': {
-      id: '/qa-fixture-hiring'
-      path: '/qa-fixture-hiring'
-      fullPath: '/qa-fixture-hiring'
-      preLoaderRoute: typeof QaFixtureHiringRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -306,7 +286,6 @@ const rootRouteChildren: RootRouteChildren = {
   GetStartedRoute: GetStartedRoute,
   NotificationActionRoute: NotificationActionRoute,
   PrivacyRoute: PrivacyRoute,
-  QaFixtureHiringRoute: QaFixtureHiringRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   JobsJobIdRoute: JobsJobIdRoute,
 }
