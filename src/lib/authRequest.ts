@@ -10,6 +10,17 @@ export async function authDeadline<T>(operation: PromiseLike<T>, milliseconds = 
   } finally { clearTimeout(timer); }
 }
 
+// Cancel a slow account read as well as ending its loading state. Otherwise
+// each Retry would leave another database request running in the background.
+export async function requestWithDeadline<T>(operation: (signal: AbortSignal) => PromiseLike<T>, milliseconds = 12000): Promise<T> {
+  const controller = new AbortController();
+  try {
+    return await authDeadline(operation(controller.signal), milliseconds);
+  } finally {
+    controller.abort();
+  }
+}
+
 // Abort stalled auth HTTP requests so they release the session refresh queue.
 // Do not apply this deadline to uploads or application submission writes.
 export async function authBoundedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

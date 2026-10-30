@@ -5,7 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { User } from "@supabase/supabase-js";
 import { useTranslation } from "react-i18next";
-import { loadCompanyWorkspaces, type CompanyWorkspace } from "@/lib/company-workspaces";
+import { type CompanyWorkspace } from "@/lib/company-workspaces";
+import { loadAccountAccess, type AccountAccess } from "@/lib/account-access";
+import { availablePortals, resolvePortal } from "@/lib/account-routing";
+import { authDeadline } from "@/lib/authRequest";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const Navbar = () => {
+const Navbar = ({ verifiedAccess }: { verifiedAccess?: AccountAccess | null }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { t, i18n } = useTranslation();
@@ -23,80 +26,51 @@ const Navbar = () => {
   const [accountRoles, setAccountRoles] = useState<string[]>([]);
   const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [accessFailed, setAccessFailed] = useState(false);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        checkAdminStatus(session.user.id);
-        getUserRole(session.user.id);
-      }
-    });
-
+    let active = true;
+    let receivedAuthEvent = false;
+    // Auth callbacks only publish state. Data fetching happens in the effect
+    // below, outside Supabase's session notification/refresh lifecycle.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        checkAdminStatus(session.user.id);
-        getUserRole(session.user.id);
-      } else {
-        setIsAdmin(false);
-        setUserRole(null);
-        setAccountRoles([]);
-        setCompanyWorkspaces([]);
-      }
+      receivedAuthEvent = true;
+      if (active) setUser(session?.user ?? null);
     });
+    authDeadline(supabase.auth.getSession()).then(({ data: { session } }) => {
+      if (active && !receivedAuthEvent) setUser(session?.user ?? null);
+    }).catch(() => { /* The sign-in/dashboard page owns recovery feedback. */ });
 
-    return () => subscription.unsubscribe();
+    return () => { active = false; subscription.unsubscribe(); };
   }, []);
 
-  const checkAdminStatus = async (userId: string) => {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    
-    setIsAdmin(!!data);
-  };
-
-  const getUserRole = async (userId: string) => {
-    const [{ data: profile }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("role").eq("id", userId).single(),
-      supabase.from("user_roles").select("role").eq("user_id", userId),
-    ]);
-
-    const nextRoles = Array.from(new Set([profile?.role, ...(roles || []).map(({ role }) => role)]))
-      .filter((role) => role === "officer" || role === "company") as string[];
-
-    let verifiedRoles = nextRoles;
-    let verifiedUserRole = profile?.role ?? null;
-    if (nextRoles.includes("company")) {
-      try {
-        const workspaces = await loadCompanyWorkspaces(userId);
-        setCompanyWorkspaces(workspaces);
-        if (workspaces.length === 0) {
-          verifiedRoles = nextRoles.filter((role) => role !== "company");
-          if (verifiedUserRole === "company") verifiedUserRole = verifiedRoles.includes("officer") ? "officer" : null;
-        }
-      } catch (error) {
-        console.error("Failed to load company workspace navigation", error);
-        setCompanyWorkspaces([]);
-        // A stale role row or failed request must never expose company
-        // navigation before an actual workspace has been verified.
-        verifiedRoles = nextRoles.filter((role) => role !== "company");
-        if (verifiedUserRole === "company") verifiedUserRole = verifiedRoles.includes("officer") ? "officer" : null;
-      }
-    } else {
-      setCompanyWorkspaces([]);
-    }
-    setUserRole(verifiedUserRole);
-    setAccountRoles(verifiedRoles);
-  };
+  const userId = user?.id;
+  useEffect(() => {
+    let active = true;
+    setIsAdmin(false);
+    setUserRole(null);
+    setAccountRoles([]);
+    setCompanyWorkspaces([]);
+    setAccessFailed(false);
+    if (!userId) return;
+    const request = verifiedAccess?.userId === userId ? Promise.resolve(verifiedAccess) : loadAccountAccess(userId);
+    void request.then(access => {
+      if (!active) return;
+      setIsAdmin(access.roles.includes("admin"));
+      setAccountRoles(availablePortals(access));
+      setCompanyWorkspaces(access.workspaces);
+      setUserRole(resolvePortal(access, null, null));
+    }).catch(error => {
+      if (!active) return;
+      console.error("Failed to load account navigation", error);
+      setAccessFailed(true);
+    });
+    return () => { active = false; };
+  }, [userId, verifiedAccess]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -145,7 +119,7 @@ const Navbar = () => {
 
       {user ? (
         <>
-          {activeRole !== "officer" && (
+          {(activeRole === "company" || isAdmin) && (
             <Button variant="ghost" asChild>
               <Link to={browseHref}>{t("nav.browse")}</Link>
             </Button>
@@ -164,6 +138,7 @@ const Navbar = () => {
               {t("nav.dashboard")}
             </Link>
           </Button>
+          {accessFailed && <Button variant="ghost" asChild><Link to="/dashboard">Retry account access</Link></Button>}
           {isAdmin && (
             <>
               <Button variant="ghost" asChild>

@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { requestWithDeadline } from "@/lib/authRequest";
 
 export type CompanyProfile = Database["public"]["Tables"]["company_profiles"]["Row"];
 
@@ -9,14 +10,14 @@ export type CompanyWorkspace = {
   owned: boolean;
 };
 
-export async function loadCompanyWorkspaces(userId: string): Promise<CompanyWorkspace[]> {
+async function fetchCompanyWorkspaces(userId: string): Promise<CompanyWorkspace[]> {
   const [ownedResult, membershipsResult] = await Promise.all([
-    supabase.from("company_profiles").select("*").eq("user_id", userId),
-    supabase
+    requestWithDeadline((signal) => supabase.from("company_profiles").select("*").eq("user_id", userId).abortSignal(signal)),
+    requestWithDeadline((signal) => supabase
       .from("company_members")
       .select("company_id,role,status")
       .eq("user_id", userId)
-      .eq("status", "active"),
+      .eq("status", "active").abortSignal(signal)),
   ]);
 
   if (ownedResult.error) throw ownedResult.error;
@@ -29,14 +30,14 @@ export async function loadCompanyWorkspaces(userId: string): Promise<CompanyWork
   }
   for (const companyId of ownedCompanyIds) roleByCompanyId.set(companyId, "owner");
 
-  const companyIds = Array.from(roleByCompanyId.keys());
-  if (companyIds.length === 0) return [];
-
-  const { data: companies, error } = await supabase
-    .from("company_profiles")
-    .select("*")
-    .in("id", companyIds);
-  if (error) throw error;
+  const memberCompanyIds = Array.from(roleByCompanyId.keys()).filter(id => !ownedCompanyIds.has(id));
+  const companies = [...(ownedResult.data || [])];
+  if (memberCompanyIds.length > 0) {
+    const { data, error } = await requestWithDeadline((signal) => supabase
+      .from("company_profiles").select("*").in("id", memberCompanyIds).abortSignal(signal));
+    if (error) throw error;
+    companies.push(...(data || []));
+  }
 
   return (companies || [])
     .map((company) => ({
@@ -48,6 +49,17 @@ export async function loadCompanyWorkspaces(userId: string): Promise<CompanyWork
       if (left.owned !== right.owned) return left.owned ? -1 : 1;
       return left.company.company_name.localeCompare(right.company.company_name);
     });
+}
+
+const pending = new Map<string, Promise<CompanyWorkspace[]>>();
+export function loadCompanyWorkspaces(userId: string): Promise<CompanyWorkspace[]> {
+  const existing = pending.get(userId);
+  if (existing) return existing;
+  const request = fetchCompanyWorkspaces(userId).finally(() => {
+    if (pending.get(userId) === request) pending.delete(userId);
+  });
+  pending.set(userId, request);
+  return request;
 }
 
 export function selectCompanyWorkspace(

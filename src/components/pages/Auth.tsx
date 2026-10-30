@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "@/lib/router-compat";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,8 @@ import { toast } from "sonner";
 import { Link } from "@/lib/router-compat";
 import { z } from "zod";
 import { formatUsPhone } from "@/lib/phone";
-import { authDeadline } from "@/lib/authRequest";
+import { authDeadline, requestWithDeadline } from "@/lib/authRequest";
+import { portalRole, safeReturnPath, signInDestination, type PortalRole } from "@/lib/account-routing";
 
 // Password validation schema
 const passwordSchema = z
@@ -33,17 +34,12 @@ const isTemporaryAuthFailure = (error: unknown) => {
   return status >= 500 || /(?:http\s*)?5\d\d|gateway|timed?\s*out|failed to fetch|network request|abort(?:ed|error)?|signal/i.test(message);
 };
 
-const signInWithRecovery = (email: string, password: string) => authDeadline((async () => {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error) return;
-    if (!isTemporaryAuthFailure(error)) throw error;
-    if (attempt === 1) {
-      throw new Error("The sign-in service is temporarily unavailable. Please try again in a moment.");
-    }
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
-  }
-})());
+// The transport already bounds stalled requests. A retry must be requested by
+// the user, not started in the background after the form's deadline expires.
+const signIn = async (email: string, password: string) => {
+  const { error } = await authDeadline(supabase.auth.signInWithPassword({ email: email.trim(), password }));
+  if (error) throw error;
+};
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -52,8 +48,12 @@ const Auth = () => {
   const urlRole = searchParams.get("role");
   const requestedNext = searchParams.get("next");
   const candidateLeadId = searchParams.get("lead");
-  const nextPath =
-    requestedNext?.startsWith("/") && !requestedNext.startsWith("//") ? requestedNext : null;
+  const nextPath = safeReturnPath(requestedNext);
+  const forceSignIn = searchParams.get("force");
+  const [signInPortal, setSignInPortal] = useState<PortalRole | null>(portalRole(urlRole));
+  const destination = signInDestination(nextPath, signInPortal);
+  const authStarted = useRef(false);
+  const busy = useRef(false);
 
   const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [emailOrUsername, setEmailOrUsername] = useState("");
@@ -69,6 +69,8 @@ const Auth = () => {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [confirmationEmail, setConfirmationEmail] = useState("");
 
+  useEffect(() => { setSignInPortal(portalRole(urlRole)); }, [urlRole]);
+
   useEffect(() => {
     if (!candidateLeadId) return;
     try {
@@ -83,15 +85,14 @@ const Auth = () => {
 
   useEffect(() => {
     // Check if user is already logged in
-    const force = searchParams.get("force");
     let active = true;
-    authDeadline(supabase.auth.getSession()).then(({ data: { session } }) => {
-      if (active && session && !force) {
-        navigate(nextPath || "/dashboard");
+    authDeadline(supabase.auth.getSession()).then(({ data: { session }, error }) => {
+      if (active && !authStarted.current && !error && session && !forceSignIn) {
+        navigate(destination, { replace: true });
       }
     }).catch(() => { /* Keep the sign-in form usable if session recovery fails. */ });
     return () => { active = false; };
-  }, [navigate, nextPath, searchParams]);
+  }, [navigate, destination, forceSignIn]);
 
   const validatePassword = (pwd: string) => {
     const errors: string[] = [];
@@ -110,6 +111,9 @@ const Auth = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
+    authStarted.current = true;
     setLoading(true);
     setPasswordErrors([]);
 
@@ -147,7 +151,7 @@ const Auth = () => {
         }
 
         const postConfirmationPath =
-          nextPath || (role === "officer" ? "/dashboard?onboarding=application" : "/dashboard");
+          nextPath || (role === "officer" ? "/dashboard?viewAs=officer&onboarding=application" : "/dashboard?viewAs=company");
 
         const { data: signUpData, error } = await supabase.auth.signUp({
           email: emailOrUsername,
@@ -182,24 +186,27 @@ const Auth = () => {
 
         if (isEmail) {
           // Sign in with email
-          await signInWithRecovery(emailOrUsername, password);
+          await signIn(emailOrUsername, password);
         } else {
           // Sign in with username - first get email from profiles
-          const { data: profile, error: profileError } = await authDeadline(supabase
+          const { data: profile, error: profileError } = await requestWithDeadline((signal) => supabase
             .from("profiles")
             .select("email")
-            .eq("username", emailOrUsername)
-            .single());
+            .eq("username", emailOrUsername.trim())
+            .abortSignal(signal).maybeSingle());
 
-          if (profileError || !profile) {
+          if (profileError) {
+            throw new Error("Your username could not be looked up. Try signing in with your email address.");
+          }
+          if (!profile) {
             throw new Error("Username not found");
           }
 
-          await signInWithRecovery(profile.email, password);
+          await signIn(profile.email, password);
         }
 
         toast.success("Signed in successfully!");
-        navigate(nextPath || "/dashboard");
+        navigate(destination, { replace: true });
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "An error occurred";
@@ -209,6 +216,7 @@ const Auth = () => {
           : message,
       );
     } finally {
+      busy.current = false;
       setLoading(false);
     }
   };
@@ -293,16 +301,32 @@ const Auth = () => {
             </Link>
           </div>
           <CardTitle className="text-2xl text-center">
-            {mode === "signin" ? "Welcome back" : "Create your account"}
+            {mode === "signin" ? signInPortal === "company" ? "Company sign-in" : signInPortal === "officer" ? "Security officer sign-in" : "Welcome back" : "Create your account"}
           </CardTitle>
           <CardDescription className="text-center">
             {mode === "signin"
-              ? "Sign in to access your account"
+              ? signInPortal === "company" ? "Use the email address added to your company team" : "Sign in to access your account"
               : "Join the premier security professional marketplace"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAuth} className="space-y-4">
+            {mode === "signin" && (
+              <div className="space-y-2">
+                <Label htmlFor="signInPortal">Open after sign-in</Label>
+                <select
+                  id="signInPortal"
+                  className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-base"
+                  value={signInPortal || "auto"}
+                  disabled={loading}
+                  onChange={(event) => setSignInPortal(portalRole(event.target.value))}
+                >
+                  <option value="auto">My workspace (automatic)</option>
+                  <option value="company">Company workspace</option>
+                  <option value="officer">Security officer workspace</option>
+                </select>
+              </div>
+            )}
             {mode === "signup" && (
               <>
                 <div className="space-y-2">
@@ -380,6 +404,9 @@ const Auth = () => {
                 type={mode === "signup" ? "email" : "text"}
                 placeholder={mode === "signup" ? "your@email.com" : "email or username"}
                 value={emailOrUsername}
+                autoComplete={mode === "signup" ? "email" : "username"}
+                autoCapitalize="none"
+                spellCheck={false}
                 onChange={(e) => setEmailOrUsername(e.target.value)}
                 required
               />
@@ -393,6 +420,7 @@ const Auth = () => {
                   type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
                   onChange={(e) => {
                     setPassword(e.target.value);
                     if (mode === "signup") {
@@ -401,7 +429,7 @@ const Auth = () => {
                   }}
                   className="pr-11"
                   required
-                  minLength={8}
+                  minLength={mode === "signup" ? 8 : undefined}
                 />
                 <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Hide password" : "Show password"}>
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -436,7 +464,7 @@ const Auth = () => {
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Loading..." : mode === "signin" ? "Sign In" : "Create Account"}
+              {loading ? mode === "signin" ? "Signing in…" : "Creating account…" : mode === "signin" ? signInPortal === "company" ? "Sign in to company" : "Sign In" : "Create Account"}
             </Button>
 
             {mode === "signin" && (
@@ -456,6 +484,7 @@ const Auth = () => {
               <button
                 type="button"
                 onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
+                disabled={loading}
                 className="text-primary hover:underline"
               >
                 {mode === "signin"

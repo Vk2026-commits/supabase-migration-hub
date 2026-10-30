@@ -2207,14 +2207,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                 </Card>
               )}
 
-              {activeTab === "photos" && <OfficerPhotos userId={userId} onChanged={loadProfile} />}
+              {activeTab === "photos" && <OfficerPhotos userId={userId} onChanged={() => void loadProfile()} />}
 
               {activeTab === "certifications" && (
                 <CertificationsManager
                   officerId={officerProfile?.id || ""}
                   userId={userId}
                   onEnsureProfile={ensureOfficerProfile}
-                  onChanged={loadProfile}
+                  onChanged={() => void loadProfile()}
                 />
               )}
 

@@ -8,6 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import OfficerDashboard from "@/components/dashboard/OfficerDashboard";
 import CompanyDashboard from "@/components/dashboard/CompanyDashboard";
 import ExpiredTrialDialog from "@/components/dashboard/ExpiredTrialDialog";
+import { loadAccountAccess, type AccountAccess } from "@/lib/account-access";
+import { availablePortals, resolvePortal, type PortalRole } from "@/lib/account-routing";
+import { authDeadline, requestWithDeadline } from "@/lib/authRequest";
+import { Link } from "@/lib/router-compat";
 import {
   loadCompanyWorkspaces,
   selectCompanyWorkspace,
@@ -41,22 +45,31 @@ const Dashboard = () => {
   const [companyWorkspaces, setCompanyWorkspaces] = useState<CompanyWorkspace[]>([]);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [portals, setPortals] = useState<PortalRole[]>([]);
+  const [accountAccess, setAccountAccess] = useState<AccountAccess | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
     setAccessError(null);
+    setShowExpiredTrialDialog(false);
+    setCompanyProfile(null);
+    setCompanyWorkspaces([]);
+    setPortals([]);
+    setAccountAccess(null);
     const timer = window.setTimeout(() => {
       active = false;
       setAccessError("The account service is taking too long to respond. Retry to load your account; this does not erase your application.");
       setLoading(false);
-    }, 15000);
+    }, 25000);
     const getProfile = async () => {
       try {
         const {
           data: { session },
-        } = await supabase.auth.getSession();
+          error: sessionError,
+        } = await authDeadline(supabase.auth.getSession());
         if (!active) return;
+        if (sessionError) throw sessionError;
 
         if (!session) {
           const next = `${window.location.pathname}${window.location.search}`;
@@ -66,49 +79,28 @@ const Dashboard = () => {
 
         setUser(session.user);
 
-        // These requests are independent, so avoid paying for two network
-        // round trips before the dashboard can render.
-        const [{ data: roles, error: rolesError }, { data: profileData, error: profileError }] =
-          await Promise.all([
-            supabase
-              .from("user_roles")
-              .select("role")
-              .eq("user_id", session.user.id),
-            supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
-          ]);
+        const access = await loadAccountAccess(session.user.id);
         if (!active) return;
-
-        if (rolesError) throw rolesError;
-        if (profileError) throw profileError;
-
-        const accountRoles = new Set((roles || []).map(({ role }) => role));
-        const isAdmin = accountRoles.has("admin");
-        const requestedRole = viewAs === "officer" || viewAs === "company" ? viewAs : null;
-        const selectedRole =
-          requestedRole && (isAdmin || accountRoles.has(requestedRole)) ? requestedRole : null;
-
-        // Admins who belong to a company land in their company workspace;
-        // only admins with no company profile go to the platform Admin page.
-        if (isAdmin && !selectedRole && profileData?.role !== "company") {
-          navigate("/admin");
-          return;
-        }
-
-        const effectiveRole = selectedRole || profileData?.role;
+        setAccountAccess(access);
+        setPortals(availablePortals(access));
+        const profileData = access.profile;
 
         // Legacy invitation emails authenticated the recipient and sent them
         // straight to the dashboard. A pending membership must create a
         // password before gaining workspace access, so route it to the
         // branded account-activation screen instead.
-        if (!selectedRole && effectiveRole === "company") {
-          const { data: pendingMembership, error: membershipError } = await supabase
+        // An established member with an active workspace must not be diverted
+        // into account setup just because another team has a pending invitation.
+        if (access.companyCount === 0 && viewAs !== "officer" &&
+            (viewAs === "company" || access.profileRole === "company" || access.roles.includes("company"))) {
+          const { data: pendingMembership, error: membershipError } = await requestWithDeadline((signal) => supabase
             .from("company_members")
             .select("id,status,password_created_at")
             .eq("user_id", session.user.id)
             .in("status", ["invited", "accepted"])
             .order("invited_at", { ascending: false })
             .limit(1)
-            .maybeSingle();
+            .abortSignal(signal).maybeSingle());
           if (!active) return;
 
           if (membershipError) throw membershipError;
@@ -123,11 +115,15 @@ const Dashboard = () => {
           }
         }
 
+        const effectiveRole = resolvePortal(access, viewAs, requestedCompanyId);
+        if (effectiveRole === "admin") {
+          navigate("/admin", { replace: true });
+          return;
+        }
+
         // Check if this is a company with expired trial.
         if (effectiveRole === "company") {
-          try {
-            const workspaces = await loadCompanyWorkspaces(session.user.id);
-            if (!active) return;
+            const workspaces = access.workspaces;
             const selectedWorkspace = selectCompanyWorkspace(workspaces, requestedCompanyId);
             const companyData = selectedWorkspace?.company || null;
             if (!companyData) throw new Error("No authorized company workspace was found");
@@ -139,30 +135,14 @@ const Dashboard = () => {
             const isFreeTier = companyData.subscription_tier === "free";
 
             setShowExpiredTrialDialog(Boolean(trialExpired && isFreeTier));
-          } catch (workspaceError) {
-            if (!active) return;
-            console.error("Company workspace verification failed:", workspaceError);
-            const hasOfficerAccess = accountRoles.has("officer") || profileData?.role === "officer";
-            if (hasOfficerAccess) {
-              const officerParams = new URLSearchParams(window.location.search);
-              officerParams.set("viewAs", "officer");
-              officerParams.delete("companyId");
-              setCompanyProfile(null);
-              setCompanyWorkspaces([]);
-              setProfile(profileData ? { ...profileData, role: "officer" } : { role: "officer" });
-              navigate(`/dashboard?${officerParams.toString()}`, { replace: true });
-              return;
-            }
-            setAccessError("Your company access could not be verified. Please refresh and try again.");
-            setProfile(profileData ? { ...profileData, role: null } : null);
-            return;
-          }
         }
         setAccessError(null);
-        setProfile(profileData ? { ...profileData, role: effectiveRole } : profileData);
+        setProfile({ ...profileData, role: effectiveRole });
       } catch (error) {
         console.error("Failed to load dashboard:", error);
-        if (active) setAccessError("Your account could not be loaded. Please retry. Your account type has not been changed.");
+        // A failed verification is not evidence of officer access. Preserve the
+        // destination and show a retry instead of silently changing portals.
+        if (active) setAccessError(error instanceof Error ? error.message : "Your account could not be loaded. Please retry. Your account type has not been changed.");
       } finally {
         if (active) {
           clearTimeout(timer);
@@ -178,7 +158,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
+        <Navbar verifiedAccess={accountAccess} />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-12 w-64 mb-8" />
           <div className="grid md:grid-cols-2 gap-6">
@@ -193,7 +173,7 @@ const Dashboard = () => {
   if (!user && !accessError) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
+        <Navbar verifiedAccess={accountAccess} />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-12 w-64 mb-8" />
           <Skeleton className="h-64" />
@@ -205,17 +185,20 @@ const Dashboard = () => {
   if (!user || accessError || (profile?.role !== "officer" && profile?.role !== "company")) {
     return (
       <div className="min-h-screen bg-background">
-        <Navbar />
+        <Navbar verifiedAccess={accountAccess} />
         <main className="container mx-auto px-4 py-10">
           <Card className="mx-auto max-w-xl">
             <CardHeader>
               <CardTitle>Account access could not be verified</CardTitle>
               <CardDescription>{accessError || "Refresh the page to verify your account access."}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-wrap gap-3">
               <button className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground" onClick={() => setRetry(value => value + 1)}>
                 Retry loading account
               </button>
+              {portals.includes("company") && <Link to="/dashboard?viewAs=company" className="rounded-md border px-4 py-2">Open company workspace</Link>}
+              {portals.includes("officer") && <Link to="/dashboard?viewAs=officer" className="rounded-md border px-4 py-2">Open officer workspace</Link>}
+              <Link to="/auth?role=company&force=1" className="rounded-md border px-4 py-2">Company sign-in</Link>
             </CardContent>
           </Card>
         </main>
@@ -229,6 +212,7 @@ const Dashboard = () => {
     const companyData = selectCompanyWorkspace(workspaces, requestedCompanyId)?.company || null;
 
     if (companyData) {
+      setCompanyWorkspaces(workspaces);
       setCompanyProfile(companyData);
     }
   };
@@ -240,7 +224,7 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar />
+      <Navbar verifiedAccess={accountAccess} />
       <div className="container mx-auto px-4 py-8">
         {profile.role === "officer" ? (
           <OfficerDashboard
@@ -271,6 +255,7 @@ const Dashboard = () => {
               <CompanyDashboard
                 userId={user.id}
                 userName={profile?.full_name || user?.email || ""}
+                verifiedWorkspaces={companyWorkspaces}
               />
             </div>
           </>

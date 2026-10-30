@@ -45,6 +45,7 @@ import {
 interface CompanyDashboardProps {
   userId: string;
   userName: string;
+  verifiedWorkspaces: CompanyWorkspace[];
 }
 
 type ApplicantPortalNotification = {
@@ -90,7 +91,7 @@ const sectionsWithOwnHeading = new Set(["jobs", "sites", "not-hired", "terminate
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
-const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
+const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashboardProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const requestedCompanyId = searchParams.get("companyId");
@@ -227,10 +228,10 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     return () => cancelAnimationFrame(frame);
   }, [activeTab]);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = useCallback(async (refresh = false) => {
     setProfileLoaded(false);
     try {
-      const availableWorkspaces = await loadCompanyWorkspaces(userId);
+      const availableWorkspaces = refresh ? await loadCompanyWorkspaces(userId) : verifiedWorkspaces;
       const selectedWorkspace = selectCompanyWorkspace(availableWorkspaces, requestedCompanyId);
       const data = selectedWorkspace?.company || null;
       setCompanyWorkspaces(availableWorkspaces);
@@ -281,7 +282,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
     } finally {
       setProfileLoaded(true);
     }
-  }, [requestedCompanyId, setSearchParams, userId]);
+  }, [requestedCompanyId, setSearchParams, userId, verifiedWorkspaces]);
 
   useEffect(() => {
     void loadProfile();
@@ -415,7 +416,7 @@ const CompanyDashboard = ({ userId, userName }: CompanyDashboardProps) => {
       }
 
       if (showToast) toast.success("Company profile updated successfully!");
-      await loadProfile();
+      await loadProfile(true);
       return true;
     } catch (error: unknown) {
       toast.error(errorMessage(error, "Company profile could not be saved"));
