@@ -87,12 +87,12 @@ const Auth = () => {
     // Check if user is already logged in
     let active = true;
     authDeadline(supabase.auth.getSession()).then(({ data: { session }, error }) => {
-      if (active && !authStarted.current && !error && session && !forceSignIn) {
+      if (active && !authStarted.current && !error && session && !forceSignIn && signInPortal) {
         navigate(destination, { replace: true });
       }
     }).catch(() => { /* Keep the sign-in form usable if session recovery fails. */ });
     return () => { active = false; };
-  }, [navigate, destination, forceSignIn]);
+  }, [navigate, destination, forceSignIn, signInPortal]);
 
   const validatePassword = (pwd: string) => {
     const errors: string[] = [];
@@ -111,6 +111,10 @@ const Auth = () => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mode === "signin" && !signInPortal) {
+      toast.error("Choose Company or Security Officer before signing in.");
+      return;
+    }
     if (busy.current) return;
     busy.current = true;
     authStarted.current = true;
@@ -317,11 +321,12 @@ const Auth = () => {
                 <select
                   id="signInPortal"
                   className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-base"
-                  value={signInPortal || "auto"}
+                  value={signInPortal || ""}
                   disabled={loading}
+                  required
                   onChange={(event) => setSignInPortal(portalRole(event.target.value))}
                 >
-                  <option value="auto">My workspace (automatic)</option>
+                  <option value="" disabled>Choose workspace</option>
                   <option value="company">Company workspace</option>
                   <option value="officer">Security officer workspace</option>
                 </select>
