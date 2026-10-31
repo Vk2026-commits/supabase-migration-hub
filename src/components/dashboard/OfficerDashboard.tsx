@@ -823,44 +823,14 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   };
 
   const onboardingItems = [
-    {
-      label: "Submit hiring application",
-      complete: applicationSubmitted,
-      tab: "hiring-application",
-    },
-    {
-      label: acceptedEmploymentOffer
-        ? "Offer accepted and signed"
-        : pendingEmploymentOffer
-          ? "Review and sign company offer"
-          : "Await company offer",
-      complete: Boolean(acceptedEmploymentOffer),
-      tab: "employee-onboarding",
-      locked: !onboardingOfferAvailable,
-    },
-    {
-      label: employeeOnboardingSubmitted
-        ? "Employee onboarding submitted"
-        : acceptedEmploymentOffer
-          ? "Complete employee onboarding"
-          : "Employee onboarding unlocks after acceptance",
-      complete: employeeOnboardingSubmitted,
-      tab: "employee-onboarding",
-      locked: !acceptedEmploymentOffer,
-    },
-    { label: "Set availability", complete: completionStatus.availability, tab: "availability" },
-    {
-      label: "Add headshot and full-body photo (optional)",
-      complete: requiredPhotosComplete,
-      tab: "photos",
-      optional: true,
-    },
-    {
-      label: "Upload licenses or certificates (if applicable)",
-      complete: certificationDocumentComplete,
-      tab: "certifications",
-      optional: true,
-    },
+    { label: "Complete your profile", complete: completionStatus.profile, tab: "profile", optional: true },
+    { label: "Set your availability", complete: completionStatus.availability, tab: "availability" },
+    { label: "Add photos (optional)", complete: requiredPhotosComplete, tab: "photos", optional: true },
+    { label: "Upload licenses and certificates (if applicable)", complete: certificationDocumentComplete, tab: "certifications", optional: true },
+    { label: "Add work history (if applicable)", complete: workHistoryCount > 0, tab: "work-history", optional: true },
+    { label: "Submit hiring application", complete: applicationSubmitted, tab: "hiring-application" },
+    { label: "Review and accept company offer", complete: Boolean(acceptedEmploymentOffer), tab: "employee-onboarding", locked: !onboardingOfferAvailable },
+    { label: "Complete and submit employee onboarding", complete: employeeOnboardingSubmitted, tab: "employee-onboarding", locked: !acceptedEmploymentOffer },
   ];
   const onboardingComplete = onboardingItems
     .filter((item) => !item.optional)
@@ -1076,41 +1046,32 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     selectTab(tab);
   };
 
-  const onboardingChecklist = (compact = false) => (
+  const onboardingChecklist = (compact = false, full = false) => (
     <Card
-      className={`rounded-2xl border-primary/20 bg-primary/5 ${compact ? "shadow-sm" : "mb-6 xl:hidden"}`}
+      className={`rounded-2xl border-primary/20 bg-primary/5 ${compact ? "shadow-sm" : full ? "mb-6" : "mb-6 xl:hidden"}`}
     >
       <CardHeader className={compact ? "p-4 pb-2" : "pb-3"}>
         <CardTitle className={`flex items-center gap-2 ${compact ? "text-base" : "text-lg"}`}>
           <ClipboardCheck className="h-5 w-5 text-primary" />
-          {compact ? "Application progress" : "Finish your onboarding"}
+          Application steps
         </CardTitle>
         <CardDescription>
-          {compact
-            ? "Your next steps stay visible while you work."
-            : "Complete these items so employers can review your profile."}
+          Follow the numbered steps. Red means incomplete; green means complete. Optional items may be skipped. Offer and onboarding steps unlock later.
         </CardDescription>
       </CardHeader>
-      <CardContent className={compact ? "grid gap-2 p-4 pt-2" : "grid gap-2 sm:grid-cols-2"}>
-        {onboardingItems.map((item) => (
+      <CardContent className={compact ? "grid gap-2 p-4 pt-2" : "grid gap-2"}>
+        {onboardingItems.map((item, index) => (
           <button
             key={item.label}
             type="button"
             disabled={item.locked}
             onClick={() => handleTabChange(item.tab)}
-            className="flex min-w-0 items-center gap-3 rounded-xl border bg-background p-3 text-left transition-colors enabled:hover:border-primary/30 enabled:hover:bg-muted disabled:cursor-not-allowed disabled:opacity-70"
+            className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-left transition-colors enabled:hover:brightness-95 disabled:cursor-not-allowed ${item.complete ? "border-green-300 bg-green-50 text-green-900" : "border-red-300 bg-red-50 text-red-900"}`}
           >
-            {item.locked ? (
-              <LockKeyhole className="h-4 w-4 shrink-0 text-amber-600" />
-            ) : item.complete ? (
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-green-600" />
-            ) : (
-              <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-            )}
-            <span
-              className={`min-w-0 text-sm leading-tight ${item.complete ? "text-muted-foreground line-through" : "font-medium"}`}
-            >
-              {item.label}
+            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${item.complete ? "bg-green-700" : "bg-red-700"}`}>{index + 1}</span>
+            <span className="min-w-0 flex-1 text-sm leading-tight">
+              <span className="block font-semibold">{item.label}</span>
+              <span className="mt-1 block text-xs">{item.complete ? "Complete ✓" : item.locked ? (item.tab === "employee-onboarding" && index === onboardingItems.length - 1 ? "Incomplete · Unlocks after offer acceptance" : "Incomplete · Awaiting company offer") : "Incomplete · Select to continue"}</span>
             </span>
           </button>
         ))}
@@ -1613,6 +1574,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
 
             {!employmentConfirmedAt &&
               !onboardingComplete &&
+              activeTab !== "overview" &&
               activeTab !== "hiring-application" &&
               activeTab !== "employee-onboarding" &&
               onboardingChecklist()}
@@ -1639,31 +1601,15 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                       <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">
                         Officer workspace
                       </p>
-                      <h2 className="mt-1 text-xl font-bold">Tasks and profile</h2>
+                      <h2 className="mt-1 text-xl font-bold">Your application, step by step</h2>
                     </div>
                     <p className="text-sm text-muted-foreground">Choose a row to continue.</p>
                   </div>
+                  {onboardingChecklist(false, true)}
+                  <h3 className="text-lg font-semibold">Profile and account shortcuts</h3>
                   <div className="overflow-hidden rounded-lg border bg-background">
                     {(
                       [
-                        [
-                          "hiring-application",
-                          "Hiring application",
-                          applicationSubmitted
-                            ? "Submitted"
-                            : "Complete and submit your application",
-                          ClipboardList,
-                        ],
-                        [
-                          "employee-onboarding",
-                          "Employee onboarding",
-                          employeeOnboardingSubmitted
-                            ? "Submitted"
-                            : onboardingOfferAvailable
-                              ? "Continue your new-hire paperwork"
-                              : "Available after an accepted offer",
-                          ClipboardCheck,
-                        ],
                         [
                           "profile",
                           "Profile",

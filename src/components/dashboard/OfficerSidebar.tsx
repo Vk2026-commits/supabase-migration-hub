@@ -50,7 +50,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
     const completionKey = completionKeyFor(value);
     const isComplete = completionStatus?.[completionKey as keyof typeof completionStatus];
     const baseClasses = activeTab === value ? activeIndicator : "hover:bg-muted/50";
-    const statusColor = isComplete ? "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20" : "bg-red-500/10 text-red-600 hover:bg-red-500/20";
+    const statusColor = isComplete ? "bg-green-500/10 text-green-700 hover:bg-green-500/20" : "bg-red-500/10 text-red-600 hover:bg-red-500/20";
     return `${baseClasses} ${statusColor}`;
   };
 
@@ -85,7 +85,7 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
                       {open && <span className="min-w-0 flex-1 break-words text-left leading-tight">{item.title}{item.value === "hiring-application" && <span className={`ml-2 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${employmentConfirmed ? "bg-green-100 text-green-800 group-data-[active=true]:bg-white/20 group-data-[active=true]:text-white" : "bg-primary/15 group-data-[active=true]:bg-white/15"}`}>{employmentConfirmed ? "Hired" : "Start here"}</span>}{item.value === "employee-onboarding" && <span className={`ml-2 inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${(offerNeedsResponse || (onboardingAvailable && !completionStatus?.employeeOnboarding)) ? "bg-amber-100 text-amber-800" : "bg-muted"}`}>{employmentConfirmed ? "Completed" : offerNeedsResponse ? "Review offer" : onboardingAvailable ? (completionStatus?.employeeOnboarding ? "Submitted" : "Action required") : "Offer required"}</span>}</span>}
                       {item.value === "employee-onboarding" && onboardingOfferLoaded && !onboardingAvailable && open && <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-amber-600" />}
                       {isTabComplete(item.value) && open && item.value !== 'messages' && item.value !== 'find-jobs' && (
-                        <Check className="h-3 w-3 shrink-0 text-blue-600" />
+                        <Check className="h-3 w-3 shrink-0 text-green-700" />
                       )}
                     </div>
                   </SidebarMenuButton>
