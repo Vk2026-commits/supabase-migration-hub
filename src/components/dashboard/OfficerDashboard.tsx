@@ -832,6 +832,9 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
     { label: "Review and accept company offer", complete: Boolean(acceptedEmploymentOffer), tab: "employee-onboarding", locked: !onboardingOfferAvailable },
     { label: "Complete and submit employee onboarding", complete: employeeOnboardingSubmitted, tab: "employee-onboarding", locked: !acceptedEmploymentOffer },
   ];
+  const visibleOnboardingItems = pendingEmploymentOffer || acceptedEmploymentOffer
+    ? onboardingItems
+    : onboardingItems.slice(0, 6);
   const onboardingComplete = onboardingItems
     .filter((item) => !item.optional)
     .every((item) => item.complete);
@@ -1056,11 +1059,11 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           Application steps
         </CardTitle>
         <CardDescription>
-          Follow the numbered steps. Red means incomplete; green means complete. Optional items may be skipped. Offer and onboarding steps unlock later.
+          Follow the numbered steps. Red means incomplete; green means complete. Optional items may be skipped. Steps 7 and 8 appear when a company sends you an offer.
         </CardDescription>
       </CardHeader>
       <CardContent className={compact ? "grid gap-2 p-4 pt-2" : "grid gap-2"}>
-        {onboardingItems.map((item, index) => (
+        {visibleOnboardingItems.map((item, index) => (
           <button
             key={item.label}
             type="button"
