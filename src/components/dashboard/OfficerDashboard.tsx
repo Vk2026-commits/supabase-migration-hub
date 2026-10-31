@@ -2425,10 +2425,6 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           {/* Right Side Chat Panel and Interested Jobs */}
           {officerProfile?.id && activeTab !== "employee-onboarding" && (
             <div className="hidden w-96 shrink-0 border-l bg-muted/20 p-4 overflow-y-auto space-y-4 xl:block">
-              {!employmentConfirmedAt &&
-                !onboardingComplete &&
-                activeTab !== "hiring-application" &&
-                onboardingChecklist(true)}
               <div className="h-[250px]">
                 <OfficerChatPanel
                   officerId={officerProfile.id}
