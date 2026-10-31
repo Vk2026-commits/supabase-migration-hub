@@ -1334,17 +1334,16 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               />
             )}
 
-            {acceptedEmploymentOffer &&
-              !employeeOnboardingSubmitted &&
+            {!employeeOnboardingSubmitted &&
               !["not_hired", "terminated"].includes(hireDecisionStatus || "") &&
               activeTab !== "employee-onboarding" && (
-                <section aria-label="Onboarding action required" className="m-4 flex flex-col gap-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+                <section aria-label="Your next onboarding step" className="m-4 flex flex-col gap-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-6 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-wide">Action required · Onboarding incomplete</p>
-                    <h2 className="mt-1 text-xl font-bold">Complete your employee onboarding</h2>
-                    <p className="mt-2 text-sm">Your offer is accepted, but your onboarding is not finished. Complete the remaining forms and submit your packet to the company.</p>
+                    <p className="text-xs font-bold uppercase tracking-wide">Onboarding is not complete</p>
+                    <h2 className="mt-2 text-2xl font-bold">{acceptedEmploymentOffer ? "Action required: complete employee onboarding" : pendingEmploymentOffer ? "Action required: review your offer" : !applicationSubmitted ? "Action required: complete your hiring application" : "Next step: wait for your company’s offer"}</h2>
+                    <p className="mt-2 text-base">{acceptedEmploymentOffer ? "Your offer is accepted. Finish the remaining forms and submit your onboarding packet to the company." : pendingEmploymentOffer ? "Review and accept your company’s offer to unlock the employee onboarding forms." : !applicationSubmitted ? "Start here to continue your onboarding. Complete and submit your hiring application first. Employee onboarding forms unlock after you accept a company offer." : "Your application is submitted. Employee onboarding forms will unlock after you receive and accept an offer. No onboarding forms are available to complete yet."}</p>
                   </div>
-                  <Button className="h-auto shrink-0 whitespace-normal px-6 py-3" onClick={() => handleTabChange("employee-onboarding")}>Complete onboarding →</Button>
+                  {(acceptedEmploymentOffer || pendingEmploymentOffer || !applicationSubmitted) && <Button className="h-auto shrink-0 whitespace-normal px-6 py-4 text-base font-bold" onClick={() => handleTabChange(acceptedEmploymentOffer || pendingEmploymentOffer ? "employee-onboarding" : "hiring-application")}>{acceptedEmploymentOffer ? "Complete onboarding →" : pendingEmploymentOffer ? "Review offer →" : "Continue onboarding →"}</Button>}
                 </section>
               )}
 
