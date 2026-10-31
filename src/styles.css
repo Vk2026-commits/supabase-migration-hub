@@ -188,3 +188,20 @@
     }
   }
 }
+
+/* Respond to the actual form width, including when dashboard navigation is open. */
+.onboarding-form { container-type: inline-size; }
+.onboarding-form .form-fields-grid, .onboarding-form .upload-fields-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.onboarding-form :where(input, button, [role="combobox"]) { max-width: 100%; }
+.onboarding-form :where(label, h3, p) { overflow-wrap: normal; word-break: normal; }
+@container (min-width: 1100px) {
+  .onboarding-layout { grid-template-columns: 250px minmax(0, 1fr); }
+  .onboarding-navigation { display: block; }
+}
+
+@container (min-width: 1100px) { .onboarding-step-picker { display: none; } }
+.workspace-content { container-name: workspace; container-type: inline-size; }
+@container workspace (max-width: 700px) {
+  .operations-workspace .grid:where([class*="sm:grid-cols"], [class*="md:grid-cols"], [class*="lg:grid-cols"]) { grid-template-columns: minmax(0, 1fr); }
+  .operations-workspace .grid > [class*="col-span"] { grid-column: auto; }
+}

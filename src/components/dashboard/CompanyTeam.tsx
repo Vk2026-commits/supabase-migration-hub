@@ -236,11 +236,12 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                 Existing users are added immediately. New users receive a secure We Find Guards
                 account invitation by email.
               </p>
-              <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
                 <div className="space-y-2">
                   <Label htmlFor="team-email">Email address</Label>
                   <Input
                     id="team-email"
+                    className="h-10"
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
@@ -253,7 +254,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                     value={role}
                     onValueChange={(value) => setRole(value as Exclude<TeamRole, "owner">)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-10 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -263,7 +264,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                     </SelectContent>
                   </Select>
                 </div>
-                <Button type="button" onClick={invite} disabled={submitting}>
+                <Button className="h-10" type="button" onClick={invite} disabled={submitting}>
                   <Mail className="mr-2 h-4 w-4" />
                   {submitting ? "Adding…" : "Add member"}
                 </Button>
@@ -321,7 +322,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                       requestRoleChange(member, value as TeamRole)
                     }
                   >
-                    <SelectTrigger className="w-44">
+                    <SelectTrigger className="h-10 w-full sm:w-48">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -340,6 +341,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                   <Button
                     type="button"
                     size="icon"
+                    className="h-10 w-10"
                     variant="ghost"
                     onClick={() => remove(member)}
                     aria-label={`Remove ${member.full_name || member.email}`}

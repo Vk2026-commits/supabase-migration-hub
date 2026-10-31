@@ -538,7 +538,7 @@ export function ApplicantReviewDialog({
         <DialogHeader className="sticky top-0 z-20 border-b bg-background/95 px-5 py-5 backdrop-blur sm:px-8">
           <div className="flex flex-col gap-4 pr-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <DialogTitle className="text-2xl">{title}</DialogTitle>
+              <DialogTitle className="text-2xl">{data?.companyName && <span className="block text-sm text-primary">{data.companyName}</span>}{title}</DialogTitle>
               <DialogDescription>
                 Complete applicant review for {application?.job_posting?.title || "your position"}
               </DialogDescription>

@@ -147,7 +147,7 @@ export default function JobApplicationsList({ companyId, onOpenOfficer }: JobApp
                       <ProfileAvatar name={application.officer_profiles?.profiles?.full_name} email={application.officer_profiles?.profiles?.email} src={application.officer_profiles?.avatar_url} className="h-9 w-9 shrink-0" />
                       <div className="min-w-0">
                         <CardTitle className="text-sm">
-                          {application.officer_profiles?.profiles?.full_name || "Officer"}
+                          <button type="button" className="text-left hover:underline" onClick={() => application.officer_profiles?.id && onOpenOfficer?.(application.officer_profiles.id)}>{application.officer_profiles?.profiles?.full_name || "Officer"}</button>
                         </CardTitle>
                         <CardDescription>
                           {application.officer_profiles?.title || "Security Officer"}

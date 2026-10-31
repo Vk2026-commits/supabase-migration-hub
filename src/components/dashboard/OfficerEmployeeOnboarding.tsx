@@ -60,6 +60,10 @@ type OnboardingData = {
   emergencyRelationship: string;
   emergencyPhone: string;
   emergencyAltPhone: string;
+  emergencySecondName: string;
+  emergencySecondRelationship: string;
+  emergencySecondPhone: string;
+  emergencySecondAltPhone: string;
   physicianName: string;
   medicalNotes: string;
   uniformShirt: string;
@@ -151,7 +155,6 @@ const newBankAccount = (allocationType: "amount" | "entire" = "entire", id = `ba
 });
 
 const policyItems = [
-  ["property", "Company property and equipment", "/forms/07-receipt-company-property.pdf"],
   ["confidentiality", "Confidentiality agreement", "/forms/09-confidentialityagreement.pdf"],
   ["trackTik", "TrackTik login and usage", "/forms/11-track-tik-login-info-sheet.pdf"],
   ["temporary", "Temporary employment acknowledgement", "/forms/12-temporary-employeement-acknowldgement.pdf"],
@@ -164,7 +167,6 @@ const policyItems = [
   ["jobDescription", "Security officer job description", "/forms/20-job-description.pdf"],
   ["social", "Social and digital media conduct", "/forms/21-social-and-digital-media-code-of-conduct-for-your-organization.pdf"],
   ["workersComp", "Workers’ compensation notice", "/forms/22-texas-department-of-insurance.pdf"],
-  ["uniform", "Uniform receipt and return checklist", "/forms/23-uniform-check-list.pdf"],
   ["schedule", "Initial work schedule", "/forms/24-kairos-schedule.pdf"],
   ["handbook", "Employee handbook acknowledgment", "/forms/06-acknowledgement-of-handbook.pdf"],
 ] as const;
@@ -272,36 +274,6 @@ const policyContent: Record<string, { intro: string; paragraphs?: string[]; bull
   },
 };
 
-const propertyEquipmentRows = [
-  ["Building KeyCard", "Building key/card"],
-  ["Identification Badge", "Identification badge"],
-  ["Mobile Device Enter service provider and model", "Mobile device"],
-  ["Parking Pass", "Parking pass"],
-  ["Credit Card Enter issuer last four digits and expiration date", "Company credit card"],
-  ["Home Computer Enter make and model", "Home computer"],
-  ["Laptop Computer Enter make and model", "Laptop computer"],
-  ["Printer Copier Scanner", "Printer/copier/scanner"],
-] as const;
-
-const propertyAdditionalRows = [
-  ["Fax machine", "Fax machine"],
-  ["Company Car Enter year make model mileage", "Company vehicle"],
-  ["Customer Contact List", "Customer contact list"],
-  ["CoWorker Contact List", "Coworker contact list"],
-  ["Other Enter Details", "Other item 1"],
-  ["Other Enter Details_2", "Other item 2"],
-] as const;
-
-const issuedItemOptions = ["Building key/card", "Identification badge", "Mobile device", "Parking pass", "Laptop", "Uniform", "Radio", "Flashlight"];
-
-const uniformChecklistRows = [
-  "Long sleeve shirt (complete with patches)", "Short sleeve button-up shirt (complete with patches)",
-  "Short sleeve shirt (complete with patches)", "High-visibility traffic long sleeve shirt (complete with patches)",
-  "High-visibility traffic short sleeve shirt (complete with patches)", "Tie", "Silver badge", "Silver SOs", "Pants",
-  "Bomber jacket", "Jacket", "Beanie hat", "Baseball hat", "Flashlight", "Flag patch", "Radio", "ID badge",
-  "Additional jacket", "Additional beanie or baseball hat", "Additional flashlight", "Additional flag patch",
-] as const;
-
 const scheduleDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
 
 const normalizeOfferTime = (value: string) => {
@@ -387,6 +359,10 @@ const initialData: OnboardingData = {
   emergencyRelationship: "",
   emergencyPhone: "",
   emergencyAltPhone: "",
+  emergencySecondName: "",
+  emergencySecondRelationship: "",
+  emergencySecondPhone: "",
+  emergencySecondAltPhone: "",
   physicianName: "",
   medicalNotes: "",
   uniformShirt: "",
@@ -745,10 +721,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
 
   const policyDetailsComplete = (key: string) => {
     if (key === "trackTik") return Boolean(data.trackTikUsername);
-    if (key === "uniform") {
-      const fields = data.policyAcknowledgements[key]?.documentFields || {};
-      return fields.uniformNone === "true" || uniformChecklistRows.some((_, index) => fields[`uniformReceived:${index}`] === "true" || fields[`uniformReturned:${index}`] === "true");
-    }
     if (key === "schedule") {
       return Boolean(data.scheduledPost && data.worksiteAddress && data.worksiteCity && data.worksiteState && data.worksiteZip && data.startDate && data.scheduledShift);
     }
@@ -1208,7 +1180,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     );
 
   return (
-    <form id="employee-onboarding-top" onSubmit={submit} className="w-full max-w-none scroll-mt-4 pb-24 lg:pb-8">
+    <form id="employee-onboarding-top" onSubmit={submit} className="onboarding-form w-full max-w-none scroll-mt-4 pb-24 lg:pb-8">
       {status === "correction_requested" && correctionRequests.length > 0 && (
         <div className="mb-5 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950">
           <p className="font-semibold">Your company returned part of the onboarding packet for correction</p>
@@ -1243,8 +1215,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
       </div>
-      <div className="grid items-start gap-8 lg:grid-cols-[270px_minmax(0,900px)] lg:justify-center">
-        <aside className="hidden lg:block">
+      <div className="onboarding-layout grid items-start gap-8">
+        <aside className="onboarding-navigation hidden">
           <nav className="sticky top-4 space-y-2 rounded-2xl border bg-zinc-100 p-3 shadow-inner">
             {steps.map((step, index) => (
               <div key={step[0]}>
@@ -1273,7 +1245,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
           </nav>
         </aside>
         <main className="min-w-0">
-          <div className="mb-4 lg:hidden">
+          <div className="onboarding-step-picker mb-4">
             <div className="mb-3 flex justify-between"><span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">Page {currentStep + 1} of 8</span><span className="text-sm text-muted-foreground">{progress}% complete</span></div>
             <div className="flex gap-2 overflow-x-auto pb-2">
               {steps.map((step, index) => <button key={step[0]} type="button" onClick={() => go(index)} aria-label={`Open ${step[0]}`} className={`flex h-12 min-w-12 items-center justify-center rounded-lg border text-sm font-bold shadow-sm ${index === currentStep ? "border-primary bg-primary text-primary-foreground" : completeStep(index) ? "border-green-300 bg-green-50 text-green-700" : "bg-background text-muted-foreground"}`}>{completeStep(index) && index !== currentStep ? <Check className="h-4 w-4" /> : index + 1}</button>)}
@@ -1317,7 +1289,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                         <p className="mt-1 text-sm text-muted-foreground">Optionally upload clear copies of your driver’s license and Social Security card. Files are kept in the private onboarding archive and are available only to you and the hiring company.</p>
                       </div>
                     </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                    <div className="upload-fields-grid mt-5 grid gap-3">
                       {[
                         ["driver-license-front", "Driver’s license — front"],
                         ["driver-license-back", "Driver’s license — back"],
@@ -1346,14 +1318,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                     </div>
                   </section>
                   <div className="space-y-6">
-                      <div className="grid gap-5 md:grid-cols-3 2xl:grid-cols-2">
+                      <div className="grid gap-5 form-fields-grid">
                     <Field label="Legal first name" value={data.legalFirstName} onChange={(v) => update("legalFirstName", v)} required />
                     <Field label="Middle initial" value={data.middleInitial} onChange={(v) => update("middleInitial", v)} />
                     <Field label="Legal last name" value={data.legalLastName} onChange={(v) => update("legalLastName", v)} required />
-                    <div className="md:col-span-3 2xl:col-span-2">
+                    <div className="col-span-full">
                       <Field label="Other last names used" value={data.otherLastNames} onChange={(v) => update("otherLastNames", v)} />
                     </div>
-                    <div className="md:col-span-2 2xl:col-span-1">
+                    <div className="col-span-full">
                       <Field label="Street address" value={data.address} onChange={(v) => update("address", v)} required />
                     </div>
                     <Field label="Apartment number" value={data.apartmentNumber} onChange={(v) => update("apartmentNumber", v)} />
@@ -1531,12 +1503,17 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               )}
               {currentStep === 4 && (
                 <div className="space-y-6">
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Emergency contact record</strong><p className="mt-1">Enter the person your employer should contact in an emergency. Optional medical instructions are shared only as part of this employment record.</p></div>
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><strong>Emergency contact record</strong><p className="mt-1">Enter the people your employer should contact in an emergency. Optional medical instructions are shared only as part of this employment record.</p></div>
                   <div className="grid gap-5 md:grid-cols-2">
                     <Field label="Emergency contact name" value={data.emergencyName} onChange={(v) => update("emergencyName", v)} required />
                     <Field label="Relationship" value={data.emergencyRelationship} onChange={(v) => update("emergencyRelationship", v)} required />
                     <Field label="Primary phone" type="tel" value={data.emergencyPhone} onChange={(v) => update("emergencyPhone", v)} required />
                     <Field label="Alternate phone" type="tel" value={data.emergencyAltPhone} onChange={(v) => update("emergencyAltPhone", v)} />
+                    <h3 className="font-semibold md:col-span-2">Second emergency contact</h3>
+                    <Field label="Second contact name" value={data.emergencySecondName} onChange={(v) => update("emergencySecondName", v)} />
+                    <Field label="Second contact relationship" value={data.emergencySecondRelationship} onChange={(v) => update("emergencySecondRelationship", v)} />
+                    <Field label="Second contact phone" type="tel" value={data.emergencySecondPhone} onChange={(v) => update("emergencySecondPhone", v)} />
+                    <Field label="Second contact alternate phone" type="tel" value={data.emergencySecondAltPhone} onChange={(v) => update("emergencySecondAltPhone", v)} />
                     <Field label="Physician name" value={data.physicianName} onChange={(v) => update("physicianName", v)} />
                   </div>
                   <div className="space-y-2">
@@ -1583,13 +1560,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
                                   <Field label="Date signed" type="date" value={acknowledgement.signatureDate} onChange={(value) => updatePolicyAcknowledgement(key, { signatureDate: value })} required />
                                   <div className="space-y-2"><Label>Notes for this section</Label><Textarea rows={3} value={acknowledgement.notes} onChange={(event) => updatePolicyAcknowledgement(key, { notes: event.target.value })} placeholder="Optional" /></div>
                                 </div>
-                                {key === "property" && (
-                                  <PropertyDocumentFields acknowledgement={acknowledgement} data={data} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
-                                )}
                                 {key === "trackTik" && <TrackTikDocumentFields data={data} onChange={updateTrackTik} />}
-                                {key === "uniform" && (
-                                  <UniformDocumentFields acknowledgement={acknowledgement} onChange={(field, value) => updatePolicyAcknowledgement(key, { documentFields: { ...acknowledgement.documentFields, [field]: value } })} />
-                                )}
                                 {key === "schedule" && (
                                   <ScheduleDocumentFields data={data} />
                                 )}
@@ -1609,20 +1580,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
               )}
               {currentStep === 6 && (
                 <div className="space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold">Company property and uniform checklist</h3>
-                    <p className="text-sm text-muted-foreground">Check only the items your employer has issued to you.</p>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {issuedItemOptions.map((item) => (
-                      <label key={item} className="flex items-center gap-3 rounded-xl border p-4">
-                        <Checkbox checked={Boolean(data.issuedItems[item])} onCheckedChange={(v) => update("issuedItems", { ...data.issuedItems, [item]: Boolean(v) })} />
-                        <span className="text-sm font-medium">{item}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="grid gap-5 border-t pt-6 md:grid-cols-4">
-                    <Field label="Employee ID number" value={data.employeeIdNumber} onChange={(v) => update("employeeIdNumber", v)} />
+                  <h3 className="text-lg font-semibold">Uniform sizes</h3>
+                  <div className="grid gap-5 border-t pt-6 sm:grid-cols-2">
                     <Field label="Shirt size" value={data.uniformShirt} onChange={(v) => update("uniformShirt", v)} required />
                     <Field label="Pants size" value={data.uniformPants} onChange={(v) => update("uniformPants", v)} required />
                     <Field label="Shoe size" value={data.uniformShoes} onChange={(v) => update("uniformShoes", v)} required />
@@ -1724,46 +1683,6 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
   );
 }
 
-function PropertyDocumentFields({ acknowledgement, data, onChange }: { acknowledgement: PolicyAcknowledgement; data: OnboardingData; onChange: (field: string, value: string) => void }) {
-  const fields = acknowledgement.documentFields || {};
-  const value = (field: string) => fields[field] || "";
-
-  return (
-    <section className="space-y-5 rounded-2xl border bg-muted/10 p-4 sm:p-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Company property receipt</p>
-        <h4 className="mt-1 text-lg font-semibold">Record issued company property</h4>
-        <p className="mt-1 text-sm text-muted-foreground">Your name, employee ID, and hire date are filled from onboarding. Add only property actually issued to you. Return information can be completed later when an item is returned.</p>
-      </div>
-      <div className="grid gap-3 rounded-xl border bg-background p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div><p className="text-xs text-muted-foreground">Employee name</p><p className="font-medium">{acknowledgement.printedName || "Not entered"}</p></div>
-        <div><p className="text-xs text-muted-foreground">Date of hire</p><p className="font-medium">{data.startDate || acknowledgement.signatureDate || "Not entered"}</p></div>
-        <div><p className="text-xs text-muted-foreground">Employee ID</p><p className="font-medium">{data.employeeIdNumber || "Not assigned"}</p></div>
-        <Field label="Department" value={value("Text4") || "Security"} onChange={(next) => onChange("Text4", next)} />
-      </div>
-      <div className="space-y-4">
-        {propertyEquipmentRows.map(([pdfName, label]) => (
-          <div key={pdfName} className="rounded-xl border bg-background p-4">
-            <p className="mb-3 font-semibold">{label}</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Quantity received" type="number" value={value(`Qty${pdfName}`)} onChange={(next) => onChange(`Qty${pdfName}`, next)} placeholder="0" />
-              <Field label="Number, ID, or details" value={value(`Number or ID${pdfName}`)} onChange={(next) => onChange(`Number or ID${pdfName}`, next)} placeholder="Optional identifier" />
-              <Field label="Returned to" value={value(`Returned To${pdfName}`)} onChange={(next) => onChange(`Returned To${pdfName}`, next)} placeholder="Complete when returned" />
-              <Field label="Return date" type="date" value={value(`Date${pdfName}`)} onChange={(next) => onChange(`Date${pdfName}`, next)} />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {propertyAdditionalRows.map(([pdfName, label]) => (
-          <Field key={pdfName} label={label} value={value(pdfName)} onChange={(next) => onChange(pdfName, next)} placeholder="Quantity or details, if issued" />
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">The company representative signature remains for the employer to complete.</p>
-    </section>
-  );
-}
-
 function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onChange: (field: "trackTikUsername" | "employeeIdNumber" | "trackTikPasswordSet", value: string | boolean) => void }) {
   return (
     <section className="space-y-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
@@ -1787,34 +1706,6 @@ function TrackTikDocumentFields({ data, onChange }: { data: OnboardingData; onCh
         <div className="rounded-xl border bg-background p-4"><p className="text-xs text-muted-foreground">Temporary password</p><p className="mt-1 font-mono text-base font-semibold">#Security2020</p><p className="mt-1 text-xs text-muted-foreground">Change this after your first sign-in</p></div>
       </div>
       <Field label="Employee number (optional)" value={data.employeeIdNumber} onChange={(value) => onChange("employeeIdNumber", value)} placeholder="The company can assign this later" />
-    </section>
-  );
-}
-
-function UniformDocumentFields({ acknowledgement, onChange }: { acknowledgement: PolicyAcknowledgement; onChange: (field: string, value: string) => void }) {
-  const fields = acknowledgement.documentFields || {};
-  const toggle = (field: string, checked: boolean) => onChange(field, checked ? "true" : "");
-  return (
-    <section className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Uniform checklist</p>
-        <h4 className="mt-1 text-lg font-semibold">Record each uniform item digitally</h4>
-        <p className="mt-1 text-sm text-muted-foreground">Mark every item received or returned. Your selections become part of the official company record.</p>
-      </div>
-      <label className="flex items-center gap-3 rounded-xl border bg-background p-4">
-        <Checkbox checked={fields.uniformNone === "true"} onCheckedChange={(value) => toggle("uniformNone", Boolean(value))} />
-        <span className="text-sm font-medium">No uniform items were issued</span>
-      </label>
-      <div className="overflow-hidden rounded-xl border bg-background">
-        <div className="grid grid-cols-[1fr_92px_92px] gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-semibold"><span>Item</span><span>Received</span><span>Returned</span></div>
-        {uniformChecklistRows.map((label, index) => (
-          <div key={label} className="grid grid-cols-[1fr_92px_92px] items-center gap-2 border-b px-3 py-3 last:border-b-0">
-            <span className="text-sm">{label}</span>
-            <Checkbox aria-label={`${label} received`} checked={fields[`uniformReceived:${index}`] === "true"} onCheckedChange={(value) => toggle(`uniformReceived:${index}`, Boolean(value))} />
-            <Checkbox aria-label={`${label} returned`} checked={fields[`uniformReturned:${index}`] === "true"} onCheckedChange={(value) => toggle(`uniformReturned:${index}`, Boolean(value))} />
-          </div>
-        ))}
-      </div>
     </section>
   );
 }

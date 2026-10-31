@@ -1,3 +1,5 @@
+import { NoOfferButton } from "./NoOfferButton";
+import { OfficerProfileDetails } from "./OfficerProfileDetails";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import "./ApplicantRoster.css";
 import { supabase } from "@/integrations/supabase/client";
@@ -130,6 +132,7 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
     };
   }
 
+  if (app.status === "not_offered") return { label: "No offer extended", tone: "border-slate-300 bg-slate-50 text-slate-700" };
   if (app.interview?.attendance_status === "attended")
     return {
       label: "Interview attended — next: Send offer",
@@ -201,6 +204,7 @@ const getNextStep = (app: any, onboarding: ReturnType<typeof getOnboardingStatus
       label: "Next: Resend or revise offer",
       tone: "border-red-300 bg-red-50 text-red-800",
     },
+    not_offered: { label: "No offer extended", tone: "border-slate-300 bg-slate-50 text-slate-700" },
     declined: { label: "Offer declined", tone: "border-slate-300 bg-slate-50 text-slate-700" },
   };
   return (
@@ -229,6 +233,15 @@ const JobApplicants = ({
 }: JobApplicantsProps) => {
   const [applications, setApplications] = useState<any[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => {
+      document.querySelectorAll<HTMLDetailsElement>("details.applicant-more[open]").forEach((menu) => {
+        if (event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+      });
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, []);
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [reviewApplication, setReviewApplication] = useState<any>(null);
@@ -509,6 +522,7 @@ const JobApplicants = ({
           }}
           actions={
             <>
+              {activeApplication.status === "interview_completed" && <NoOfferButton applicationId={activeApplication.id} officerName={activeApplication.officerName} onChanged={loadApplications} />}
               <Button
                 size="sm"
                 variant="secondary"
@@ -548,6 +562,7 @@ const JobApplicants = ({
             </>
           }
           tabs={[
+            { value: "profile", label: "Profile", content: <OfficerProfileDetails officerId={activeApplication.officer.id} /> },
             {
               value: "overview",
               label: "Overview",
@@ -1029,14 +1044,15 @@ const JobApplicants = ({
                           src={app.officerAvatar}
                         />
                         <div className="min-w-0">
-                          <span className="block truncate font-semibold leading-tight text-foreground">
+                          <button type="button" onClick={() => isPaidSubscriber && onOpenOfficer?.(app.officer.id)} className="block max-w-full truncate text-left font-semibold leading-tight text-foreground hover:underline">
                             {isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}
-                          </span>
+                          </button>
                           <span className="mt-1 block truncate text-xs text-muted-foreground">
                             {app.job_posting?.title || "Security Officer"}
                           </span>
                         </div>
                       </div>
+                      {app.interview?.scheduled_at && <p className="pl-12 text-xs font-medium text-red-800">Interview: {new Date(app.interview.scheduled_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>}
                       <div className="flex flex-wrap gap-x-3 gap-y-1 pl-12">
                         {isPaidSubscriber && app.officerPhone && (
                           <a
@@ -1090,6 +1106,7 @@ const JobApplicants = ({
 
                   {isPaidSubscriber ? (
                     <div className="applicant-roster-actions">
+                      {app.status === "interview_completed" && <NoOfferButton applicationId={app.id} officerName={app.officerName} onChanged={loadApplications} />}
                       {nextStep.label === "Next: Review application" && (
                         <Button
                           type="button"

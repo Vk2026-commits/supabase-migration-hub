@@ -83,6 +83,7 @@ export function OfficerRecordShell({
                 <h1 className="truncate text-2xl font-bold sm:text-3xl">{officer.name}</h1>
                 {officer.employmentStatus ? <Badge variant="secondary">{officer.employmentStatus}</Badge> : null}
               </div>
+              <a className="mt-2 block text-sm font-medium text-primary underline" href="https://tops.portal.texas.gov/psp-self-service/login/auth" target="_blank" rel="noopener noreferrer">Texas Online Private Security (TOPS)</a>
               <p className="mt-1 text-sm text-muted-foreground">
                 {officer.title || "Security Officer"}
                 {officer.officerNumber ? ` · Officer #${officer.officerNumber}` : ""}

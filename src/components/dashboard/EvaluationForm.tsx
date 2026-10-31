@@ -15,6 +15,7 @@ interface EvaluationFormProps {
 
 export default function EvaluationForm({ evaluation, onComplete }: EvaluationFormProps) {
   const [loading, setLoading] = useState(false);
+  const [ratingNotes, setRatingNotes] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     overall_rating: 0,
     attendance_rating: 0,
@@ -34,7 +35,7 @@ export default function EvaluationForm({ evaluation, onComplete }: EvaluationFor
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.overall_rating === 0 || formData.would_rehire === "") {
       toast.error("Please complete all required ratings");
       return;
@@ -43,10 +44,11 @@ export default function EvaluationForm({ evaluation, onComplete }: EvaluationFor
     setLoading(true);
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("evaluations")
         .update({
           ...formData,
+          rating_notes: ratingNotes,
           would_rehire: formData.would_rehire === "yes",
           completed_date: new Date().toISOString(),
         })
@@ -64,43 +66,6 @@ export default function EvaluationForm({ evaluation, onComplete }: EvaluationFor
     }
   };
 
-  const RatingSelector = ({ 
-    label, 
-    value, 
-    onChange 
-  }: { 
-    label: string; 
-    value: number; 
-    onChange: (value: number) => void;
-  }) => (
-    <div className="space-y-2">
-      <Label>{label} *</Label>
-      <div className="flex gap-2">
-        {[1, 2, 3, 4, 5].map((rating) => (
-          <button
-            key={rating}
-            type="button"
-            onClick={() => onChange(rating)}
-            className={`p-2 rounded transition-colors ${
-              value >= rating 
-                ? "text-yellow-500" 
-                : "text-gray-300 hover:text-yellow-300"
-            }`}
-          >
-            <Star className="w-8 h-8" fill={value >= rating ? "currentColor" : "none"} />
-          </button>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {value === 0 && "Click to rate"}
-        {value === 1 && "Poor"}
-        {value === 2 && "Fair"}
-        {value === 3 && "Good"}
-        {value === 4 && "Very Good"}
-        {value === 5 && "Excellent"}
-      </p>
-    </div>
-  );
 
   return (
     <Card>
@@ -116,30 +81,40 @@ export default function EvaluationForm({ evaluation, onComplete }: EvaluationFor
         <form onSubmit={handleSubmit} className="space-y-6">
           <RatingSelector
             label="Overall Performance"
+            note={ratingNotes["Overall Performance"] || ""}
+            onNoteChange={(value) => setRatingNotes((current) => ({ ...current, ["Overall Performance"]: value }))}
             value={formData.overall_rating}
             onChange={(value) => setFormData({ ...formData, overall_rating: value })}
           />
 
           <RatingSelector
             label="Attendance & Punctuality"
+            note={ratingNotes["Attendance & Punctuality"] || ""}
+            onNoteChange={(value) => setRatingNotes((current) => ({ ...current, ["Attendance & Punctuality"]: value }))}
             value={formData.attendance_rating}
             onChange={(value) => setFormData({ ...formData, attendance_rating: value })}
           />
 
           <RatingSelector
             label="Reliability"
+            note={ratingNotes["Reliability"] || ""}
+            onNoteChange={(value) => setRatingNotes((current) => ({ ...current, ["Reliability"]: value }))}
             value={formData.reliability_rating}
             onChange={(value) => setFormData({ ...formData, reliability_rating: value })}
           />
 
           <RatingSelector
             label="Professionalism"
+            note={ratingNotes["Professionalism"] || ""}
+            onNoteChange={(value) => setRatingNotes((current) => ({ ...current, ["Professionalism"]: value }))}
             value={formData.professionalism_rating}
             onChange={(value) => setFormData({ ...formData, professionalism_rating: value })}
           />
 
           <RatingSelector
             label="Quality of Work"
+            note={ratingNotes["Quality of Work"] || ""}
+            onNoteChange={(value) => setRatingNotes((current) => ({ ...current, ["Quality of Work"]: value }))}
             value={formData.quality_of_work_rating}
             onChange={(value) => setFormData({ ...formData, quality_of_work_rating: value })}
           />
@@ -191,3 +166,47 @@ export default function EvaluationForm({ evaluation, onComplete }: EvaluationFor
     </Card>
   );
 }
+
+const RatingSelector = ({
+    label,
+    value,
+    onChange,
+    note,
+    onNoteChange
+  }: {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    note: string;
+    onNoteChange: (value: string) => void;
+  }) => (
+    <div className="space-y-2">
+      <Label>{label} *</Label>
+      <div className="flex gap-2">
+        {[1, 2, 3, 4, 5].map((rating) => (
+          <button
+            key={rating}
+            type="button"
+            onClick={() => onChange(rating)}
+            className={`p-2 rounded transition-colors ${
+              value >= rating
+                ? "text-yellow-500"
+                : "text-gray-300 hover:text-yellow-300"
+            }`}
+          >
+            <Star className="w-8 h-8" fill={value >= rating ? "currentColor" : "none"} />
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {value === 0 && "Click to rate"}
+        {value === 1 && "Poor"}
+        {value === 2 && "Fair"}
+        {value === 3 && "Good"}
+        {value === 4 && "Very Good"}
+        {value === 5 && "Excellent"}
+      </p>
+      <Label htmlFor={`note-${label}`}>{label} notes</Label>
+      <Textarea id={`note-${label}`} value={note} onChange={(event) => onNoteChange(event.target.value)} placeholder={`Explain the ${label.toLowerCase()} rating`} />
+    </div>
+  );

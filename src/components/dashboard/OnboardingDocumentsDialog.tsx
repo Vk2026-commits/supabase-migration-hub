@@ -33,6 +33,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
   const [currentPage, setCurrentPage] = useState(1);
   const [pageCount, setPageCount] = useState(0);
   const [loadError, setLoadError] = useState("");
+  const [missingDocuments, setMissingDocuments] = useState<string[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionArea, setCorrectionArea] = useState("");
@@ -53,6 +54,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
       setCurrentPage(1);
       setPageCount(0);
       setLoadError("");
+      setMissingDocuments([]);
       try {
         const packetId = application.onboardingProgress?.packet_id;
         if (!packetId) throw new Error("This officer has not started an onboarding packet yet");
@@ -65,7 +67,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
             .order("submitted_at", { ascending: true }),
           (supabase as any)
             .from("officer_onboarding_packets")
-            .select("id,hire_id,hiring_application_id,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at")
+            .select("id,hire_id,hiring_application_id,company_name,form_data,i9_document_path,i9_submitted_at,w4_document_path,w4_submitted_at")
             .eq("id", packetId)
             .maybeSingle(),
         ]);
@@ -73,6 +75,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
         if (packetResult.error) throw packetResult.error;
 
         const entries: any[] = [];
+        const failedLabels: string[] = [];
         const hiringApplicationId = packetResult.data?.hiring_application_id || application.hiringApplicationId;
         if (hiringApplicationId) {
           const { data: hiringApplication } = await (supabase as any)
@@ -83,14 +86,48 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
           if (hiringApplication?.application_data) {
             try {
               const snapshot = hiringApplication.application_data as GuardApplicationData;
-              const applicationBlob = await generateGuardApplicationPDF({ ...snapshot, licenseLevels: snapshot.licenseLevels || [], workHistory: snapshot.workHistory || [], references: snapshot.references || [] }, "blob");
+              const applicationBlob = await generateGuardApplicationPDF({ ...snapshot, companyName: hiringApplication.company_name || snapshot.companyName, licenseLevels: snapshot.licenseLevels || [], workHistory: snapshot.workHistory || [], references: snapshot.references || [] }, "blob");
               if (applicationBlob instanceof Blob) entries.push({ id: `application-${hiringApplicationId}`, document_label: "Security Officer Application", version: null, submitted_at: "", document_type: "hiring-application", blob: applicationBlob });
             } catch (error) {
               console.warn("The submitted application could not be added to this packet", error);
+              failedLabels.push("Submitted application");
             }
           }
         }
 
+        if (hiringApplicationId) {
+          const evidence = await (supabase as any).from("application_evidence_files").select("id,label,storage_path,mime_type,archived_at").eq("hiring_application_id", hiringApplicationId);
+          if (evidence.error) throw evidence.error;
+          if (evidence.data?.length) {
+            const signed = await supabase.storage.from("application-evidence").createSignedUrls(evidence.data.map((file: any) => file.storage_path), 3600);
+            if (signed.error) throw signed.error;
+            const links = new Map((signed.data || []).map((file: any) => [file.path, file.signedUrl]));
+            entries.push(...evidence.data.map((file: any) => ({ id: file.id, document_label: file.label, document_type: "application-evidence", submitted_at: file.archived_at, source_url: links.get(file.storage_path), storage_path: file.storage_path })));
+          }
+        }
+        const form = packetResult.data?.form_data;
+        if (form) {
+          const { jsPDF } = await import("jspdf");
+          const summary = new jsPDF();
+          summary.setFontSize(16);
+          const heading = summary.splitTextToSize(packetResult.data.company_name || "Hiring company", 180);
+          summary.text(heading, 15, 20);
+          let y = 25 + heading.length * 7;
+          summary.setFontSize(12);
+          summary.text("Emergency contacts", 15, y); y += 12;
+          const lines = [
+            `Officer: ${application.officerName || [form.legalFirstName, form.legalLastName].filter(Boolean).join(" ")}`,
+            `Primary contact: ${form.emergencyName || "Not provided"}`,
+            `Relationship: ${form.emergencyRelationship || "Not provided"}`,
+            `Phone: ${form.emergencyPhone || "Not provided"}; alternate: ${form.emergencyAltPhone || "Not provided"}`,
+            `Second contact: ${form.emergencySecondName || "Not provided"}`,
+            `Relationship: ${form.emergencySecondRelationship || "Not provided"}`,
+            `Phone: ${form.emergencySecondPhone || "Not provided"}; alternate: ${form.emergencySecondAltPhone || "Not provided"}`,
+          ];
+          summary.setFontSize(10);
+          for (const line of lines) { const wrapped = summary.splitTextToSize(line, 180); if (y + wrapped.length * 6 > 275) { summary.addPage(); y = 20; } summary.text(wrapped, 15, y); y += wrapped.length * 6 + 5; }
+          entries.push({ id: "emergency-contacts", document_label: "Emergency contacts", document_type: "emergency-contacts", blob: summary.output("blob") });
+        }
         const hireId = packetResult.data?.hire_id || application.hireId;
         let offerId = application.offerId;
         if (!offerId && hireId) {
@@ -106,6 +143,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
             entries.push({ id: `offer-${offerId}`, document_label: "Accepted Officer Letter", version: null, submitted_at: "", document_type: "accepted-offer", blob: await response.blob(), source_url: offerPreview.url });
           } catch (error) {
             console.warn("The accepted offer could not be added to this packet", error);
+            failedLabels.push("Accepted offer");
           }
         }
 
@@ -118,7 +156,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
           entries.push({ id: `legacy-w4-${packetId}`, document_label: "Signed Form W-4", version: null, submitted_at: packetResult.data.w4_submitted_at, storage_path: packetResult.data.w4_document_path, document_type: "form-w4" });
         }
 
-        const storedEntries = entries.filter((document: any) => document.storage_path);
+        const storedEntries = entries.filter((document: any) => document.storage_path && !document.source_url);
         const signedResult = storedEntries.length
           ? await supabase.storage.from("onboarding-documents").createSignedUrls(storedEntries.map((document: any) => document.storage_path), 3600)
           : { data: [], error: null };
@@ -127,7 +165,6 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
 
         const merged = await PDFDocument.create();
         const prepared: DocumentRecord[] = [];
-        const failedLabels: string[] = [];
         let nextPage = 1;
         for (const entry of entries) {
           try {
@@ -194,6 +231,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
         }
 
         if (!prepared.length) throw new Error("No completed onboarding documents are available yet");
+        if (active) setMissingDocuments(failedLabels);
         if (failedLabels.length) toast.warning(`${failedLabels.length} document${failedLabels.length === 1 ? "" : "s"} could not be added to the preview`);
         const bytes = await merged.save();
         createdPacketUrl = URL.createObjectURL(new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }));
@@ -325,7 +363,8 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
               <DialogTitle className="flex items-center gap-2"><FileCheck2 className="h-5 w-5 text-primary" />{application?.officerName || "Officer"} onboarding packet</DialogTitle>
               <DialogDescription>Review every completed document together, accept the packet, or send a selected item back to the officer for correction.</DialogDescription>
             </div>
-            {packetUrl && <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setCorrectionOpen(true)} disabled={!correctionAvailable}><RotateCcw className="mr-2 h-4 w-4" />Send back for correction</Button><Button type="button" size="sm" variant="outline" onClick={() => void acceptOnboarding()} disabled={accepting || !hireId}><ShieldCheck className="mr-2 h-4 w-4" />{accepting ? "Accepting…" : "Reviewed — accept onboarding"}</Button><Button asChild size="sm"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download all as one PDF</a></Button></div>}
+            {missingDocuments.length > 0 && <p role="alert" className="text-sm text-red-700">Incomplete audit file. Missing: {missingDocuments.join(", ")}. Retry before using for an audit.</p>}
+            {packetUrl && <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setCorrectionOpen(true)} disabled={!correctionAvailable}><RotateCcw className="mr-2 h-4 w-4" />Send back for correction</Button><Button type="button" size="sm" variant="outline" onClick={() => void acceptOnboarding()} disabled={accepting || !hireId}><ShieldCheck className="mr-2 h-4 w-4" />{accepting ? "Accepting…" : "Reviewed — accept onboarding"}</Button><Button asChild size="sm"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download Texas audit file (PDF)</a></Button></div>}
           </div>
         </DialogHeader>
 

@@ -1,3 +1,4 @@
+import { interviewAddress } from "@/lib/companyAddress";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { shouldAutoOpenApplication } from "@/lib/hiringRestore";
@@ -1288,7 +1289,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
           employmentConfirmed={Boolean(employmentConfirmedAt && onboardingReviewedAt)}
         />
         <div className="flex min-w-0 flex-1">
-          <div className="min-w-0 flex-1">
+          <div className="workspace-content min-w-0 flex-1">
             <WorkspaceIdentityHeader
               name={profile?.full_name}
               email={profile?.email}
@@ -1406,7 +1407,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               <Card
                 className={`mb-6 rounded-2xl ${upcomingInterview.status === "cancelled" ? "border-red-200 bg-red-50/70" : "border-blue-200 bg-blue-50/70"}`}
               >
-                <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
+                <CardContent className="flex flex-col flex-wrap gap-4 p-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs font-bold uppercase tracking-wide text-primary">
@@ -1452,19 +1453,6 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                       </div>
                     ) : (
                       <>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Current appointment:{" "}
-                          {new Date(upcomingInterview.scheduled_at).toLocaleString([], {
-                            dateStyle: "full",
-                            timeStyle: "short",
-                          })}
-                        </p>
-                        <p className="mt-2 flex items-center gap-2 text-sm">
-                          <MapPin className="h-4 w-4" />
-                          {upcomingInterview.interview_type === "video"
-                            ? upcomingInterview.meeting_url
-                            : upcomingInterview.location}
-                        </p>
                         {upcomingInterview.change_requested_by === "company" &&
                           upcomingInterview.change_request_status === "pending" && (
                             <div className="mt-3 rounded-xl border border-violet-200 bg-white/80 p-3 text-sm">
@@ -1503,12 +1491,28 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                           <div className="mt-3 whitespace-pre-line rounded-xl border border-blue-200 bg-white/80 p-3 text-sm text-foreground">
                             <span className="font-semibold">Company instructions</span>
                             <br />
-                            {upcomingInterview.notes}
+                            {upcomingInterview.notes.replace(/fire arm/gi, "Firearm")}
                           </div>
                         )}
                       </>
                     )}
                   </div>
+                  <aside className="w-full rounded-xl border-2 border-red-300 bg-red-50 p-4 text-red-900 sm:w-72 sm:shrink-0" aria-label="Interview appointment details">
+                    <h3 className="font-bold uppercase tracking-wide">Interview details</h3>
+                        <p className="mt-1 text-base font-bold text-red-900">
+                          Current appointment:{" "}
+                          {new Date(upcomingInterview.scheduled_at).toLocaleString([], {
+                            dateStyle: "full",
+                            timeStyle: "short",
+                          })}
+                        </p>
+                        <p className="mt-3 flex items-start gap-2 text-base font-semibold">
+                          <MapPin className="h-4 w-4" />
+                          {upcomingInterview.interview_type === "video"
+                            ? upcomingInterview.meeting_url
+                            : interviewAddress(upcomingInterview.company_name, upcomingInterview.location)}
+                        </p>
+                  </aside>
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {upcomingInterview.status === "cancelled" && (
                       <Button

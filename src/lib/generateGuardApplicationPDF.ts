@@ -148,8 +148,9 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   doc.setFont("helvetica", "bold");
   doc.setTextColor(30, 81, 180);
   doc.setFontSize(20);
-  doc.text("WE FIND GUARDS", width / 2, y, { align: "center" });
-  y += 8;
+  const companyHeading = doc.splitTextToSize(data.companyName?.trim() || "WE FIND GUARDS", width - margin * 2);
+  doc.text(companyHeading, width / 2, y, { align: "center" });
+  y += companyHeading.length * 8;
   doc.setTextColor(20, 24, 35);
   doc.setFontSize(15);
   doc.text("SECURITY OFFICER EMPLOYMENT APPLICATION", width / 2, y, { align: "center" });

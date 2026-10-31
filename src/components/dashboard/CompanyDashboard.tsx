@@ -200,8 +200,6 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
   };
 
   const openApplicantNotification = async (notification: ApplicantPortalNotification) => {
-    const completed = await completeApplicantNotification(notification.id);
-    if (!completed) return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", "applicants");
     nextParams.set("officerId", notification.job_application_id);
@@ -459,7 +457,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
           companyId={companyProfile?.id || requestedCompanyId || undefined}
         />
 
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="workspace-content flex-1 flex flex-col min-w-0">
           <WorkspaceIdentityHeader name={accountProfile?.full_name || userName} email={accountProfile?.email} avatarUrl={accountProfile?.avatar_url} subtitle={formData.company_name || "Company representative"} onOpenAccount={() => selectTab("account")}>
               {companyWorkspaces.length > 1 && companyProfile && (
                 <div className="min-w-0 basis-full sm:ml-auto sm:w-full sm:max-w-[280px] sm:basis-auto">
@@ -1131,7 +1129,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
             {activeTab === "interested" && companyProfile && (
               <Tabs key={companyProfile.id} defaultValue="job-interest" className="space-y-3">
                 <TabsList className="h-auto flex-wrap justify-start"><TabsTrigger value="job-interest">Interested in your jobs</TabsTrigger><TabsTrigger value="shortlist">Company shortlist</TabsTrigger></TabsList>
-                <TabsContent value="job-interest" className="m-0"><JobApplicationsList companyId={companyProfile.id} onOpenOfficer={(officerId) => openOfficerRecord(officerId, "applicants")} /></TabsContent>
+                <TabsContent value="job-interest" className="m-0"><JobApplicationsList companyId={companyProfile.id} onOpenOfficer={(officerId) => { window.location.href = `/browse?companyId=${encodeURIComponent(companyProfile.id)}&officerId=${encodeURIComponent(officerId)}`; }} /></TabsContent>
                 <TabsContent value="shortlist" className="m-0">
                   <p className="mb-3 text-sm text-muted-foreground">Officers your company saved while browsing. This is separate from responses to your jobs.</p>
                   <InterestedOfficers

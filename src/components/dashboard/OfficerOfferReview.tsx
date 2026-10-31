@@ -1,3 +1,4 @@
+import { OfferSchedule } from "./OfferSchedule";
 import { useEffect, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -119,7 +120,7 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
         <CardContent className="space-y-7 p-6 sm:p-8">
           <OfferSection icon={BriefcaseBusiness} title="The role" description={`A ${employmentTypeLabel(terms.employmentType).toLowerCase()} ${terms.positionTitle} position reporting to ${terms.supervisorName}.`} tone="blue">
             <Detail label="What you will do" value={terms.duties} />
-            <Detail label="Schedule" value={`${terms.expectedSchedule}. The company expects approximately ${terms.expectedWeeklyHours} hours each week; hours are ${terms.hoursType === "guaranteed" ? "guaranteed" : "variable and not guaranteed"}.`} />
+            <OfferSchedule schedule={terms.expectedSchedule} /><Detail label="Weekly hours" value={`${terms.expectedWeeklyHours}; ${terms.hoursType === "guaranteed" ? "guaranteed" : "variable and not guaranteed"}`} />
             <Detail label="Where you will work" value={location} />
           </OfferSection>
 
@@ -137,7 +138,7 @@ export function OfficerOfferReview({ offer, officerName, onChanged }: { offer: a
 
           <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
             <h2 className="font-semibold text-foreground">Important before you decide</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">This is at-will employment with no guaranteed duration. Either you or the company may end employment at any time, subject to applicable law.</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">This is at-will employment with no guaranteed duration. Either you or the company may end employment at any time, subject to applicable law. <a className="underline text-primary" href="https://efte.twc.texas.gov/pay_and_policies_general.html" target="_blank" rel="noopener noreferrer">Read Texas Workforce Commission guidance</a></p>
             <p className="mt-2 text-sm font-medium text-foreground">Please respond by {readableDate(terms.acceptanceDeadline)}.</p>
             <p className="mt-1 text-xs text-muted-foreground">Prepared and signed by {terms.representativeName}, {terms.representativeTitle}. Policies referenced: {terms.policyReferences}.</p>
           </div>

@@ -174,7 +174,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
                   <div className="flex min-w-0 items-center gap-3">
                     <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} />
                     <div className="min-w-0">
-                    <p className="truncate font-semibold">{interest.officer_profiles?.profiles?.full_name}</p>
+                    <a className="block truncate font-semibold hover:underline" href={`/browse?companyId=${encodeURIComponent(companyId)}&officerId=${encodeURIComponent(interest.officer_profiles?.id || "")}`}>{interest.officer_profiles?.profiles?.full_name}</a>
                     <p className="truncate text-xs text-muted-foreground">{interest.officer_profiles?.title} · {interest.officer_profiles?.location || "Location not specified"}</p>
                     </div>
                   </div>
@@ -234,7 +234,7 @@ export default function InterestedOfficers({ companyId, subscriptionTier }: Inte
         ) : (
           <div className="overflow-hidden border bg-background">{filteredNotInterestedOfficers.map((interest) => (
             <div key={interest.id} className="flex flex-wrap items-center gap-3 border-b px-3 py-2.5 last:border-b-0 hover:bg-slate-50/70">
-                <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} /><div className="min-w-0 flex-1"><p className="truncate font-semibold">{interest.officer_profiles?.profiles?.full_name}</p><p className="truncate text-xs text-muted-foreground">{interest.officer_profiles?.title}</p></div><div className="flex shrink-0 gap-1.5 [&_button]:h-8 [&_button]:text-xs">
+                <ProfileAvatar name={interest.officer_profiles?.profiles?.full_name} email={interest.officer_profiles?.profiles?.email} src={interest.officer_profiles?.avatar_url} /><div className="min-w-0 flex-1"><a className="block truncate font-semibold hover:underline" href={`/browse?companyId=${encodeURIComponent(companyId)}&officerId=${encodeURIComponent(interest.officer_profiles?.id || "")}`}>{interest.officer_profiles?.profiles?.full_name}</a><p className="truncate text-xs text-muted-foreground">{interest.officer_profiles?.title}</p></div><div className="flex shrink-0 gap-1.5 [&_button]:h-8 [&_button]:text-xs">
                   <Button
                     variant="outline"
                     onClick={() =>

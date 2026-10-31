@@ -31,6 +31,7 @@ interface Analytics {
 
 const Admin = () => {
   const navigate = useNavigate();
+  const [activeAdminTab, setActiveAdminTab] = useState("analytics");
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [allOfficers, setAllOfficers] = useState<any[]>([]);
@@ -950,7 +951,7 @@ const Admin = () => {
           <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         </div>
 
-        <Tabs defaultValue="analytics" className="w-full">
+        <Tabs value={activeAdminTab} onValueChange={setActiveAdminTab} className="w-full">
           <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="browse">
@@ -1106,15 +1107,13 @@ const Admin = () => {
                 {analytics?.recentOfficers.map((officer) => (
                   <div key={officer.id} className="flex justify-between items-start border-b pb-2">
                     <div>
-                      <p className="font-medium">{officer.profiles?.full_name || "N/A"}</p>
+                      <button className="text-left font-medium text-primary hover:underline" onClick={() => { const record = allOfficers.find((item) => item.id === officer.id) || officer; setSelectedOfficer(record); setEditingOfficer({ ...record }); void loadOfficerDetails(officer.id, officer.user_id); setActiveAdminTab("browse"); }}>{officer.profiles?.full_name || "N/A"}</button>
                       <p className="text-sm text-muted-foreground">{officer.profiles?.email}</p>
                       <p className="text-xs text-muted-foreground">
                         {calculateDaysOnSite(officer.profiles?.created_at)} days on site
                       </p>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(officer.profiles?.created_at)}
-                    </span>
+                    <Button size="sm" variant="outline" onClick={() => { const record = allOfficers.find((item) => item.id === officer.id) || officer; setSelectedOfficer(record); setEditingOfficer({ ...record }); void loadOfficerDetails(officer.id, officer.user_id); setActiveAdminTab("browse"); }}>View profile</Button>
                   </div>
                 ))}
               </div>
@@ -1132,15 +1131,13 @@ const Admin = () => {
                 {analytics?.recentCompanies.map((company) => (
                   <div key={company.id} className="flex justify-between items-start border-b pb-2">
                     <div>
-                      <p className="font-medium">{company.company_name}</p>
+                      <button className="text-left font-medium text-primary hover:underline" onClick={() => { const record = allCompanies.find((item) => item.id === company.id) || company; setSelectedCompany(record); setEditingCompany({ ...record }); setActiveAdminTab("company-profiles"); }}>{company.company_name}</button>
                       <p className="text-sm text-muted-foreground">{company.profiles?.email}</p>
                       <p className="text-xs text-muted-foreground">
                         {calculateDaysOnSite(company.profiles?.created_at)} days on site
                       </p>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDate(company.profiles?.created_at)}
-                    </span>
+                    <Button size="sm" variant="outline" onClick={() => { const record = allCompanies.find((item) => item.id === company.id) || company; setSelectedCompany(record); setEditingCompany({ ...record }); setActiveAdminTab("company-profiles"); }}>Review company</Button>
                   </div>
                 ))}
               </div>

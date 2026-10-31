@@ -1,3 +1,4 @@
+import { interviewAddress } from "@/lib/companyAddress";
 import { FormEvent, useEffect, useState } from "react";
 import { Link as LinkIcon, MapPin, Trash2, UserCheck, UserX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -77,7 +78,7 @@ const makeInstructions = (
     "• Driver's License",
     "• Social Security Card",
     "• Security License (Pocket Card)",
-    "• Fire Arm Unloaded",
+    "• Firearm (unloaded)",
     "• Duty Belt",
     "",
     "If you have any questions or concerns, please give us a call.",
@@ -114,6 +115,7 @@ export function InterviewScheduler({
   const [notes, setNotes] = useState("");
   const [changeReason, setChangeReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [noShowReason, setNoShowReason] = useState("");
 
   const loadForm = async () => {
     const [interviewResult, companyResult] = await Promise.all([
@@ -146,6 +148,7 @@ export function InterviewScheduler({
     setExisting(interview || null);
     setInstructionTemplate("");
     setChangeReason("");
+    setNoShowReason("");
     if (interview) {
       const responseExpired =
         interview.status === "expired" ||
@@ -167,9 +170,9 @@ export function InterviewScheduler({
       setDestination(
         interview.interview_type === "video"
           ? interview.meeting_url || ""
-          : interview.location || profileAddress,
+          : interviewAddress(companyId, interview.location) || profileAddress,
       );
-      setNotes(interview.notes || "");
+      setNotes((interview.notes || "").replace(/fire arm/gi, "Firearm"));
       return;
     }
 
@@ -306,6 +309,7 @@ export function InterviewScheduler({
 
   const cancelInterview = async () => {
     if (!existing?.id) return;
+    if (!window.confirm("Are you sure you want to cancel this interview? The applicant will be notified.")) return;
     if (!changeReason.trim()) {
       toast.error("Add a reason for the cancellation");
       return;
@@ -380,11 +384,13 @@ export function InterviewScheduler({
 
   const recordAttendance = async (attendanceStatus: "attended" | "no_show") => {
     if (!existing?.id) return;
+    if (attendanceStatus === "no_show" && !noShowReason.trim()) { toast.error("Enter the reason for the no-show, or state that the reason is unknown."); return; }
     setSaving(true);
     try {
       const { error } = await (supabase as any).rpc("record_interview_attendance", {
         _interview_id: existing.id,
         _attendance_status: attendanceStatus,
+        _reason: attendanceStatus === "no_show" ? noShowReason.trim() : null,
       });
       if (error) throw error;
       toast.success(attendanceStatus === "attended" ? "Attendance confirmed" : "No-show recorded");
@@ -495,6 +501,7 @@ export function InterviewScheduler({
                     ? "Declined"
                     : "Awaiting response"}
             </Badge>
+            {existing?.attendance_reason && <p className="rounded-lg border p-3 text-sm"><strong>No-show reason:</strong> {existing.attendance_reason}</p>}
             {attendanceLabel && (
               <>
                 <span className="ml-2">Attendance:</span>
@@ -511,6 +518,7 @@ export function InterviewScheduler({
             <p className="mt-1 text-sm text-amber-900/80">
               Record the result so the company and officer histories stay accurate.
             </p>
+            <div className="mt-3 space-y-2"><Label htmlFor="no-show-reason">No-show reason</Label><Textarea id="no-show-reason" value={noShowReason} onChange={(event) => setNoShowReason(event.target.value)} placeholder="Record what happened, or say the reason is unknown." /></div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -739,7 +747,8 @@ export function InterviewScheduler({
                 </p>
               </div>
             )}
-            <DialogFooter className="gap-2 sm:justify-between">
+            <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>Close</Button>
               {activeInterview?.status === "scheduled" && !interviewHasStarted ? (
                 <div className="flex gap-2">
                   <Button

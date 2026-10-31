@@ -84,7 +84,7 @@ export const emptyEmploymentOffer = (positionTitle = "Security Officer"): Employ
 
 export const offerRequiredFields: Array<keyof EmploymentOfferTerms> = [
   "positionTitle", "duties", "employmentType", "classification", "hourlyRate", "overtimeTerms",
-  "payFrequency", "regularPayday", "shiftDifferential", "bonusCompensation", "additionalCompensation",
+  "payFrequency", "regularPayday", "shiftDifferential",
   "worksiteName", "worksiteAddress", "worksiteCity", "worksiteState", "worksiteZip", "supervisorName",
   "expectedSchedule", "expectedWeeklyHours", "hoursType", "benefitsEligibility", "benefitsSummary",
   "ptoSummary", "holidaySummary", "policyReferences", "startDate", "acceptanceDeadline",
