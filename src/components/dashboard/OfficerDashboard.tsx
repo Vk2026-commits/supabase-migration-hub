@@ -1334,6 +1334,20 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               />
             )}
 
+            {acceptedEmploymentOffer &&
+              !employeeOnboardingSubmitted &&
+              !["not_hired", "terminated"].includes(hireDecisionStatus || "") &&
+              activeTab !== "employee-onboarding" && (
+                <section aria-label="Onboarding action required" className="m-4 flex flex-col gap-4 rounded-xl border-2 border-amber-500 bg-amber-50 p-5 text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-wide">Action required · Onboarding incomplete</p>
+                    <h2 className="mt-1 text-xl font-bold">Complete your employee onboarding</h2>
+                    <p className="mt-2 text-sm">Your offer is accepted, but your onboarding is not finished. Complete the remaining forms and submit your packet to the company.</p>
+                  </div>
+                  <Button className="h-auto shrink-0 whitespace-normal px-6 py-3" onClick={() => handleTabChange("employee-onboarding")}>Complete onboarding →</Button>
+                </section>
+              )}
+
             {activeTab === "overview" && hireDecisionStatus === "terminated" && (
               <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-950 shadow-sm">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-800">
