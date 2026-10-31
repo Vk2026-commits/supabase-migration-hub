@@ -1,3 +1,4 @@
+import { isVisibleHiringCompany } from "@/lib/hiringCompanyVisibility";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Copy, Download, FileCheck2, PlayCircle, Plus, ShieldCheck, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -324,7 +325,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         if (!isLive()) return;
         const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
         if (canonicalWork.length) setForm((current) => ({ ...current, workHistory: current.workHistory.some((item) => item.employer?.trim()) ? current.workHistory : canonicalWork }));
-        const destinations: HiringDestination[] = (jobsResult?.data || []).map((item: any) => ({ id: item.id, companyId: item.company_id, companyName: item.company_name, position: item.position, city: item.city || "", state: item.state || "" }));
+        const destinations: HiringDestination[] = (jobsResult?.data || []).filter((item: any) => isVisibleHiringCompany(item.company_id, item.city || "", item.state || "")).map((item: any) => ({ id: item.id, companyId: item.company_id, companyName: item.company_name, position: item.position, city: item.city || "", state: item.state || "" }));
         const matchingDestination = destinations.find((item) => item.id === savedJobId) || destinations.find((item) =>
           item.companyName.trim().toLowerCase() === (draft.companyName || initialForm.companyName).trim().toLowerCase()
           && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()
