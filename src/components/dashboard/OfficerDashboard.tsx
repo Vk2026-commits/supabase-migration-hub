@@ -1,3 +1,4 @@
+import { HiringTestPanel } from "./HiringTestPanel";
 import { interviewAddress } from "@/lib/companyAddress";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -1275,6 +1276,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                         : "Officer profile"}
               </span>
             </WorkspaceIdentityHeader>
+            <HiringTestPanel userId={userId} />
 
             {activeTab !== "overview" && officerSectionDetails[activeTab] && (
               <DashboardSectionHeader

@@ -1,6 +1,7 @@
 import { PDFDocument, PDFName, StandardFonts, rgb } from "pdf-lib";
 
 export type OfficialOnboardingValues = {
+  isTestApplication?: boolean;
   legalFirstName: string;
   middleInitial: string;
   legalLastName: string;
@@ -216,6 +217,7 @@ export async function buildI9(values: OfficialOnboardingValues, ssn: string) {
     } catch { /* signature widget differs between editions */ }
   }
   try { form.updateFieldAppearances(await document.embedFont(StandardFonts.Helvetica)); } catch { /* viewer regenerates */ }
+  if (values.isTestApplication) for (const page of document.getPages()) page.drawText("SAMPLE - TEST ACCOUNT - NOT FOR EMPLOYMENT USE", { x: 18, y: 12, size: 10, color: rgb(0.8, 0, 0) });
   return document.save();
 }
 
@@ -257,6 +259,7 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
   }
   if (values.w4SignatureDate) page.drawText(date(values.w4SignatureDate), { x: 470, y: 91, size: 10, color: rgb(0, 0, 0) });
   try { form.updateFieldAppearances(await document.embedFont(StandardFonts.Helvetica)); } catch { /* viewer regenerates */ }
+  if (values.isTestApplication) for (const page of document.getPages()) page.drawText("SAMPLE - TEST ACCOUNT - NOT FOR EMPLOYMENT USE", { x: 18, y: 12, size: 10, color: rgb(0.8, 0, 0) });
   return document.save();
 }
 
@@ -332,6 +335,7 @@ export async function buildDirectDeposit(values: OfficialOnboardingValues, accou
     const textWidth = font.widthOfTextAtSize(segment, size);
     page.drawText(segment, { x: boxes[index].x + (boxes[index].width - textWidth) / 2, y: boxes[index].y + 3.1, size, font, color: rgb(0, 0, 0) });
   });
+  if (values.isTestApplication) for (const page of document.getPages()) page.drawText("SAMPLE - TEST ACCOUNT - NOT FOR EMPLOYMENT USE", { x: 18, y: 12, size: 10, color: rgb(0.8, 0, 0) });
   return document.save();
 }
 

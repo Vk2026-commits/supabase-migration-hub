@@ -1,3 +1,4 @@
+import { HiringTestPanel } from "./HiringTestPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -478,6 +479,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
                 </div>
               )}
           </WorkspaceIdentityHeader>
+          <HiringTestPanel companyId={companyProfile?.id} />
 
           <div
             id="company-dashboard-content"

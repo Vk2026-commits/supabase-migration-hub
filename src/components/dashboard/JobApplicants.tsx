@@ -300,6 +300,7 @@ const JobApplicants = ({
           job_posting_id,
           officer_id,
           message,
+          test_run_id,
           job_posting:job_postings(title),
           officer:officer_profiles(id, user_id, phone),
           hiring_application:guard_hiring_applications(id,status,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
@@ -1070,7 +1071,7 @@ const JobApplicants = ({
                             {isPaidSubscriber ? app.officerName : getMaskedName(app.officerName)}
                           </button>
                           <span className="mt-1 block truncate text-xs text-muted-foreground">
-                            {app.job_posting?.title || "Security Officer"}
+                            {app.job_posting?.title || "Security Officer"}{app.test_run_id ? " · TEST ACCOUNT" : ""}
                           </span>
                         </div>
                       </div>

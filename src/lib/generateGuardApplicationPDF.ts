@@ -1,4 +1,6 @@
 export type GuardApplicationData = {
+  isTestApplication?: boolean;
+  testRunId?: string;
   applicantName: string;
   email: string;
   phone: string;
@@ -271,6 +273,7 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page += 1) {
     doc.setPage(page);
+    if (data.isTestApplication) doc.text("SAMPLE - TEST ACCOUNT - NOT FOR EMPLOYMENT USE", width / 2, height - 13, { align: "center" });
     doc.text(`We Find Guards • Application ${page} of ${pages}`, width / 2, height - 8, { align: "center" });
   }
 

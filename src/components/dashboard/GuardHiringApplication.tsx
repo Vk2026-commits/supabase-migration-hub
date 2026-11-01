@@ -1,3 +1,4 @@
+import { ensureHiringTestAttachments } from "@/lib/hiringTestFixtures";
 import { isVisibleHiringCompany } from "@/lib/hiringCompanyVisibility";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Copy, Download, FileCheck2, PlayCircle, Plus, ShieldCheck, X } from "lucide-react";
@@ -312,6 +313,18 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       const referredJobId = searchParams.get("job") || "";
       const savedJobId = referredJobId || (draft as any).jobPostingId || "";
       setSelectedJobId(savedJobId);
+      if ((draft as any).isTestApplication && restoredOfficerId) {
+        const runKey = `hiring-test-active-run:${userId}`;
+        const runId = String((draft as any).testRunId || "");
+        if (window.localStorage.getItem(runKey) !== runId) {
+          Object.keys(window.localStorage).filter(key => key.includes(userId) &&
+            (key.startsWith("guard-application-") || key.startsWith("hiring-submission-attempt:")))
+            .forEach(key => window.localStorage.removeItem(key));
+          window.localStorage.setItem(runKey, runId);
+        }
+        await ensureHiringTestAttachments(userId, restoredOfficerId);
+        if (!isLive()) return;
+      }
       setLoaded(true);
       console.info("[hiring-app] restore ready", { ms: Math.round(performance.now() - startedAt), resumedStep: restoredStep + 1 });
 

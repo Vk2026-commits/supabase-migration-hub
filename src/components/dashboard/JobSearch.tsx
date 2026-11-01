@@ -99,17 +99,9 @@ const JobSearch = ({ officerId }: JobSearchProps) => {
     try {
       const job = jobs.find(j => j.id === jobId);
       
-      const { data: jobApplication, error } = await supabase
-        .from("job_applications")
-        .upsert({
-          job_posting_id: jobId,
-          officer_id: officerId,
-          status,
-        }, {
-          onConflict: 'job_posting_id,officer_id'
-        })
-        .select("id")
-        .single();
+      const { data: jobApplication, error } = await (supabase as any).rpc("set_my_job_interest", {
+        _job_posting_id: jobId, _officer_id: officerId, _status: status,
+      }).single();
 
       if (error) throw error;
 

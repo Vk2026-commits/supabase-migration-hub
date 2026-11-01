@@ -609,7 +609,7 @@ const Admin = () => {
       const [officersCount, companiesCount, hiresCount, viewsCount] = await Promise.all([
         supabase.from("officer_profiles").select("*", { count: "exact", head: true }),
         supabase.from("company_profiles").select("*", { count: "exact", head: true }),
-        supabase.from("hires").select("*", { count: "exact", head: true }),
+        supabase.from("hires").select("*", { count: "exact", head: true }).is("test_run_id", null),
         supabase.from("profile_views").select("*", { count: "exact", head: true }),
       ]);
 
@@ -667,6 +667,7 @@ const Admin = () => {
           officer_profiles(*, profiles(full_name)),
           company_profiles(company_name)
         `)
+        .is("test_run_id", null)
         .order("created_at", { ascending: false })
         .limit(10);
 

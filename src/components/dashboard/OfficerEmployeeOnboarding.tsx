@@ -21,6 +21,7 @@ type Props = {
 };
 
 type OnboardingData = {
+  isTestApplication?: boolean;
   employerName: string;
   legalFirstName: string;
   middleInitial: string;
@@ -593,6 +594,7 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
       const snapshot = (hiring.application_data || {}) as Record<string, any>;
       const fullName = (snapshot.applicantName || hiring.applicant_name || profileResult.data?.full_name || "").trim().split(/\s+/).filter(Boolean);
       const saved = existing?.form_data || {};
+      if (saved.isTestApplication) setSsn("000-00-0000");
       const offer = (hire?.offer_terms || {}) as Record<string, string>;
       const automaticTrackTikUsername = `${(fullName[0] || "").slice(0, 1)}${fullName.length > 1 ? fullName[fullName.length - 1] : ""}`.toLowerCase().replace(/[^a-z0-9]/g, "");
       setData({
@@ -767,6 +769,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
     const submittedAt = new Date().toISOString();
     const safeTime = submittedAt.replace(/[:.]/g, "-");
     const storagePath = `${userId}/${packetIdRef.current}/compliance/${documentType}/v${version}-${safeTime}.pdf`;
+    if (data.isTestApplication) {
+      const { PDFDocument, rgb } = await import("pdf-lib");
+      const sample = await PDFDocument.load(bytes);
+      for (const page of sample.getPages()) page.drawText("SAMPLE - TEST ACCOUNT - NOT FOR EMPLOYMENT USE", { x: 18, y: 12, size: 10, color: rgb(0.8, 0, 0) });
+      bytes = await sample.save();
+      documentLabel = `SAMPLE — ${documentLabel}`;
+      metadata = { ...metadata, isTestApplication: true };
+    }
     const digest = await crypto.subtle.digest("SHA-256", bytes.slice().buffer);
     const sha256 = Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
     const upload = await supabase.storage.from("onboarding-documents").upload(storagePath, new Blob([bytes as unknown as BlobPart], { type: "application/pdf" }), { upsert: false, contentType: "application/pdf" });
