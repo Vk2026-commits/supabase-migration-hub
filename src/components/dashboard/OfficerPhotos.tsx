@@ -44,6 +44,8 @@ const preparePhotoForUpload = async (file: File): Promise<File> => {
 
 export function OfficerPhotos({ userId, embedded = false, optional = false, onChanged, onSaved }: OfficerPhotosProps) {
   const [photos, setPhotos] = useState<Record<string, string>>({});
+  const [loadingPhotos, setLoadingPhotos] = useState(true);
+  const [photoLoadError, setPhotoLoadError] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const [savingPhotos, setSavingPhotos] = useState(false);
   const [photosConfirmed, setPhotosConfirmed] = useState(false);
@@ -54,6 +56,8 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
 
   useEffect(() => {
     void loadPhotos(true);
+    const refresh = () => { void loadPhotos(true); };
+    window.addEventListener("focus", refresh);
     void (async () => {
       const { data } = await (supabase as any)
         .from("guard_hiring_applications")
@@ -65,9 +69,12 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
         .maybeSingle();
       setHasSubmittedApplication(Boolean(data));
     })();
+    return () => window.removeEventListener("focus", refresh);
   }, [userId]);
 
   const loadPhotos = async (confirmExisting = false) => {
+    setLoadingPhotos(true);
+    setPhotoLoadError(false);
     try {
       const { data, error } = await supabase.storage
         .from("officer-photos")
@@ -78,7 +85,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
 
       if (error) throw error;
 
-      const files = data || [];
+      const files = (data || []).filter(file => PHOTO_TYPES.some(type => type.id === file.name.split(".")[0]));
       if (confirmExisting) {
         const storedTypes = files.map((file) => file.name.split(".")[0]);
         const complete = storedTypes.includes("headshot") && storedTypes.includes("full-body");
@@ -93,7 +100,8 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
         const { data: signedData, error: signedError } = await supabase.storage
           .from("officer-photos")
           .createSignedUrl(`${userId}/${file.name}`, 3600); // 1 hour expiry
-        return !signedError && signedData ? [photoType, signedData.signedUrl] as const : null;
+        if (signedError || !signedData) throw signedError || new Error("Photo preview unavailable");
+        return [photoType, signedData.signedUrl] as const;
       }));
       const photoUrls = Object.fromEntries(signedPhotos.filter((photo): photo is readonly [string, string] => Boolean(photo)));
 
@@ -102,7 +110,10 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
       return photoUrls;
     } catch (error: any) {
       console.error("Error loading photos:", error);
+      setPhotoLoadError(true);
       return null;
+    } finally {
+      setLoadingPhotos(false);
     }
   };
 
@@ -184,6 +195,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
     setSavingPhotos(true);
     try {
       const savedPhotos = await loadPhotos();
+      if (!savedPhotos) return;
       if (!optional && (!savedPhotos?.headshot || !savedPhotos["full-body"])) {
         setPhotosConfirmed(false);
         toast.error("Upload both a professional headshot and a full-body photo to complete this step");
@@ -222,6 +234,10 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
             <p className="text-sm">{requiredPhotosComplete ? "Your headshot and full-body photo are stored." : optional ? "Adding a professional headshot and full-body photo can help employers review your application." : "Upload one professional headshot and one full-body photo."}</p>
           </div>
         </div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p role="status" className="text-sm">{loadingPhotos ? "Checking saved photos…" : photoLoadError ? "Could not load saved photos. Retry before uploading replacements." : `${Object.keys(photos).length} of 4 photos uploaded`}</p>
+          <Button type="button" variant="outline" onClick={() => void loadPhotos(true)} disabled={loadingPhotos || Boolean(uploading)}>Refresh photos</Button>
+        </div>
         <div className="grid gap-6 md:grid-cols-2">
           {PHOTO_TYPES.map((photoType) => (
             <div key={photoType.id} className={`space-y-3 rounded-2xl border p-5 transition-shadow hover:shadow-sm ${photos[photoType.id] ? "border-green-500/40 bg-green-500/5" : "bg-card"}`}>
@@ -230,6 +246,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
                 <p className="text-sm text-muted-foreground">{photoType.description}</p>
               </div>
 
+              {photos[photoType.id] && <p className="text-sm font-medium text-green-700">✓ Uploaded and saved</p>}
               {photos[photoType.id] ? (
                 <div className="group relative">
                   <img src={photos[photoType.id]} alt={photoType.label} className="h-64 w-full rounded-lg border object-cover" />
@@ -239,6 +256,8 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
                     <Button type="button" variant="destructive" size="sm" onClick={() => deletePhoto(photoType.id)}><X className="mr-2 h-4 w-4" />Remove</Button>
                   </div>
                 </div>
+              ) : loadingPhotos || photoLoadError ? (
+                <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">{loadingPhotos ? "Loading photo…" : "Photo status unavailable — use Refresh photos"}</div>
               ) : (
                 <div className="rounded-lg border-2 border-dashed p-8 text-center">
                   <Input type="file" accept="image/*" onChange={(e) => uploadPhoto(e, photoType.id)} disabled={uploading === photoType.id} className="hidden" id={`photo-${photoType.id}`} />
