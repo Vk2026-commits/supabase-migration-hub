@@ -1,3 +1,4 @@
+import { listOfficerPhotos } from "@/lib/officerPhotos";
 import { HiringTestPanel } from "./HiringTestPanel";
 import { interviewAddress } from "@/lib/companyAddress";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -540,7 +541,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
             .select("id", { count: "exact", head: true })
             .eq("officer_id", data.id),
           applicationsPromise,
-          supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
+          listOfficerPhotos(userId),
           (supabase as any)
             .from("officer_onboarding_packets")
             .select("status,company_name,submitted_at")

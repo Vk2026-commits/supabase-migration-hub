@@ -1,3 +1,4 @@
+import { listOfficerPhotos } from "@/lib/officerPhotos";
 import { ensureHiringTestAttachments } from "@/lib/hiringTestFixtures";
 import { isVisibleHiringCompany } from "@/lib/hiringCompanyVisibility";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -149,7 +150,7 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     if (currentStep !== 7 && currentStep !== 8) return;
     let mounted = true;
     Promise.all([
-      supabase.storage.from("officer-photos").list(userId, { limit: 100 }),
+      listOfficerPhotos(userId),
       activeOfficerId ? (supabase as any).rpc("get_my_certifications") : Promise.resolve({ data: [], error: null }),
     ]).then(([photoResult, certificationResult]) => {
       if (!mounted) return;

@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+const code = ts.transpileModule(readFileSync('src/lib/officerPhotos.ts','utf8').replace('import { supabase } from "@/integrations/supabase/client";', 'const supabase = globalThis.photoTestClient;'), {compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
+let calls=0, fail=false;
+globalThis.photoTestClient={auth:{getSession:async()=>({data:{session:{user:{id:'owner'}}}})},rpc:()=>({abortSignal:async()=>{calls++;await new Promise(r=>setTimeout(r,5));return fail?{error:new Error('offline')}:{data:[{name:'headshot.png'}]};}})};
+const {listOfficerPhotos}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const results=await Promise.all([listOfficerPhotos('owner'),listOfficerPhotos('owner'),listOfficerPhotos('owner')]);
+assert.equal(calls,1); assert.equal(results[0].data[0].name,'headshot.png');
+assert.ok((await listOfficerPhotos('other')).error); assert.equal(calls,1);
+fail=true; assert.ok((await listOfficerPhotos('owner')).error);
+fail=false; assert.equal((await listOfficerPhotos('owner')).data.length,1); assert.equal(calls,3);
+delete globalThis.photoTestClient;
+console.log('PASS concurrent requests share one call, wrong account blocked, failed request can retry');

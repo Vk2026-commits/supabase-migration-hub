@@ -1,3 +1,4 @@
+import { listOfficerPhotos } from "@/lib/officerPhotos";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,8 +58,6 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
 
   useEffect(() => {
     void loadPhotos(true);
-    const refresh = () => { void loadPhotos(true); };
-    window.addEventListener("focus", refresh);
     void (async () => {
       const { data } = await (supabase as any)
         .from("guard_hiring_applications")
@@ -70,19 +69,13 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
         .maybeSingle();
       setHasSubmittedApplication(Boolean(data));
     })();
-    return () => window.removeEventListener("focus", refresh);
   }, [userId]);
 
   const loadPhotos = async (confirmExisting = false) => {
     setLoadingPhotos(true);
     setPhotoLoadError(false);
     try {
-      const { data, error } = await supabase.storage
-        .from("officer-photos")
-        .list(userId, {
-          limit: 100,
-          offset: 0,
-        });
+      const { data, error } = await listOfficerPhotos(userId);
 
       if (error) throw error;
 
@@ -94,17 +87,18 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
         onSaved?.(complete);
       }
 
-      // Generate private photo URLs in parallel so completion does not wait on
-      // several sequential storage requests.
-      const signedPhotos = await Promise.all(files.map(async (file) => {
-        const photoType = file.name.split(".")[0];
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from("officer-photos")
-          .createSignedUrl(`${userId}/${file.name}`, 3600); // 1 hour expiry
-        if (signedError || !signedData) throw signedError || new Error("Photo preview unavailable");
-        return [photoType, signedData.signedUrl] as const;
-      }));
-      const photoUrls = Object.fromEntries(signedPhotos.filter((photo): photo is readonly [string, string] => Boolean(photo)));
+      const photoUrls: Record<string, string> = {};
+      if (files.length) {
+        // One signing request for the whole gallery instead of four competing requests.
+        const { data: signed, error: signError } = await supabase.storage.from("officer-photos")
+          .createSignedUrls(files.map(file => `${userId}/${file.name}`), 3600);
+        if (signError) throw signError;
+        for (const photo of signed || []) {
+          if (photo.error || !photo.signedUrl || !photo.path) throw new Error("Photo preview unavailable");
+          const type = photo.path.split("/").pop()!.split(".")[0];
+          if (!photoUrls[type]) photoUrls[type] = photo.signedUrl;
+        }
+      }
 
       setPhotos(photoUrls);
       onChanged?.(photoUrls);
@@ -174,7 +168,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
 
       // Delete old photo if exists
       if (photos[photoType]) {
-        const { data: existingFiles } = await supabase.storage.from("officer-photos").list(userId);
+        const { data: existingFiles } = await listOfficerPhotos(userId);
         const oldPaths = (existingFiles || []).filter((item) => item.name.startsWith(`${photoType}.`)).map((item) => `${userId}/${item.name}`);
         if (oldPaths.length) await supabase.storage.from("officer-photos").remove(oldPaths);
       }
@@ -212,9 +206,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
     try {
       setPhotosConfirmed(false);
       onSaved?.(false);
-      const { data: files } = await supabase.storage
-        .from("officer-photos")
-        .list(userId);
+      const { data: files } = await listOfficerPhotos(userId);
 
       const fileToDelete = files?.find((f) => f.name.startsWith(photoType));
       
