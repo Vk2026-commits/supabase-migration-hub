@@ -47,6 +47,7 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [photoLoadError, setPhotoLoadError] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [updatingAvatar, setUpdatingAvatar] = useState(false);
   const [savingPhotos, setSavingPhotos] = useState(false);
   const [photosConfirmed, setPhotosConfirmed] = useState(false);
   const [hasSubmittedApplication, setHasSubmittedApplication] = useState(false);
@@ -117,6 +118,37 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
     }
   };
 
+  const updateProfilePicture = async (file: Blob) => {
+    // Use a durable avatar URL, never persist an expiring private signed URL.
+    const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+    const path = `${userId}/headshot-${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("profile-avatars")
+      .upload(path, file, { contentType: file.type, cacheControl: "3600" });
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage.from("profile-avatars").getPublicUrl(path);
+    const { error: profileError } = await supabase.from("profiles")
+      .update({ avatar_url: data.publicUrl, updated_at: new Date().toISOString() }).eq("id", userId);
+    if (profileError) throw profileError;
+    const { error: officerError } = await supabase.from("officer_profiles")
+      .update({ avatar_url: data.publicUrl }).eq("user_id", userId);
+    if (officerError) throw officerError;
+    window.dispatchEvent(new CustomEvent("officer-avatar-updated", { detail: { userId, avatarUrl: data.publicUrl } }));
+  };
+
+  const useExistingHeadshot = async () => {
+    setUpdatingAvatar(true);
+    try {
+      const response = await fetch(photos.headshot);
+      if (!response.ok) throw new Error("Could not read the saved headshot");
+      await updateProfilePicture(await response.blob());
+      toast.success("Headshot is now your profile picture");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update profile picture. Try again.");
+    } finally {
+      setUpdatingAvatar(false);
+    }
+  };
+
   const uploadPhoto = async (event: React.ChangeEvent<HTMLInputElement>, photoType: string) => {
     try {
       setUploading(photoType);
@@ -153,7 +185,17 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
 
       if (uploadError) throw uploadError;
 
-      toast.success("Photo uploaded successfully!");
+      if (photoType === "headshot") {
+        try {
+          await updateProfilePicture(file);
+          toast.success("Headshot uploaded and profile picture updated");
+        } catch (error) {
+          console.error("Headshot saved but profile picture update failed:", error);
+          toast.error("Headshot saved, but profile picture could not update. Use ‘Use as profile picture’ to retry.");
+        }
+      } else {
+        toast.success("Photo uploaded successfully!");
+      }
       if (hasSubmittedApplication) setShowResubmitReminder(true);
       const savedPhotos = await loadPhotos();
       const complete = Boolean(savedPhotos?.headshot && savedPhotos?.["full-body"]);
@@ -244,8 +286,10 @@ export function OfficerPhotos({ userId, embedded = false, optional = false, onCh
               <div>
                 <Label className="text-base">{photoType.label}{optional ? " (optional)" : photoType.id === "headshot" || photoType.id === "full-body" ? " *" : " (optional)"}</Label>
                 <p className="text-sm text-muted-foreground">{photoType.description}</p>
+                {photoType.id === "headshot" && <p className="text-xs text-muted-foreground">Uploading a headshot also updates your officer profile picture.</p>}
               </div>
 
+              {photoType.id === "headshot" && photos.headshot && <Button type="button" variant="outline" size="sm" disabled={updatingAvatar || Boolean(uploading)} onClick={useExistingHeadshot}>{updatingAvatar ? "Updating profile picture…" : "Use as profile picture"}</Button>}
               {photos[photoType.id] && <p className="text-sm font-medium text-green-700">✓ Uploaded and saved</p>}
               {photos[photoType.id] ? (
                 <div className="group relative">

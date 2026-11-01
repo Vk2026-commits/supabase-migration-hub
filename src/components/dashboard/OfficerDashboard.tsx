@@ -197,6 +197,16 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
   const sectionHeaderRef = useRef<HTMLDivElement>(null);
   const [officerProfile, setOfficerProfile] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  useEffect(() => {
+    const updateAvatar = (event: Event) => {
+      const { userId: updatedUserId, avatarUrl } = (event as CustomEvent<{ userId: string; avatarUrl: string }>).detail;
+      if (updatedUserId !== userId) return;
+      setProfile((current: any) => current ? { ...current, avatar_url: avatarUrl } : current);
+      setOfficerProfile((current: any) => current ? { ...current, avatar_url: avatarUrl } : current);
+    };
+    window.addEventListener("officer-avatar-updated", updateAvatar);
+    return () => window.removeEventListener("officer-avatar-updated", updateAvatar);
+  }, [userId]);
   const [loading, setLoading] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
   const [certCount, setCertCount] = useState(0);
