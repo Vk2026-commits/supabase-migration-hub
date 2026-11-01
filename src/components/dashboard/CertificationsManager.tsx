@@ -84,6 +84,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
   const [currentOfficerId, setCurrentOfficerId] = useState(officerId);
+  const [previewError, setPreviewError] = useState(false);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [licenseForms, setLicenseForms] = useState<Record<string, LicenseFormData>>({});
   const [pendingLicenseUploads, setPendingLicenseUploads] = useState<Record<string, PendingLicenseUploads>>({});
@@ -124,49 +125,40 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
     return null;
   };
 
-  // Generate signed URLs for all document paths
+  // Sign in one request; individual storage requests can exhaust database
+  // connections when several saved credentials are opened together.
   const generateSignedUrls = async (certs: Certification[]) => {
-    const requests = certs.flatMap((cert) => ([
-      cert.document_front_url ? getSignedUrlForPath(cert.document_front_url).then((url) => url ? [`${cert.id}-front`, url] as const : null) : Promise.resolve(null),
-      cert.document_back_url ? getSignedUrlForPath(cert.document_back_url).then((url) => url ? [`${cert.id}-back`, url] as const : null) : Promise.resolve(null),
-    ]));
+    setPreviewError(false);
+    const entries = certs.flatMap((cert) => [
+      { key: `${cert.id}-front`, path: cert.document_front_url },
+      { key: `${cert.id}-back`, path: cert.document_back_url },
+    ]).filter((entry) => entry.path);
     const urls: Record<string, string> = {};
-    for (const entry of await Promise.all(requests)) {
-      if (entry) urls[entry[0]] = entry[1];
+    const stored = entries.map((entry) => {
+      const path = entry.path!;
+      if (!path.startsWith("http")) return { ...entry, path };
+      const match = new URL(path).pathname.match(/certification-documents\/(.+)$/);
+      if (match) return { ...entry, path: decodeURIComponent(match[1]) };
+      urls[entry.key] = path;
+      return null;
+    }).filter((entry): entry is { key: string; path: string } => !!entry);
+    try {
+      if (stored.length) {
+        const { data, error } = await supabase.storage
+          .from("certification-documents")
+          .createSignedUrls([...new Set(stored.map((entry) => entry.path))], 3600);
+        if (error) throw error;
+        for (const entry of stored) {
+          const result = data?.find((item) => item.path === entry.path);
+          if (result?.signedUrl) urls[entry.key] = result.signedUrl;
+        }
+      }
+      setPreviewError(entries.some((entry) => !urls[entry.key]));
+    } catch (error) {
+      console.error("Could not load saved document previews", error);
+      setPreviewError(true);
     }
     setSignedUrls(urls);
-  };
-
-  // Get signed URL for a file path
-  const getSignedUrlForPath = async (filePath: string): Promise<string | null> => {
-    if (!filePath) return null;
-    
-    // Check if it's already a full URL (legacy data)
-    if (filePath.startsWith('http')) {
-      // Extract just the path portion
-      const pathMatch = filePath.match(/certification-documents\/(.+)$/);
-      if (pathMatch) {
-        filePath = pathMatch[1];
-      } else {
-        return filePath; // Return as-is if can't extract
-      }
-    }
-    
-    try {
-      const { data, error } = await supabase.storage
-        .from("certification-documents")
-        .createSignedUrl(filePath, 3600); // 1 hour expiry
-      
-      if (error) {
-        console.error("Error creating signed URL:", error);
-        return null;
-      }
-      
-      return data.signedUrl;
-    } catch (err) {
-      console.error("Error generating signed URL:", err);
-      return null;
-    }
   };
 
   const loadCertifications = async () => {
@@ -511,16 +503,19 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                   return (
                     <div key={side} className="space-y-2">
                       <Label className="capitalize">{side} of License</Label>
+                      {hasDocument && <p className="text-xs text-green-700">✓ Document saved</p>}
                       {hasDocument && displayUrl ? (
                         <div className="relative aspect-[3/2] bg-muted rounded-lg overflow-hidden border">
-                          <img
+                          {/\.pdf(?:$|[?#])/i.test(hasDocument) ? (
+                            <iframe src={displayUrl} title={`License ${side} PDF`} className="w-full h-full" />
+                          ) : <img
                             src={displayUrl}
                             alt={`License ${side}`}
                             className="w-full h-full object-cover"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                             }}
-                          />
+                          />}
                           <div className="absolute top-2 right-2 flex gap-1">
                             <Button
                               type="button"
@@ -550,7 +545,8 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                         <div className="relative aspect-[3/2] bg-muted rounded-lg overflow-hidden border flex items-center justify-center">
                           <div className="text-center text-muted-foreground">
                             <FileText className="h-8 w-8 mx-auto mb-2" />
-                            <p className="text-sm">Loading...</p>
+                            <p className="text-sm">{previewError ? "Document saved — preview unavailable" : "Loading saved document…"}</p>
+                            {previewError && <Button type="button" variant="link" onClick={() => void generateSignedUrls(certifications)}>Retry preview</Button>}
                           </div>
                         </div>
                       ) : hasPending ? (
