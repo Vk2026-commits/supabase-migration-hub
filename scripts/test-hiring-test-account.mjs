@@ -38,6 +38,7 @@ await db.exec(readFileSync('supabase/migrations/20260925120000_reliable_hiring_s
 const user='c2d2969a-dbb3-45e5-910b-a7c9e4730aa2',officer='4dd7fbb8-f59a-4ea5-a15f-9c8f400ebbd5',company='abaebf12-8db2-44f7-b60e-a8931405df88',job='3665bcce-eb1b-44ce-a001-90d494eab528';
 await db.exec(`INSERT INTO auth.users VALUES('${user}','vektiss@gmail.com'); INSERT INTO profiles VALUES('${user}','Test Account'); INSERT INTO officer_profiles(id,user_id) VALUES('${officer}','${user}'); INSERT INTO company_profiles VALUES('${company}','Kairos Security'); INSERT INTO job_postings VALUES('${job}','${company}','Armed Security Officer','active');`);
 await db.exec(readFileSync('supabase/migrations/20261101180000_reusable_hiring_test_account.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/20261101193000_hiring_test_availability_values.sql','utf8'));
 const query=async(sql,args=[]) => (await db.query(sql,args)).rows;
 const current=async()=> (await query('select * from hiring_test_accounts'))[0];
 let account=await current();
