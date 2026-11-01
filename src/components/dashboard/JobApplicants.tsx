@@ -1,3 +1,4 @@
+import { ApplicantReviewAction } from "./ApplicantReviewAction";
 import { NoOfferButton } from "./NoOfferButton";
 import { OfficerProfileDetails } from "./OfficerProfileDetails";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
@@ -1141,6 +1142,8 @@ const JobApplicants = ({
                     <div className="applicant-roster-actions">
                       {app.status === "interview_completed" && <NoOfferButton applicationId={app.id} officerName={app.officerName} onChanged={loadApplications} />}
                       {nextStep.label === "Next: Review application" && (
+                        <>
+                        <ApplicantReviewAction applicationId={app.id} officerName={app.officerName || "this officer"} onChanged={loadApplications} />
                         <Button
                           type="button"
                           size="sm"
@@ -1151,6 +1154,7 @@ const JobApplicants = ({
                         >
                           Review application
                         </Button>
+                        </>
                       )}
                       <Button
                         size="sm"
@@ -1160,6 +1164,8 @@ const JobApplicants = ({
                         View profile
                       </Button>
                       {app.status === "reviewed" && !app.interview ? (
+                        <>
+                        <ApplicantReviewAction applicationId={app.id} officerName={app.officerName || "this officer"} decline onChanged={loadApplications} />
                         <InterviewScheduler
                           companyId={companyId}
                           companyName={companyProfile?.company_name || "The company"}
@@ -1171,6 +1177,7 @@ const JobApplicants = ({
                           existingInterview={app.interview}
                           onChanged={loadApplications}
                         />
+                        </>
                       ) : app.status === "accepted" && onboarding.percent === 100 && app.hireId ? (
                         <Button
                           size="sm"
