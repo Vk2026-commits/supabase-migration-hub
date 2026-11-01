@@ -58,6 +58,17 @@ const onboardingSteps = [
   "Review and sign",
 ];
 
+const formatSubmissionTime = (value: string | null | undefined) => {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  }).format(date);
+};
+
 const getOnboardingStatus = (progress: any) => {
   if (!progress || progress.status === "not_started")
     return {
@@ -411,6 +422,7 @@ const JobApplicants = ({
           ...app,
           hiring_application: hiringApplications,
           offerHiringApplicationId: offerApplication?.id || null,
+          applicationSubmittedAt: offerApplication?.submitted_at || null,
           officerName: profile?.full_name || "Unknown",
           officerAvatar: profile?.avatar_url || null,
           officerEmail: profile?.email || "",
@@ -617,6 +629,9 @@ const JobApplicants = ({
               content: (
                 <div className="max-w-3xl">
                   <h2 className="text-lg font-bold">Submitted hiring application</h2>
+                  <p className="mt-2 text-sm">
+                    Application submitted: {formatSubmissionTime(activeApplication.applicationSubmittedAt)}
+                  </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Review the officer’s submitted answers, work history, qualifications,
                     availability, and signature.
@@ -636,6 +651,13 @@ const JobApplicants = ({
                     <div>
                       <h2 className="text-lg font-bold">{onboarding.label}</h2>
                       <p className="mt-1 text-sm text-muted-foreground">{onboarding.detail}</p>
+                      <p className="mt-2 text-sm">
+                        {activeApplication.onboardingProgress?.submitted_at
+                          ? `Onboarding submitted: ${formatSubmissionTime(activeApplication.onboardingProgress.submitted_at)}`
+                          : activeApplication.onboardingProgress?.status === "submitted"
+                            ? "Onboarding submitted: Date unavailable"
+                            : "Onboarding not submitted"}
+                      </p>
                     </div>
                     <Badge variant="outline">{onboarding.percent}%</Badge>
                   </div>
@@ -1052,6 +1074,9 @@ const JobApplicants = ({
                           </span>
                         </div>
                       </div>
+                      <p className="pl-12 text-xs text-muted-foreground">
+                        Application submitted: {formatSubmissionTime(app.applicationSubmittedAt)}
+                      </p>
                       {app.interview?.scheduled_at && <p className="pl-12 text-xs font-medium text-red-800">Interview: {new Date(app.interview.scheduled_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>}
                       <div className="flex flex-wrap gap-x-3 gap-y-1 pl-12">
                         {isPaidSubscriber && app.officerPhone && (
@@ -1102,6 +1127,13 @@ const JobApplicants = ({
                     ) : (
                       <span className="text-xs text-muted-foreground">Not started</span>
                     )}
+                    {app.onboardingProgress?.submitted_at ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Submitted: {formatSubmissionTime(app.onboardingProgress.submitted_at)}
+                      </p>
+                    ) : app.onboardingProgress?.status === "submitted" ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Submitted: Date unavailable</p>
+                    ) : null}
                   </div>
 
                   {isPaidSubscriber ? (
