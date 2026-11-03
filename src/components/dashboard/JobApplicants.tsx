@@ -521,6 +521,8 @@ const JobApplicants = ({
     return (
       <div className="mx-auto max-w-7xl overflow-hidden rounded-lg border bg-background">
         <OfficerRecordShell
+          key={selectedOfficerId}
+          defaultTab="profile"
           context="applicant"
           backLabel="Back to applicants"
           onBack={() => onCloseOfficer?.()}
