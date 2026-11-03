@@ -36,7 +36,7 @@ export function OfficerProfileDetails({ officerId }: { officerId: string }) {
           .finally(() => update({ historyLoading: false }));
         void (async () => {
           try {
-            const listing = await bounded(supabase.storage.from("officer-photos").list(profile.data.user_id));
+            const listing: any = await bounded((supabase as any).rpc("list_visible_officer_photos", { _user_id: profile.data.user_id }).abortSignal(controller.signal));
             if (listing.error) throw listing.error;
             const files = (listing.data || []).filter(file => photoLabels[file.name.split(".")[0]]);
             const signed = files.length ? await bounded(supabase.storage.from("officer-photos").createSignedUrls(files.map(file => `${profile.data.user_id}/${file.name}`), 3600)) : { data: [], error: null };
