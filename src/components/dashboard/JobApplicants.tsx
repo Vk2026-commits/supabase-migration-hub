@@ -1,4 +1,4 @@
-import { displayInterviewNotes, isKairos } from "@/lib/kairosWorkflow";
+import { displayInterviewNotes, isKairos, KAIROS_POSITIONS } from "@/lib/kairosWorkflow";
 import { ApplicantReviewAction } from "./ApplicantReviewAction";
 import { NoOfferButton } from "./NoOfferButton";
 import { OfficerProfileDetails } from "./OfficerProfileDetails";
@@ -305,7 +305,7 @@ const JobApplicants = ({
           test_run_id,
           job_posting:job_postings(title),
           officer:officer_profiles(id, user_id, phone),
-          hiring_application:guard_hiring_applications(id,status,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
+          hiring_application:guard_hiring_applications(id,status,applied_position:application_data->>position,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
         `,
         )
         .eq("job_posting.company_id", companyId)
@@ -423,6 +423,7 @@ const JobApplicants = ({
         const screeningChecks = screeningByHire.get(hireId) || [];
         return {
           ...app,
+          job_posting: isKairos(companyId) && KAIROS_POSITIONS.includes(offerApplication?.applied_position) ? { ...app.job_posting, title: offerApplication.applied_position } : app.job_posting,
           hiring_application: hiringApplications,
           offerHiringApplicationId: offerApplication?.id || null,
           applicationSubmittedAt: offerApplication?.submitted_at || null,
