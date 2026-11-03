@@ -1,6 +1,6 @@
-import { isKairos } from "@/lib/kairosWorkflow";
+import { isKairos, KAIROS_ACCESS_LABELS } from "@/lib/kairosWorkflow";
 import { KairosTeamDirectory } from "./KairosWorkflowOptions";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Crown, Mail, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,6 +84,8 @@ type CompanyTeamProps = {
 };
 
 export default function CompanyTeam({ companyId, allowInvites = false, readOnly = false }: CompanyTeamProps) {
+  const loadGeneration = useRef(0);
+  const accessLabel = (value: TeamRole) => isKairos(companyId) && value !== "owner" ? KAIROS_ACCESS_LABELS[value] : roleLabels[value];
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [serverCanManage, setServerCanManage] = useState(false);
   const [canAssignOwners, setCanAssignOwners] = useState(false);
@@ -99,9 +101,10 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
   const canManage = !readOnly && (allowInvites || serverCanManage);
 
   const invoke = useCallback(
-    async (body: Record<string, unknown>) => {
+    async (body: Record<string, unknown>, signal?: AbortSignal) => {
       const result = await supabase.functions.invoke("manage-company-team", {
         body: { ...body, company_id: companyId },
+        signal,
       });
       if (result.error) {
         let message = result.error.message || "Team request failed";
@@ -122,31 +125,57 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
   );
 
   const load = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const current = () => generation === loadGeneration.current;
     setLoading(true);
     setLoadError("");
+    setServerCanManage(false);
     try {
-      const data = await withTimeout(invoke({ action: "list" }), 12000);
+      // Retry only reads. A slow first connection must not duplicate invitations.
+      let data;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const controller = new AbortController();
+        try {
+          data = await withTimeout(invoke({ action: "list" }, controller.signal), 15000);
+          break;
+        } catch (error) {
+          if (!current()) return;
+          if (attempt || !/timed out|fetch|network/i.test(errorMessage(error, ""))) throw error;
+        } finally { controller.abort(); }
+      }
+      if (!current()) return;
       const listedMembers = (data.members || []) as TeamMember[];
-      const userIds = listedMembers.map((member) => member.user_id).filter(Boolean);
-      const { data: identities } = userIds.length
-        ? await supabase.from("profiles").select("id,avatar_url").in("id", userIds)
-        : { data: [] };
-      const avatarByUser = new Map((identities || []).map((identity) => [identity.id, identity.avatar_url]));
-      setMembers(listedMembers.map((member) => ({ ...member, avatar_url: avatarByUser.get(member.user_id) || null })));
+      // Show names and access immediately; optional avatars never block the roster.
+      setMembers(listedMembers);
       setServerCanManage(Boolean(data.can_manage));
       setCanAssignOwners(Boolean(data.can_assign_owners));
       setPrimaryOwnerUserId(String(data.primary_owner_user_id || ""));
+      setLoading(false);
+      const userIds = listedMembers.map((member) => member.user_id).filter(Boolean);
+      if (userIds.length) {
+        const controller = new AbortController();
+        try {
+          const { data: identities } = await withTimeout(Promise.resolve(supabase.from("profiles").select("id,avatar_url").in("id", userIds).abortSignal(controller.signal)), 5000);
+          if (!current()) return;
+          const avatarByUser = new Map((identities || []).map((identity) => [identity.id, identity.avatar_url]));
+          setMembers(listedMembers.map((member) => ({ ...member, avatar_url: avatarByUser.get(member.user_id) || null })));
+        } catch { /* Initials remain usable if photos cannot load. */ }
+        finally { controller.abort(); }
+      }
     } catch (error: unknown) {
+      if (!current()) return;
       const message = errorMessage(error, "Company team could not be loaded");
       setLoadError(message);
       toast.error(message);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   }, [invoke]);
 
   useEffect(() => {
+    setMembers([]);
     void load();
+    return () => { loadGeneration.current++; };
   }, [load]);
 
   const invite = async () => {
@@ -239,7 +268,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                 Existing users are added immediately. New users receive a secure We Find Guards
                 account invitation by email.
               </p>
-              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px_auto] md:items-end">
+              <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,1fr)_auto] md:items-end">
                 <div className="space-y-2">
                   <Label htmlFor="team-email">Email address</Label>
                   <Input
@@ -261,9 +290,9 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">Administrator</SelectItem>
-                      <SelectItem value="hiring_manager">Hiring manager</SelectItem>
-                      <SelectItem value="reviewer">Reviewer</SelectItem>
+                      <SelectItem value="admin">{accessLabel("admin")}</SelectItem>
+                      <SelectItem value="hiring_manager">{accessLabel("hiring_manager")}</SelectItem>
+                      <SelectItem value="reviewer">{accessLabel("reviewer")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -282,8 +311,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
         <CardHeader className="border-b px-4 py-4 sm:px-5">
           <CardTitle>Team members</CardTitle>
           <CardDescription>
-            {members.length} {members.length === 1 ? "person is" : "people are"} listed for this
-            company. Only active members have access.
+            {loading ? "Loading saved team memberships…" : loadError ? "Team membership count unavailable." : `${members.length} ${members.length === 1 ? "person is" : "people are"} listed for this company.`} Only active members have access.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -298,6 +326,8 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                 <RefreshCw className="mr-2 h-4 w-4" />Retry
               </Button>
             </div>
+          ) : members.length === 0 ? (
+            <p className="p-6 text-muted-foreground">No team memberships found for this company.</p>
           ) : (
             members.map((member) => (
               <div
@@ -325,22 +355,22 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                       requestRoleChange(member, value as TeamRole)
                     }
                   >
-                    <SelectTrigger className="h-10 w-full sm:w-48">
+                    <SelectTrigger className="h-10 w-full sm:w-80">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {canAssignOwners && member.status === "active" && (
                         <SelectItem value="owner">Owner</SelectItem>
                       )}
-                      <SelectItem value="admin">Administrator</SelectItem>
-                      <SelectItem value="hiring_manager">Hiring manager</SelectItem>
-                      <SelectItem value="reviewer">Reviewer</SelectItem>
+                      <SelectItem value="admin">{accessLabel("admin")}</SelectItem>
+                      <SelectItem value="hiring_manager">{accessLabel("hiring_manager")}</SelectItem>
+                      <SelectItem value="reviewer">{accessLabel("reviewer")}</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : (
                   <Badge variant="outline">{roleLabels[member.role]}</Badge>
                 )}
-                {canManage && member.role !== "owner" && (
+                {canManage && member.role !== "owner" && member.user_id !== primaryOwnerUserId && (
                   <Button
                     type="button"
                     size="icon"

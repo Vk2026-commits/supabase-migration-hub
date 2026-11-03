@@ -1,11 +1,11 @@
 export const KAIROS_COMPANY_ID = "abaebf12-8db2-44f7-b60e-a8931405df88";
 export const isKairos = (companyId?: string) => companyId === KAIROS_COMPANY_ID;
 export const KAIROS_TEAM = [
-  { title: "CEO", name: "Stephen Taylor" },
-  { title: "Executive General Manager", name: "Erika Garces" },
-  { title: "Project Manager", name: "Dayan Ward" },
-  { title: "Site Lead (TLHC)", name: "Robin Whitehead" },
-  { title: "Site Lead (Wheeler Baptist Church)", name: "Shawn Jenkins" },
+  { title: "CEO", name: "Stephen Taylor", access: "admin" },
+  { title: "Executive General Manager", name: "Erika Garces", access: "admin" },
+  { title: "Project Manager", name: "Dayan Ward", access: "hiring_manager" },
+  { title: "Site Lead (TLHC)", name: "Robin Whitehead", access: "reviewer" },
+  { title: "Site Lead (Wheeler Baptist Church)", name: "Shawn Jenkins", access: "reviewer" },
 ];
 export const KAIROS_POSITIONS = ["Unarmed Officers", "Armed Officers", "PPO Officers"];
 export const PAID_HOLIDAYS = ["New Year’s Day", "Memorial Day", "Independence Day", "Labor Day", "Thanksgiving Day", "Christmas Day"];
@@ -38,3 +38,5 @@ export function displayInterviewNotes(raw: string): string {
   const { general, answers } = readInterviewNotes(raw);
   return [general, ...INTERVIEW_QUESTIONS.filter((q) => answers[q.id]).map((q) => `${q.text}\n${answers[q.id]}`)].filter(Boolean).join("\n\n");
 }
+
+export const KAIROS_ACCESS_LABELS = { admin: "CEO / Executive General Manager — Administrator", hiring_manager: "Project Manager — Hiring manager", reviewer: "Site Lead — Reviewer" };
