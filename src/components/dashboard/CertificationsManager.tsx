@@ -1,3 +1,4 @@
+import { requestWithDeadline } from "@/lib/authRequest";
 import { TexasSecurityResources } from "./KairosWorkflowOptions";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -173,7 +174,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
 
       // This officer-only function bypasses the expensive company-review RLS
       // branches that are irrelevant when an officer reads their own records.
-      const { data, error } = await (supabase as any).rpc("get_my_certifications");
+      const { data, error } = await requestWithDeadline<any>((signal) => (supabase as any).rpc("get_my_certifications").abortSignal(signal), 15000);
 
       if (error) throw error;
       setCertifications((data || []) as Certification[]);
@@ -209,13 +210,13 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
     certId: string,
     side: "front" | "back"
   ) => {
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${userId}/${certId}-${side}-${Date.now()}.${fileExt}`;
+    const fileExt = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+    const fileName = `${userId}/${certId}-${side}-${crypto.randomUUID()}.${fileExt}`;
 
     const { error: uploadError } = await supabase.storage
       .from("certification-documents")
       .upload(fileName, file, {
-        upsert: true,
+        upsert: false,
         cacheControl: "3600"
       });
 
@@ -234,11 +235,12 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
     try {
       setUploading(`${certId}-${side}`);
 
-      if (!event.target.files || event.target.files.length === 0) {
+      const input = event.currentTarget;
+      if (!input.files || input.files.length === 0) {
         return;
       }
 
-      const file = event.target.files[0];
+      const file = input.files[0];
       
       if (file.size > 20 * 1024 * 1024) {
         toast.error("Document or photo must be 20MB or smaller");
@@ -260,7 +262,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       await loadCertifications();
       
       // Reset the input so the same file can be uploaded again if needed
-      event.target.value = '';
+      input.value = '';
     } catch (error: any) {
       toast.error("Upload failed: " + error.message);
       console.error("Upload error:", error);
@@ -566,41 +568,31 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                           </div>
                         </div>
                       )}
-                      <input
-                        id={`license-upload-${licenseLevel}-${side}`}
-                        type="file"
-                        accept="image/*,.heic,.heif,.pdf,.doc,.docx"
-                        onChange={(e) => {
-                          if (existingLicense) {
-                            handleDocumentUpload(e, existingLicense.id, side as "front" | "back");
-                          } else {
-                            handlePendingUpload(e, side as "front" | "back");
-                          }
-                        }}
-                        disabled={isUploading}
-                        className="hidden"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        disabled={!!isUploading}
-                        onClick={() => document.getElementById(`license-upload-${licenseLevel}-${side}`)?.click()}
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        {isUploading ? "Uploading..." : (hasDocument || hasPending) ? "Change" : "Upload"}
-                      </Button>
+                      <label className="relative flex min-h-11 w-full items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium focus-within:ring-2 focus-within:ring-ring">
+                        <Upload className="h-4 w-4" />
+                        {isUploading ? "Uploading..." : (hasDocument || hasPending) ? "Change document" : "Upload document"}
+                        <input
+                          type="file"
+                          accept="image/*,.heic,.heif,.pdf,.doc,.docx"
+                          aria-label={`${label} ${side} document`}
+                          onChange={(e) => {
+                            if (existingLicense) void handleDocumentUpload(e, existingLicense.id, side as "front" | "back");
+                            else handlePendingUpload(e, side as "front" | "back");
+                          }}
+                          disabled={!!uploading}
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait"
+                        />
+                      </label>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {!embedded && <Button type="button" className="w-full" onClick={handleSubmit} disabled={uploading === `${licenseLevel}-save`}>
+            <Button type="button" className="w-full" onClick={handleSubmit} disabled={!!uploading}>
               {uploading === `${licenseLevel}-save` ? "Saving License…" : existingLicense ? "Update License" : "Save License"}
-            </Button>}
-            {embedded && <p className="text-sm text-muted-foreground">Your license information and selected documents will save when you press Continue.</p>}
+            </Button>
+            {embedded && <p className="text-sm text-muted-foreground">Tap Save License to upload now, or Continue to save and move on.</p>}
           </div>
         </CardContent>
       </Card>
@@ -891,27 +883,15 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
                                   </div>
                                 </div>
                               )}
-                              <input
-                                id={`training-upload-${training.id}-${side}`}
-                                type="file"
-                                accept="image/*,.heic,.heif,.pdf,.doc,.docx"
-                                onChange={(e) =>
-                                  handleDocumentUpload(e, training.id, side as "front" | "back")
-                                }
-                                disabled={isUploading}
-                                className="hidden"
-                              />
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="w-full"
-                                disabled={isUploading}
-                                onClick={() => document.getElementById(`training-upload-${training.id}-${side}`)?.click()}
-                              >
-                                <Upload className="mr-2 h-3 w-3" />
-                                {isUploading ? "Uploading..." : hasDocument ? "Change" : "Upload"}
-                              </Button>
+                              <label className="relative flex min-h-11 w-full items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium focus-within:ring-2 focus-within:ring-ring">
+                                <Upload className="h-3 w-3" />
+                                {isUploading ? "Uploading..." : hasDocument ? "Change document" : "Upload document"}
+                                <input type="file" accept="image/*,.heic,.heif,.pdf,.doc,.docx"
+                                  aria-label={`${training.name} ${side} document`}
+                                  onChange={(e) => void handleDocumentUpload(e, training.id, side as "front" | "back")}
+                                  disabled={!!uploading}
+                                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                              </label>
                             </div>
                           );
                         })}
