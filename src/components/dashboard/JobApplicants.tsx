@@ -1,3 +1,4 @@
+import { displayInterviewNotes, isKairos } from "@/lib/kairosWorkflow";
 import { ApplicantReviewAction } from "./ApplicantReviewAction";
 import { NoOfferButton } from "./NoOfferButton";
 import { OfficerProfileDetails } from "./OfficerProfileDetails";
@@ -786,7 +787,7 @@ const JobApplicants = ({
                     </Button>
                   </div>
                   <div className="mt-4 rounded-lg border p-4 text-sm text-muted-foreground">
-                    {activeApplication.companyNote?.note || "No company notes recorded."}
+                    {displayInterviewNotes(activeApplication.companyNote?.note || "") || "No company notes recorded."}
                   </div>
                 </div>
               ),
@@ -1140,6 +1141,7 @@ const JobApplicants = ({
 
                   {isPaidSubscriber ? (
                     <div className="applicant-roster-actions">
+                      {isKairos(companyId) && app.interview && <Button size="sm" variant="outline" onClick={() => setNotesApplication(app)}>Interview questions</Button>}
                       {app.status === "interview_completed" && <NoOfferButton applicationId={app.id} officerName={app.officerName} onChanged={loadApplications} />}
                       {nextStep.label === "Next: Review application" && (
                         <>

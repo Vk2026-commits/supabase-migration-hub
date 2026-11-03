@@ -1,3 +1,5 @@
+import { INTERVIEW_QUESTIONS, isKairos, readInterviewNotes, writeInterviewNotes } from "@/lib/kairosWorkflow";
+import { Label } from "@/components/ui/label";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -16,17 +18,19 @@ interface ApplicantNotesDialogProps {
 
 export function ApplicantNotesDialog({ open, onOpenChange, companyId, application, onSaved }: ApplicantNotesDialogProps) {
   const [note, setNote] = useState("");
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setNote(application?.companyNote?.note || "");
-  }, [open, application]);
+    if (open) { const saved = readInterviewNotes(application?.companyNote?.note || ""); setNote(saved.general); setAnswers(saved.answers); }
+  }, [open, application?.id]);
 
   const saveNote = async () => {
     if (!application?.id) return;
     setSaving(true);
     try {
-      const trimmedNote = note.trim();
+      const trimmedNote = writeInterviewNotes(note, answers);
+      if (trimmedNote.length > 10000) throw new Error("Please shorten your notes to fit the 10,000-character limit.");
       if (!trimmedNote && application.companyNote?.id) {
         const { error } = await (supabase as any)
           .from("company_applicant_notes")
@@ -59,12 +63,13 @@ export function ApplicantNotesDialog({ open, onOpenChange, companyId, applicatio
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !saving && onOpenChange(nextOpen)}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><StickyNote className="h-5 w-5 text-primary" />Notes for {application?.officerName}</DialogTitle>
           <DialogDescription>Private notes for your company team. The applicant cannot see them.</DialogDescription>
         </DialogHeader>
-        <Textarea
+        <Label htmlFor="applicant-general-note">General notes</Label>
+        <Textarea id="applicant-general-note"
           value={note}
           onChange={(event) => setNote(event.target.value)}
           placeholder="Add interview reminders, follow-up details, or other internal notes…"
@@ -72,7 +77,8 @@ export function ApplicantNotesDialog({ open, onOpenChange, companyId, applicatio
           maxLength={10000}
           autoFocus
         />
-        <div className="text-right text-xs text-muted-foreground">{note.length.toLocaleString()} / 10,000</div>
+        <div className="text-right text-xs text-muted-foreground">{writeInterviewNotes(note, answers).length.toLocaleString()} / 10,000</div>
+        {isKairos(companyId) && application?.interview && <section className="space-y-5"><h3 className="font-semibold">Interview questions</h3>{INTERVIEW_QUESTIONS.map((question) => <div key={question.id} className="space-y-2"><Label htmlFor={`interview-answer-${question.id}`}>{question.text}</Label><Textarea id={`interview-answer-${question.id}`} value={answers[question.id] || ""} onChange={(event) => setAnswers((current) => ({ ...current, [question.id]: event.target.value }))} placeholder="Notes on this question…" maxLength={1000} disabled={saving} /></div>)}</section>}
         <DialogFooter>
           <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button type="button" disabled={saving} onClick={() => void saveNote()}>

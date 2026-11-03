@@ -1,3 +1,4 @@
+import { TexasSecurityResources } from "./KairosWorkflowOptions";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -951,6 +952,7 @@ export function CertificationsManager({ officerId, userId, onEnsureProfile, onCh
       <TabsContent value="training" className="space-y-4">
         <TrainingSection />
       </TabsContent>
+      <TexasSecurityResources />
     </Tabs>
   );
 }

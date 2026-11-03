@@ -1,3 +1,5 @@
+import { isKairos } from "@/lib/kairosWorkflow";
+import { KairosReportingOptions } from "./KairosWorkflowOptions";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -346,9 +348,11 @@ export default function ClientSites({ companyId, canManage }: ClientSitesProps) 
             </section>
             <section className="space-y-4 rounded-xl border p-4">
               <h3 className="font-semibold">Contacts</h3>
+              {isKairos(companyId) && <KairosReportingOptions />}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
                   label="Officer supervisor"
+                  list={isKairos(companyId) ? "kairos-reporting-options" : undefined}
                   value={form.supervisor_name}
                   onChange={(value) => setForm({ ...form, supervisor_name: value })}
                 />
@@ -428,6 +432,7 @@ export default function ClientSites({ companyId, canManage }: ClientSitesProps) 
 }
 
 function Field({
+  list,
   label,
   value,
   onChange,
@@ -439,6 +444,7 @@ function Field({
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
+  list?: string;
 }) {
   const id = `site-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
@@ -449,6 +455,7 @@ function Field({
       </Label>
       <Input
         id={id}
+        list={list}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}

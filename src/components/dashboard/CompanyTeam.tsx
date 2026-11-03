@@ -1,3 +1,5 @@
+import { isKairos } from "@/lib/kairosWorkflow";
+import { KairosTeamDirectory } from "./KairosWorkflowOptions";
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Crown, Mail, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -215,6 +217,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
 
   return (
     <div className="overflow-hidden border bg-background">
+      {isKairos(companyId) && <KairosTeamDirectory />}
       <Card className="rounded-none border-0 border-b bg-transparent shadow-none">
         <CardHeader className="px-4 py-4 sm:px-5">
           <CardTitle className="flex items-center gap-2">

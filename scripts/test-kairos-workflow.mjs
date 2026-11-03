@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+const code = ts.transpileModule(readFileSync('src/lib/kairosWorkflow.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { readInterviewNotes, writeInterviewNotes, displayInterviewNotes, INTERVIEW_QUESTIONS, isKairos, KAIROS_COMPANY_ID } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const legacy = 'Called applicant.\nFollow up next week.';
+assert.deepEqual(readInterviewNotes(legacy), { general: legacy, answers: {} });
+const answers = Object.fromEntries(INVIEW());
+function INVIEW() { return INTERVIEW_QUESTIONS.map((q, i) => [q.id, `Answer ${i}\nMore detail`]); }
+const saved = writeInterviewNotes(legacy, answers);
+assert.deepEqual(readInterviewNotes(saved), { general: legacy, answers });
+assert.ok(displayInterviewNotes(saved).includes('How many years of experience'));
+assert.ok(displayInterviewNotes(saved).includes('Answer 7\nMore detail'));
+assert.equal(writeInterviewNotes('  ', {}), '');
+assert.equal(readInterviewNotes('{bad json').general, '{bad json');
+assert.ok(isKairos(KAIROS_COMPANY_ID));
+assert.equal(isKairos('other-company'), false);
+assert.equal(INTERVIEW_QUESTIONS.length, 8);
+assert.ok(!INTERVIEW_QUESTIONS.some(q => /health issues/i.test(q.text)));
+console.log('PASS legacy notes preserved, all question answers round-trip, readable summary, company scope, approved question wording');
