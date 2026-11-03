@@ -1,5 +1,6 @@
+import { isKairos } from "@/lib/kairosWorkflow";
 import { NavLink } from "@/lib/router-compat";
-import { Briefcase, Users, Heart, UserCheck, UserX, Building2, CheckCircle2, CreditCard, UsersRound, MapPinned, LayoutDashboard, Settings } from "lucide-react";
+import { Briefcase, Users, Heart, UserCheck, UserX, Building2, CheckCircle2, CreditCard, UsersRound, MapPinned, LayoutDashboard, Settings, ExternalLink } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -105,6 +106,27 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
             </SidebarGroup>
           </div>
         ))}
+        {isKairos(companyId) && <>
+          <SidebarSeparator className="mx-3 w-auto" />
+          <SidebarGroup className="py-2">
+            <SidebarGroupLabel className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground/80">Resources and links</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {[
+                  { title: "Texas TOPS", href: "https://tops.portal.texas.gov" },
+                  { title: "Texas DPS Secure Site", href: "https://securesite.dps.texas.gov/" },
+                ].map((resource) => <SidebarMenuItem key={resource.href}>
+                  <SidebarMenuButton asChild tooltip={resource.title}>
+                    <a href={resource.href} target="_blank" rel="noopener noreferrer" aria-label={`${resource.title} (opens in new tab)`}>
+                      <ExternalLink className="h-4 w-4" />
+                      {open && <span>{resource.title}</span>}
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>)}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </>}
       </SidebarContent>
     </Sidebar>
   );
