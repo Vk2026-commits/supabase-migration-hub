@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -94,6 +95,8 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
   const [role, setRole] = useState<Exclude<TeamRole, "owner">>("hiring_manager");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [draftRole, setDraftRole] = useState<TeamRole>("reviewer");
   const [memberToRemove, setMemberToRemove] = useState<TeamMember | null>(null);
   const [memberToPromote, setMemberToPromote] = useState<TeamMember | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -332,44 +335,27 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
             members.map((member) => (
               <div
                 key={member.id}
-                className="flex flex-wrap items-center gap-4 border-b px-4 py-3 last:border-b-0 hover:bg-slate-50/70 sm:px-5"
+                className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-3 border-b px-4 py-3 last:border-b-0 hover:bg-slate-50/70 sm:px-5 xl:grid-cols-[40px_minmax(0,1fr)_150px_160px_112px]"
               >
                 <ProfileAvatar name={member.full_name} email={member.email} src={member.avatar_url} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold">{member.full_name || member.email}</p>
                   <p className="truncate text-sm text-muted-foreground">{member.email}</p>
                 </div>
-                <Badge variant={member.status === "active" ? "secondary" : "outline"}>
+                <Badge className="w-fit xl:col-auto col-start-2" variant={member.status === "active" ? "secondary" : "outline"}>
                   {member.status === "invited"
                     ? "Invite pending"
                     : member.status === "accepted"
                       ? "Account setup in progress"
                       : "Active"}
                 </Badge>
-                {member.user_id === primaryOwnerUserId || (member.role === "owner" && !canAssignOwners) ? (
-                  <Badge className="gap-1"><Crown className="h-3 w-3" />{roleLabels.owner}</Badge>
-                ) : canManage ? (
-                  <Select
-                    value={member.role}
-                    onValueChange={(value) =>
-                      requestRoleChange(member, value as TeamRole)
-                    }
-                  >
-                    <SelectTrigger className="h-10 w-full sm:w-80">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {canAssignOwners && member.status === "active" && (
-                        <SelectItem value="owner">Owner</SelectItem>
-                      )}
-                      <SelectItem value="admin">{accessLabel("admin")}</SelectItem>
-                      <SelectItem value="hiring_manager">{accessLabel("hiring_manager")}</SelectItem>
-                      <SelectItem value="reviewer">{accessLabel("reviewer")}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Badge variant="outline">{roleLabels[member.role]}</Badge>
-                )}
+                <Badge variant={member.role === "owner" ? "default" : "outline"} className="col-start-2 w-fit gap-1 xl:col-auto">
+                  {member.role === "owner" && <Crown className="h-3 w-3" />}{roleLabels[member.role]}
+                </Badge>
+                <div className="col-start-2 flex min-h-10 items-center justify-start gap-1 xl:col-auto xl:justify-end">
+                  {canManage && member.user_id !== primaryOwnerUserId && (member.role !== "owner" || canAssignOwners) && (
+                    <Button type="button" variant="ghost" size="sm" aria-label={`Edit access for ${member.full_name || member.email}`} onClick={() => { setDraftRole(member.role); setEditingMember(member); }}>Edit</Button>
+                  )}
                 {canManage && member.role !== "owner" && member.user_id !== primaryOwnerUserId && (
                   <Button
                     type="button"
@@ -382,11 +368,34 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 )}
+                </div>
               </div>
             ))
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(editingMember)} onOpenChange={(open) => { if (!open) setEditingMember(null); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Edit team access</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{editingMember?.full_name || editingMember?.email}</p>
+          <Label htmlFor="edit-team-role">Access level</Label>
+          <Select value={draftRole} onValueChange={(value) => setDraftRole(value as TeamRole)}>
+            <SelectTrigger id="edit-team-role" className="h-auto min-h-10 w-full [&>span]:whitespace-normal [&>span]:text-left"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {canAssignOwners && editingMember?.status === "active" && <SelectItem value="owner">Owner</SelectItem>}
+              <SelectItem value="admin">{accessLabel("admin")}</SelectItem>
+              <SelectItem value="hiring_manager">{accessLabel("hiring_manager")}</SelectItem>
+              <SelectItem value="reviewer">{accessLabel("reviewer")}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-sm text-muted-foreground">{roleDescriptions[draftRole]}</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMember(null)}>Cancel</Button>
+            <Button disabled={!editingMember || draftRole === editingMember.role} onClick={() => { if (!editingMember) return; requestRoleChange(editingMember, draftRole); setEditingMember(null); }}>Save access</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={Boolean(memberToRemove)}
