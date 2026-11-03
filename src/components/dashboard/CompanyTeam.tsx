@@ -356,7 +356,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                   {canManage && member.user_id !== primaryOwnerUserId && (member.role !== "owner" || canAssignOwners) && (
                     <Button type="button" variant="ghost" size="sm" aria-label={`Edit access for ${member.full_name || member.email}`} onClick={() => { setDraftRole(member.role); setEditingMember(member); }}>Edit</Button>
                   )}
-                {canManage && member.role !== "owner" && member.user_id !== primaryOwnerUserId && (
+                {canManage && member.role !== "owner" && member.user_id !== primaryOwnerUserId ? (
                   <Button
                     type="button"
                     size="icon"
@@ -367,7 +367,7 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
-                )}
+                ) : <span className="h-10 w-10 shrink-0" aria-hidden="true" />}
                 </div>
               </div>
             ))
