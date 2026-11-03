@@ -38,8 +38,8 @@ export function OfficerProfileDetails({ officerId }: { officerId: string }) {
           try {
             const listing: any = await bounded((supabase as any).rpc("list_visible_officer_photos", { _user_id: profile.data.user_id }).abortSignal(controller.signal));
             if (listing.error) throw listing.error;
-            const files = (listing.data || []).filter(file => photoLabels[file.name.split(".")[0]]);
-            const signed = files.length ? await bounded(supabase.storage.from("officer-photos").createSignedUrls(files.map(file => `${profile.data.user_id}/${file.name}`), 3600)) : { data: [], error: null };
+            const files = (listing.data || []).filter((file: { name: string }) => photoLabels[file.name.split(".")[0]]);
+            const signed = files.length ? await bounded(supabase.storage.from("officer-photos").createSignedUrls(files.map((file: { name: string }) => `${profile.data.user_id}/${file.name}`), 3600)) : { data: [], error: null };
             if (signed.error) throw signed.error;
             update({ photos: signed.data || [] });
           } catch { update({ photoError: true }); }
