@@ -349,8 +349,8 @@ export default function CompanyTeam({ companyId, allowInvites = false, readOnly 
                       ? "Account setup in progress"
                       : "Active"}
                 </Badge>
-                <Badge variant={member.role === "owner" ? "default" : "outline"} className="col-start-2 w-fit gap-1 xl:col-auto">
-                  {member.role === "owner" && <Crown className="h-3 w-3" />}{roleLabels[member.role]}
+                <Badge variant={member.role === "owner" || member.user_id === primaryOwnerUserId ? "default" : "outline"} className="col-start-2 w-fit gap-1 xl:col-auto">
+                  {(member.role === "owner" || member.user_id === primaryOwnerUserId) && <Crown className="h-3 w-3" />}{roleLabels[member.user_id === primaryOwnerUserId ? "owner" : member.role]}
                 </Badge>
                 <div className="col-start-2 flex min-h-10 items-center justify-start gap-1 xl:col-auto xl:justify-end">
                   {canManage && member.user_id !== primaryOwnerUserId && (member.role !== "owner" || canAssignOwners) && (
