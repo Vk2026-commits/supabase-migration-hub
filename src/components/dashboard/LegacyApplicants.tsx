@@ -191,6 +191,12 @@ export function LegacyApplicants({
         .includes(search.toLowerCase()),
     ),
   );
+  const selectableIds = filtered
+    .map((group) => group[0])
+    .filter((row) => legacyEmailValid(row.email) && !latestInvite(row)?.claimed_at)
+    .map((row) => row.id);
+  const allVisibleSelected =
+    selectableIds.length > 0 && selectableIds.every((id) => selected.includes(id));
   return (
     <section className="mb-6 rounded-xl border bg-white p-5">
       <h3 className="text-lg font-semibold">
@@ -205,6 +211,30 @@ export function LegacyApplicants({
       </p>
       {canInvite && (
         <div className="mb-4 flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            disabled={!loadReady || sending || !selectableIds.length}
+            onClick={() =>
+              setSelected((current) =>
+                allVisibleSelected
+                  ? current.filter((id) => !selectableIds.includes(id))
+                  : [...new Set([...current, ...selectableIds])],
+              )
+            }
+          >
+            {allVisibleSelected
+              ? "Deselect all"
+              : search.trim()
+                ? "Select all results"
+                : "Select all"}
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={sending || !selected.length}
+            onClick={() => setSelected([])}
+          >
+            Clear selection
+          </Button>
           <Button
             disabled={!loadReady || sending || !selected.length}
             onClick={() =>
@@ -225,6 +255,9 @@ export function LegacyApplicants({
         onChange={(e) => setSearch(e.target.value)}
       />
       <p className="my-2 text-xs text-muted-foreground">
+        Select all includes eligible applicants in the current search results. Missing or invalid
+        emails and accepted invitations are skipped.
+        <br />
         Showing {filtered.length} of {applicants.length} applicant entries · {rows.length} original
         submissions
       </p>
@@ -385,7 +418,8 @@ export function LegacyApplicants({
             <option value="">Select an active position</option>
             {jobs.map((j) => (
               <option key={j.id} value={j.id}>
-                {j.title} — {j.location || "Location not listed"} · Posted {new Date(j.created_at).toLocaleDateString()}
+                {j.title} — {j.location || "Location not listed"} · Posted{" "}
+                {new Date(j.created_at).toLocaleDateString()}
               </option>
             ))}
           </select>
