@@ -135,12 +135,20 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
       setOpen(false);
       onChanged?.();
     };
+    const bounded = async <T,>(work: PromiseLike<T>, ms: number): Promise<T> => {
+      let timer: ReturnType<typeof setTimeout>;
+      try {
+        return await Promise.race([Promise.resolve(work), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Offer request timed out")), ms);
+        })]);
+      } finally { clearTimeout(timer!); }
+    };
     const findCompletedAttempt = async () => {
-      const { data } = await (supabase as any).from("employment_offers").select("id,version,status,terms,sent_at").eq("id", idempotencyKey).maybeSingle();
+      const { data } = await bounded<any>((supabase as any).from("employment_offers").select("id,version,status,terms,sent_at").eq("id", idempotencyKey).abortSignal(AbortSignal.timeout(5000)).maybeSingle(), 6000).catch(() => ({ data: null }));
       return data?.status === "sent" ? data : null;
     };
     try {
-      const { data, error } = await supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody });
+      const { data, error } = await bounded(supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody }), 65000);
       if (error) {
         let serverMessage = "";
         try {
@@ -175,15 +183,6 @@ const HireButton = ({ officerId, officerName, companyId, hiringApplicationId, jo
         for (let attempt = 0; attempt < 6 && !completed; attempt += 1) {
           await new Promise((resolve) => window.setTimeout(resolve, 1500));
           completed = await findCompletedAttempt();
-        }
-        if (!completed) {
-          try {
-            const retry = await supabase.functions.invoke("manage-employment-offer", { timeout: 60000, body: requestBody });
-            if (!retry.error && !retry.data?.error) completed = retry.data?.offer || retry.data;
-            if (!completed) completed = await findCompletedAttempt();
-          } catch {
-            completed = await findCompletedAttempt();
-          }
         }
         if (completed) finishSuccessfulSend(completed);
         else toast.error("The offer could not finish processing. Your entries are still here—please wait a moment and send again.", { duration: 10000 });

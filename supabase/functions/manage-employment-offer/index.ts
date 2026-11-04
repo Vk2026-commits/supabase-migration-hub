@@ -1,7 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
-declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -304,8 +303,11 @@ Deno.serve(async (request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const admin = createClient(supabaseUrl, serviceKey);
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } } });
+    const boundedFetch: typeof fetch = (input, init) => fetch(input, {
+      ...init, signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+    });
+    const admin = createClient(supabaseUrl, serviceKey, { global: { fetch: boundedFetch } });
+    const userClient = createClient(supabaseUrl, anonKey, { global: { fetch: boundedFetch, headers: { Authorization: authorization } } });
     const token = authorization.replace("Bearer ", "");
     const { data: authData, error: authError } = await admin.auth.getUser(token);
     if (authError || !authData.user) return json({ error: "Invalid or expired session" }, 401);
@@ -352,8 +354,8 @@ Deno.serve(async (request) => {
       if (!officer) return json({ error: "Officer not found" }, 404);
 
       const { data: existingAttempt } = await admin.from("employment_offers").select("*").eq("id", offerId).maybeSingle();
-      if (existingAttempt?.status === "sent") return json({ offer: existingAttempt });
       if (existingAttempt && (existingAttempt.company_id !== companyId || existingAttempt.officer_id !== officerId || existingAttempt.created_by !== authData.user.id)) return json({ error: "Offer retry does not match the original request" }, 409);
+      if (existingAttempt && existingAttempt.status !== "draft") return json({ offer: existingAttempt });
       const { data: previous } = await admin.from("employment_offers").select("id,version,status").eq("company_id", companyId).eq("officer_id", officerId).eq("hiring_application_id", applicationId).neq("id", offerId).order("version", { ascending: false }).limit(1).maybeSingle();
       const version = Number(previous?.version || 0) + 1;
       const now = new Date().toISOString();
@@ -379,13 +381,8 @@ Deno.serve(async (request) => {
         return offer;
       };
 
-      // Return as soon as the durable draft exists. Supabase keeps this promise alive
-      // after the response, so PDF generation and storage no longer hold the browser open.
-      if (typeof EdgeRuntime !== "undefined") {
-        EdgeRuntime.waitUntil(finishOffer().catch((error) => console.error("Employment offer background processing failed", error)));
-        return json({ offer: existingAttempt || { id: offerId, version, status: "draft", terms }, processing: true }, 202);
-      }
-
+      // Keep failures attached to this request so the sender receives the actual
+      // archive error. A durable draft alone does not mean the offer was sent.
       return json({ offer: await finishOffer() });
     }
 
