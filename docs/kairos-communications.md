@@ -33,3 +33,13 @@ Verification: scripts/test-company-communications.mjs mocks transport and checks
 roles, company mismatch, unsigned webhooks, and foreign agent exclusion. Live RLS tests
 confirmed owner access and zero rows for an unrelated authenticated user. No calls or
 messages were sent during implementation.
+
+## Job inquiry greeting and application emails
+
+Kairos front desk and HR inbound phone bindings now use agent version 16, based on their previously live versions (front desk 13, HR 11). Existing voice, transfers and webhook settings are preserved. Maya adds a spoken “say job” cue and routes job inquiries to HR.
+
+HR confirms the applicant's name/email, then calls `retell-application-email`. The email contains only the current application URL, `https://wefindguards.com/get-started`, and directs the recipient to create/sign into an officer account and apply for Kairos. This tool replaces the former Railway email webhook for these inbound calls. The old Railway service itself is not modified.
+
+The function requires the server-managed `KAIROS_APPLICATION_EMAIL_SECRET` tool header, verifies the current call belongs to the Kairos HR agent through Retell, rejects calls older than 12 hours, and uses Resend's 24-hour idempotency key per call/email to prevent retry duplicates. `KAIROS_RETELL_API_KEY` and `RESEND_API_KEY` remain server-only. HR only reports success after the provider accepts the message; acceptance does not guarantee inbox delivery.
+
+Validation: `node scripts/test-retell-application-email.mjs` mocks all transport and covers unauthorized requests, malformed email, other agents, old calls, retries, the current URL and email-provider failures. No real caller email or phone call was sent during deployment. A real phone/inbox test remains a manual verification step.

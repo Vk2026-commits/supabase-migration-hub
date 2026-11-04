@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+let handler, agent='agent_e4c3a2078ca7f5adc0d26fd0e1', age=0, sendOk=true, payloads=[], keys=[];
+globalThis.Deno={env:{get:k=>({KAIROS_APPLICATION_EMAIL_SECRET:'test',KAIROS_RETELL_API_KEY:'test',RESEND_API_KEY:'test'})[k]},serve:f=>handler=f};
+globalThis.fetch=async(url,opts)=>{
+ if(url.includes('retellai.com')) return Response.json({agent_id:agent,start_timestamp:Date.now()-age});
+ payloads.push(JSON.parse(opts.body));keys.push(opts.headers['Idempotency-Key']);return Response.json({id:'mock'}, {status:sendOk?200:500});
+};
+const source=fs.readFileSync('supabase/functions/retell-application-email/index.ts','utf8');
+await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64'));
+const body={args:{applicant_name:'Test Applicant',applicant_email:'test@example.invalid'},call:{call_id:'call_test'}};
+const request=(b=body,secret='test')=>handler(new Request('https://example.invalid',{method:'POST',headers:{'Content-Type':'application/json','x-kairos-email-secret':secret},body:JSON.stringify(b)}));
+assert.equal((await request(body,'wrong')).status,401);
+assert.equal((await request({...body,args:{...body.args,applicant_email:'bad'}})).status,400);
+agent='other';assert.equal((await request()).status,403);agent='agent_e4c3a2078ca7f5adc0d26fd0e1';
+age=13*3600000;assert.equal((await request()).status,403);age=0;assert.equal(payloads.length,0);
+assert.equal((await request()).status,200);assert.equal((await request()).status,200);assert.equal(keys[0],keys[1]);
+assert.match(payloads[0].text,/https:\/\/wefindguards.com\/get-started/);assert.doesNotMatch(payloads[0].text,/apply.kairossecurity.com/);
+assert.deepEqual(payloads[0].to,['test@example.invalid']);sendOk=false;assert.equal((await request()).status,502);
+console.log('PASS: auth, validation, agent isolation, old-call rejection, new URL, idempotency and delivery failure. All email delivery mocked.');
