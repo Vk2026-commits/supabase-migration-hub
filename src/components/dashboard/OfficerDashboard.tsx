@@ -1397,7 +1397,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
               <Card
                 className={`mb-6 rounded-2xl ${upcomingInterview.status === "cancelled" ? "border-red-200 bg-red-50/70" : "border-blue-200 bg-blue-50/70"}`}
               >
-                <CardContent className="flex flex-col flex-wrap gap-4 p-5 xl:flex-row xl:items-start xl:justify-between">
+                <CardContent className="grid min-w-0 grid-cols-1 items-start gap-4 p-5 2xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-xs font-bold uppercase tracking-wide text-primary">
@@ -1487,7 +1487,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                       </>
                     )}
                   </div>
-                  <aside className="w-full rounded-xl border-2 border-red-300 bg-red-50 p-4 text-red-900 sm:w-72 sm:shrink-0" aria-label="Interview appointment details">
+                  <aside className="min-w-0 w-full break-words rounded-xl border-2 border-red-300 bg-red-50 p-4 text-red-900" aria-label="Interview appointment details">
                     <h3 className="font-bold uppercase tracking-wide">Interview details</h3>
                         <p className="mt-1 text-base font-bold text-red-900">
                           Current appointment:{" "}
@@ -1503,7 +1503,7 @@ const OfficerDashboard = ({ userId, initialTab = "overview" }: OfficerDashboardP
                             : interviewAddress(upcomingInterview.company_name, upcomingInterview.location)}
                         </p>
                   </aside>
-                  <div className="flex shrink-0 flex-wrap gap-2">
+                  <div className="col-span-full flex min-w-0 flex-wrap gap-2 border-t border-blue-200 pt-4 [&>button]:max-w-full [&>button]:whitespace-normal">
                     {upcomingInterview.status === "cancelled" && (
                       <Button
                         type="button"
