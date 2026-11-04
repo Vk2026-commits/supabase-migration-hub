@@ -83,7 +83,7 @@ export function LegacyApplicants({
         .order("created_at", { ascending: false }),
       supabase
         .from("job_postings")
-        .select("id,title")
+        .select("id,title,location,created_at")
         .eq("company_id", companyId)
         .eq("status", "active"),
     ])
@@ -385,7 +385,7 @@ export function LegacyApplicants({
             <option value="">Select an active position</option>
             {jobs.map((j) => (
               <option key={j.id} value={j.id}>
-                {j.title}
+                {j.title} — {j.location || "Location not listed"} · Posted {new Date(j.created_at).toLocaleDateString()}
               </option>
             ))}
           </select>
