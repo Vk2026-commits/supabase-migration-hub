@@ -1,6 +1,6 @@
 import { isKairos } from "@/lib/kairosWorkflow";
 import { NavLink } from "@/lib/router-compat";
-import { Briefcase, Users, Heart, UserCheck, UserX, Building2, CheckCircle2, CreditCard, UsersRound, MapPinned, LayoutDashboard, Settings, ExternalLink } from "lucide-react";
+import { Briefcase, Users, Heart, UserCheck, UserX, Building2, CheckCircle2, CreditCard, UsersRound, MapPinned, LayoutDashboard, Settings, ExternalLink, Phone, MessageSquare, BarChart3 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -49,6 +49,11 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
         { title: "Terminated", value: "terminated", icon: UserX },
       ],
     },
+    ...(isKairos(companyId) ? [{ label: "Communications", items: [
+      { title: "Call Log", value: "call-log", icon: Phone },
+      { title: "SMS Log", value: "sms-log", icon: MessageSquare },
+      { title: "Analytics", value: "communications-analytics", icon: BarChart3 },
+    ] }] : []),
     {
       label: "Company Management",
       items: [

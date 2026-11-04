@@ -1,3 +1,4 @@
+import { CompanyCommunications } from "./CompanyCommunications";
 import { LegacyApplicants } from "./LegacyApplicants";
 import { HiringTestPanel } from "./HiringTestPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -65,6 +66,9 @@ const companyTabs = new Set([
   "sites",
   "applicants",
   "imported-applicants",
+  "call-log",
+  "sms-log",
+  "communications-analytics",
   "interested",
   "employment",
   "not-hired",
@@ -90,7 +94,7 @@ const companySectionDetails: Record<string, { title: string; description: string
 };
 
 // These sections already render a title alongside their own counts/actions.
-const sectionsWithOwnHeading = new Set(["imported-applicants", "jobs", "sites", "not-hired", "terminated", "team", "subscriptions"]);
+const sectionsWithOwnHeading = new Set(["call-log", "sms-log", "communications-analytics", "imported-applicants", "jobs", "sites", "not-hired", "terminated", "team", "subscriptions"]);
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
@@ -482,7 +486,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
                 </div>
               )}
           </WorkspaceIdentityHeader>
-          {activeTab !== "imported-applicants" && <HiringTestPanel companyId={companyProfile?.id} />}
+          {!["imported-applicants", "call-log", "sms-log", "communications-analytics"].includes(activeTab) && <HiringTestPanel companyId={companyProfile?.id} />}
 
           <div
             id="company-dashboard-content"
@@ -1131,6 +1135,9 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
               />
             )}
 
+            {["call-log", "sms-log", "communications-analytics"].includes(activeTab) && companyProfile && (
+              <CompanyCommunications key={companyProfile.id} companyId={companyProfile.id} view={activeTab} />
+            )}
             {activeTab === "imported-applicants" && companyProfile && (
               <LegacyApplicants companyId={companyProfile.id} canInvite={["owner", "admin", "hiring_manager"].includes(companyTeamRole || "")} />
             )}

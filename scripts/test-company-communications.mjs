@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+let handler, allowed=true, signedIn=true, fetched=0, stored=[];
+globalThis.Deno={env:{get:k=>({SUPABASE_URL:'https://example.invalid',SUPABASE_SERVICE_ROLE_KEY:'service',SUPABASE_ANON_KEY:'anon',KAIROS_RETELL_API_KEY:'synthetic',WFG_RETELL_BRIDGE_SECRET:'bridge'})[k]},serve:f=>handler=f};
+globalThis.mockCreateClient=()=>({auth:{getUser:async()=>({data:{user:signedIn?{id:'staff'}:null}})},rpc:async()=>({data:allowed}),from:()=>({upsert:async rows=>{stored.push(rows);return {};}})});
+const row={call_id:'synthetic',agent_id:'agent_8947865df608da57d4ff7c8375',start_timestamp:1,duration_ms:60000,call_status:'ended'};
+globalThis.fetch=async()=>{fetched++;return Response.json({items:[row,{...row,call_id:'other',agent_id:'other-company'}],has_more:false});};
+let source=fs.readFileSync('supabase/functions/company-communications/index.ts','utf8').replace(/import \{ createClient \} from .*?;/,'const createClient=globalThis.mockCreateClient;');
+await import('data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64'));
+const request=body=>handler(new Request('https://example.invalid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));
+const body={action:'sync',kind:'call',company_id:'abaebf12-8db2-44f7-b60e-a8931405df88'};
+signedIn=false;assert.equal((await request(body)).status,401);assert.equal(fetched,0);
+signedIn=true;allowed=false;assert.equal((await request(body)).status,403);assert.equal(fetched,0);
+allowed=true;assert.equal((await request({...body,company_id:'other'})).status,403);
+assert.equal((await request({...body,action:'webhook',call:row})).status,401);
+const result=await request(body);assert.equal(result.status,200);assert.equal((await result.json()).count,1);assert.equal(stored[0].length,1);assert.equal(stored[0][0].company_id,body.company_id);
+console.log('PASS: unauthenticated, disallowed role, foreign company, unsigned webhook rejected; foreign agent excluded. Mocked transport only.');
