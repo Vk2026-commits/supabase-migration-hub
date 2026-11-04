@@ -1,3 +1,4 @@
+import { LegacyApplicants } from "./LegacyApplicants";
 import { CandidateReview, candidateRatings, candidateReasons } from "./CandidateReview";
 import { displayInterviewNotes, isKairos, KAIROS_POSITIONS } from "@/lib/kairosWorkflow";
 import { ApplicantReviewAction } from "./ApplicantReviewAction";
@@ -915,6 +916,7 @@ const JobApplicants = ({
         <CardDescription>Officers who have expressed interest in your positions</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
+        {isPaidSubscriber && <LegacyApplicants companyId={companyId} />}
         {!isPaidSubscriber && (
           <div className="mb-4 p-4 bg-muted rounded-lg">
             <div className="flex items-start gap-3 mb-3">
