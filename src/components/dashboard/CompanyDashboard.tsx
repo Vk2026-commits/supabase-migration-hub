@@ -90,7 +90,7 @@ const companySectionDetails: Record<string, { title: string; description: string
 };
 
 // These sections already render a title alongside their own counts/actions.
-const sectionsWithOwnHeading = new Set(["jobs", "sites", "not-hired", "terminated", "team", "subscriptions"]);
+const sectionsWithOwnHeading = new Set(["imported-applicants", "jobs", "sites", "not-hired", "terminated", "team", "subscriptions"]);
 
 const errorMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
@@ -482,7 +482,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
                 </div>
               )}
           </WorkspaceIdentityHeader>
-          <HiringTestPanel companyId={companyProfile?.id} />
+          {activeTab !== "imported-applicants" && <HiringTestPanel companyId={companyProfile?.id} />}
 
           <div
             id="company-dashboard-content"

@@ -203,46 +203,23 @@ export function LegacyApplicants({
     selectableIds.length > 0 && selectableIds.every((id) => selected.includes(id));
   return (
     <section className="mb-6 rounded-xl border bg-white p-5">
-      <h3 className="text-lg font-semibold">
-        Imported applicants{" "}
-        <span className="text-sm text-muted-foreground">({applicants.length})</span>
-      </h3>
-      <p className="mb-4 text-sm text-muted-foreground">
-        Original applications from August 6, 2026 onward. These records have not been submitted
-        through We Find Guards. No account or invitation was created by this import. Confirmed
-        duplicate submissions are grouped under one person, with every original application
-        preserved.
-      </p>
-      {canInvite && (
-        <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5">
-          <h4 className="text-lg font-semibold text-blue-950">Invite everyone by email</h4>
-          <p className="mt-1 mb-4 text-sm text-blue-900">
-            Send account invitations to all {allRecipients.length} eligible applicants at once. No
-            need to select each person.
-          </p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xl font-semibold">
+          Imported Applicants{" "}
+          <span className="text-sm font-normal text-muted-foreground">({applicants.length})</span>
+        </h2>
+        {canInvite && (
           <Button
-            size="lg"
-            className="h-auto w-full whitespace-normal py-3 text-base sm:w-auto"
             disabled={!loadReady || sending || !allRecipients.length}
             onClick={() => openPreview(allRecipients)}
           >
-            <Mail className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
-            Email invitations to all {allRecipients.length} applicants
+            <Mail className="mr-2 h-4 w-4" aria-hidden="true" />
+            Email all ({allRecipients.length})
           </Button>
-          <p className="mt-3 text-sm text-blue-900">
-            You’ll review the recipients, choose a job, and confirm before any emails are sent. This
-            includes all eligible applicants, even when a search is active.
-          </p>
-          <p className="mt-1 text-xs text-blue-800">
-            Applicants with missing or invalid emails or accepted invitations are excluded.
-          </p>
-        </div>
-      )}
+        )}
+      </div>
       {canInvite && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="w-full text-sm font-medium text-muted-foreground">
-            Or choose specific applicants:
-          </span>
           <Button
             variant="outline"
             disabled={!loadReady || sending || !selectableIds.length}
@@ -260,39 +237,37 @@ export function LegacyApplicants({
                 ? "Select all results"
                 : "Select all"}
           </Button>
-          <Button
-            variant="ghost"
-            disabled={sending || !selected.length}
-            onClick={() => setSelected([])}
-          >
-            Clear selection
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!loadReady || sending || !selected.length}
-            onClick={() =>
-              openPreview(applicants.map((g) => g[0]).filter((r) => selected.includes(r.id)))
-            }
-          >
-            Email invitations to selected ({selected.length})
-          </Button>
-          <Button variant="outline" disabled={sending || !invites.length} onClick={refreshDelivery}>
-            Refresh delivery status
-          </Button>
+          {selected.length > 0 && (
+            <Button variant="ghost" disabled={sending} onClick={() => setSelected([])}>
+              Clear
+            </Button>
+          )}
+          {selected.length > 0 && (
+            <Button
+              variant="outline"
+              disabled={!loadReady || sending}
+              onClick={() =>
+                openPreview(applicants.map((g) => g[0]).filter((r) => selected.includes(r.id)))
+              }
+            >
+              Email selected ({selected.length})
+            </Button>
+          )}
+          {invites.length > 0 && (
+            <Button variant="outline" disabled={sending} onClick={refreshDelivery}>
+              Refresh status
+            </Button>
+          )}
         </div>
       )}
       <Input
         aria-label="Search imported applications"
-        placeholder="Search imported applicants by name, email, phone or position"
+        placeholder="Search applicants"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
       <p className="my-2 text-xs text-muted-foreground">
-        Select all includes eligible applicants in the current search results. Missing or invalid
-        emails and accepted invitations are skipped.
-        <br />
-        Showing {filtered.length} of {applicants.length} applicant entries · {rows.length} original
-        submissions
+        {filtered.length} applicants · {allRecipients.length} available to email
       </p>
       <div className="space-y-2">
         {filtered.map((submissions) => {
