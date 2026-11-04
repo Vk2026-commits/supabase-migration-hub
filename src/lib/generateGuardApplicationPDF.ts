@@ -306,8 +306,7 @@ export async function generateGuardApplicationPDF(
 
   fields([["Machines or equipment you can operate", data.machinesEquipment, 1]]);
 
-  doc.addPage();
-  y = 15;
+  if (y > height * 0.6) { doc.addPage(); y = 15; } else { y += 8; }
   font(14);
   doc.text("Employment History", width / 2, y, { align: "center" });
   y += 6;
