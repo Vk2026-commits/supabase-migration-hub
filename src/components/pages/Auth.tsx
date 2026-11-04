@@ -37,7 +37,7 @@ const isTemporaryAuthFailure = (error: unknown) => {
 // The transport already bounds stalled requests. A retry must be requested by
 // the user, not started in the background after the form's deadline expires.
 const signIn = async (email: string, password: string) => {
-  const { error } = await authDeadline(supabase.auth.signInWithPassword({ email: email.trim(), password }));
+  const { error } = await authDeadline(supabase.auth.signInWithPassword({ email: email.trim(), password }), 35000);
   if (error) throw error;
 };
 

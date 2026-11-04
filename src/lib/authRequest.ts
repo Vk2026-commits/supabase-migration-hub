@@ -25,13 +25,17 @@ export async function requestWithDeadline<T>(operation: (signal: AbortSignal) =>
 // Do not apply this deadline to uploads or application submission writes.
 export async function authBoundedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  if (!new URL(url).pathname.startsWith("/auth/v1/")) return fetch(input, init);
+  const authUrl = new URL(url);
+  if (!authUrl.pathname.startsWith("/auth/v1/")) return fetch(input, init);
+  // Password verification can exceed 12s during provider congestion. Keep
+  // ordinary session reads short, but allow a single login request to finish.
+  const timeoutMs = authUrl.pathname.endsWith("/token") && authUrl.searchParams.get("grant_type") === "password" ? 30000 : 12000;
   const controller = new AbortController();
   const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
   const abort = () => controller.abort(signal?.reason);
   if (signal?.aborted) abort();
   else signal?.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error("Sign-in connection timed out. Please try again.")), 12000);
+  const timer = setTimeout(() => controller.abort(new Error("Sign-in connection timed out. Please try again.")), timeoutMs);
   try {
     return await fetch(input, { ...init, signal: controller.signal });
   } finally {
