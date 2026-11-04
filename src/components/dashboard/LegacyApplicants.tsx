@@ -1,3 +1,4 @@
+import { Mail } from "lucide-react";
 import { legacyEmailValid, legacyInviteStatus } from "@/lib/legacyApplication";
 import {
   Dialog,
@@ -191,6 +192,9 @@ export function LegacyApplicants({
         .includes(search.toLowerCase()),
     ),
   );
+  const allRecipients = applicants
+    .map((group) => group[0])
+    .filter((row) => legacyEmailValid(row.email) && !latestInvite(row)?.claimed_at);
   const selectableIds = filtered
     .map((group) => group[0])
     .filter((row) => legacyEmailValid(row.email) && !latestInvite(row)?.claimed_at)
@@ -210,7 +214,35 @@ export function LegacyApplicants({
         preserved.
       </p>
       {canInvite && (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-5">
+          <h4 className="text-lg font-semibold text-blue-950">Invite everyone by email</h4>
+          <p className="mt-1 mb-4 text-sm text-blue-900">
+            Send account invitations to all {allRecipients.length} eligible applicants at once. No
+            need to select each person.
+          </p>
+          <Button
+            size="lg"
+            className="h-auto w-full whitespace-normal py-3 text-base sm:w-auto"
+            disabled={!loadReady || sending || !allRecipients.length}
+            onClick={() => openPreview(allRecipients)}
+          >
+            <Mail className="mr-2 h-5 w-5 shrink-0" aria-hidden="true" />
+            Email invitations to all {allRecipients.length} applicants
+          </Button>
+          <p className="mt-3 text-sm text-blue-900">
+            You’ll review the recipients, choose a job, and confirm before any emails are sent. This
+            includes all eligible applicants, even when a search is active.
+          </p>
+          <p className="mt-1 text-xs text-blue-800">
+            Applicants with missing or invalid emails or accepted invitations are excluded.
+          </p>
+        </div>
+      )}
+      {canInvite && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="w-full text-sm font-medium text-muted-foreground">
+            Or choose specific applicants:
+          </span>
           <Button
             variant="outline"
             disabled={!loadReady || sending || !selectableIds.length}
@@ -236,12 +268,13 @@ export function LegacyApplicants({
             Clear selection
           </Button>
           <Button
+            variant="outline"
             disabled={!loadReady || sending || !selected.length}
             onClick={() =>
               openPreview(applicants.map((g) => g[0]).filter((r) => selected.includes(r.id)))
             }
           >
-            Email selected ({selected.length})
+            Email invitations to selected ({selected.length})
           </Button>
           <Button variant="outline" disabled={sending || !invites.length} onClick={refreshDelivery}>
             Refresh delivery status
