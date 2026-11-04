@@ -58,3 +58,6 @@ verify_jwt = false
 
 [functions.process-hiring-submissions]
 verify_jwt = false
+
+[functions.company-drive]
+verify_jwt = false

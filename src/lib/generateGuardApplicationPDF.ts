@@ -412,20 +412,20 @@ export async function generateGuardApplicationPDF(
         data.signatureImage,
         "PNG",
         margin,
-        y + 1,
+        y + 8.5,
         props.width * scale,
         props.height * scale,
       );
     } catch {
       font(9, true);
-      doc.text(display(data.signature), margin, y + 10);
+      doc.text(display(data.signature), margin, y + 16);
     }
   } else {
     font(9, true);
-    doc.text(display(data.signature), margin, y + 10);
+    doc.text(display(data.signature), margin, y + 16);
   }
   font(9, true);
-  doc.text(formatDate(data.signatureDate), margin + cw * 0.72, y + 10);
+  doc.text(formatDate(data.signatureDate), margin + cw * 0.72, y + 16);
   doc.setDrawColor(150);
   doc.line(margin, y + 18, margin + cw * 0.68, y + 18);
   doc.line(margin + cw * 0.72, y + 18, width - margin, y + 18);

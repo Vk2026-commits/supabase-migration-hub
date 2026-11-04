@@ -1,3 +1,4 @@
+import { DriveExportButton } from "./DriveExportButton";
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, FileCheck2, Loader2, RotateCcw, ShieldCheck, Upload } from "lucide-react";
 import { PDFDocument } from "pdf-lib";
@@ -364,7 +365,7 @@ export function OnboardingDocumentsDialog({ open, onOpenChange, application, onA
               <DialogDescription>Review every completed document together, accept the packet, or send a selected item back to the officer for correction.</DialogDescription>
             </div>
             {missingDocuments.length > 0 && <p role="alert" className="text-sm text-red-700">Incomplete audit file. Missing: {missingDocuments.join(", ")}. Retry before using for an audit.</p>}
-            {packetUrl && <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setCorrectionOpen(true)} disabled={!correctionAvailable}><RotateCcw className="mr-2 h-4 w-4" />Send back for correction</Button><Button type="button" size="sm" variant="outline" onClick={() => void acceptOnboarding()} disabled={accepting || !hireId}><ShieldCheck className="mr-2 h-4 w-4" />{accepting ? "Accepting…" : "Reviewed — accept onboarding"}</Button><Button asChild size="sm"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download Texas audit file (PDF)</a></Button></div>}
+            {packetUrl && <div className="flex flex-wrap gap-2"><DriveExportButton applicationId={application?.id} hireId={application?.hireId} kind="onboarding" disabled={loading || missingDocuments.length > 0} getPdf={async()=>{const response=await fetch(packetUrl);if(!response.ok)throw new Error("Could not read the onboarding PDF");return response.blob();}} /><Button type="button" size="sm" variant="outline" onClick={() => setCorrectionOpen(true)} disabled={!correctionAvailable}><RotateCcw className="mr-2 h-4 w-4" />Send back for correction</Button><Button type="button" size="sm" variant="outline" onClick={() => void acceptOnboarding()} disabled={accepting || !hireId}><ShieldCheck className="mr-2 h-4 w-4" />{accepting ? "Accepting…" : "Reviewed — accept onboarding"}</Button><Button asChild size="sm"><a href={packetUrl} download={packetFilename}><Download className="mr-2 h-4 w-4" />Download Texas audit file (PDF)</a></Button></div>}
           </div>
         </DialogHeader>
 

@@ -1,3 +1,4 @@
+import { CandidateReview, candidateRatings, candidateReasons } from "./CandidateReview";
 import { displayInterviewNotes, isKairos, KAIROS_POSITIONS } from "@/lib/kairosWorkflow";
 import { ApplicantReviewAction } from "./ApplicantReviewAction";
 import { NoOfferButton } from "./NoOfferButton";
@@ -265,6 +266,9 @@ const JobApplicants = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
+  const [includeClosed, setIncludeClosed] = useState(false);
+  const [ratingFilter, setRatingFilter] = useState("all");
+  const [reasonFilter, setReasonFilter] = useState("all");
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
@@ -330,6 +334,7 @@ const JobApplicants = ({
         screeningResult,
         interviewsResult,
         notesResult,
+        candidateResult,
       ] = await Promise.all([
         officerUserIds.length
           ? supabase
@@ -361,7 +366,9 @@ const JobApplicants = ({
           .from("company_applicant_notes")
           .select("id,job_application_id,note,updated_at")
           .eq("company_id", companyId),
+        (supabase as any).from("company_candidate_reviews").select("*").eq("company_id", companyId),
       ]);
+      if (candidateResult.error) throw candidateResult.error;
       void unreadPromise.then((result) => {
         if (!result.error) setUnreadCount(result.count || 0);
       });
@@ -423,6 +430,7 @@ const JobApplicants = ({
         const screeningChecks = screeningByHire.get(hireId) || [];
         return {
           ...app,
+          candidateReview: candidateResult.data?.find((review: any) => review.job_application_id === app.id),
           job_posting: isKairos(companyId) && KAIROS_POSITIONS.includes(offerApplication?.applied_position) ? { ...app.job_posting, title: offerApplication.applied_position } : app.job_posting,
           hiring_application: hiringApplications,
           offerHiringApplicationId: offerApplication?.id || null,
@@ -452,9 +460,7 @@ const JobApplicants = ({
       setApplications(
         applicationRows.filter(
           (app: any) =>
-            !app.employmentConfirmedAt &&
-            app.hireStatus !== "not_hired" &&
-            !["not_selected", "not_interested"].includes(String(app.status || "")),
+            !app.employmentConfirmedAt,
         ),
       );
       setLoadError("");
@@ -483,20 +489,21 @@ const JobApplicants = ({
   const filteredApplications = useMemo(
     () =>
       applications.filter((app) => {
+        if (!includeClosed && (app.hireStatus === "not_hired" || ["not_selected", "not_interested", "not_offered"].includes(String(app.status || "")))) return false;
         const matchesSearch =
           !deferredSearchQuery ||
-          [app.officerName, app.officerEmail, app.officerPhone, app.job_posting?.title]
+          [app.officerName, app.officerEmail, app.officerPhone, app.job_posting?.title, app.candidateReview?.notes]
             .filter(Boolean)
             .some((value) => String(value).toLowerCase().includes(deferredSearchQuery));
         const matchesStage = stageFilter === "all" || getApplicantFilterStage(app) === stageFilter;
         const matchesPosition =
           positionFilter === "all" || app.job_posting?.title === positionFilter;
-        return matchesSearch && matchesStage && matchesPosition;
+        return matchesSearch && matchesStage && matchesPosition && (ratingFilter === "all" || (app.candidateReview?.rating || "unrated") === ratingFilter) && (reasonFilter === "all" || (app.candidateReview?.reason || "none") === reasonFilter);
       }),
-    [applications, deferredSearchQuery, positionFilter, stageFilter],
+    [applications, deferredSearchQuery, positionFilter, stageFilter, ratingFilter, reasonFilter, includeClosed],
   );
   const hasActiveFilters =
-    Boolean(searchQuery.trim()) || stageFilter !== "all" || positionFilter !== "all";
+    includeClosed || Boolean(searchQuery.trim()) || stageFilter !== "all" || positionFilter !== "all" || ratingFilter !== "all" || reasonFilter !== "all";
 
   const activeApplication = selectedOfficerId
     ? applications.find(
@@ -548,6 +555,7 @@ const JobApplicants = ({
               >
                 Review application
               </Button>
+              <CandidateReview application={activeApplication} onSaved={loadApplications} />
               <Button size="sm" variant="secondary" onClick={openChat}>
                 <MessageCircle className="mr-2 h-4 w-4" />
                 Chat
@@ -940,7 +948,7 @@ const JobApplicants = ({
         )}
         {!initialLoading && applications.length > 0 && (
           <div className="mb-2 space-y-2 border-y bg-muted/20 px-2 py-2">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
               <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -983,6 +991,8 @@ const JobApplicants = ({
                   ))}
                 </SelectContent>
               </Select>
+              <select aria-label="Filter by candidate rating" className="h-10 min-w-0 rounded-md border bg-background px-2 lg:w-44" value={ratingFilter} onChange={e=>setRatingFilter(e.target.value)}><option value="all">All ratings</option>{Object.entries(candidateRatings).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select>
+              <select aria-label="Filter by follow-up reason" className="h-10 min-w-0 rounded-md border bg-background px-2 lg:w-48" value={reasonFilter} onChange={e=>setReasonFilter(e.target.value)}><option value="all">All follow-up reasons</option>{Object.entries(candidateReasons).map(([v,label])=><option key={v} value={v}>{label}</option>)}</select>
               {hasActiveFilters && (
                 <Button
                   type="button"
@@ -992,6 +1002,7 @@ const JobApplicants = ({
                     setSearchQuery("");
                     setStageFilter("all");
                     setPositionFilter("all");
+                    setRatingFilter("all"); setReasonFilter("all"); setIncludeClosed(false);
                   }}
                 >
                   <X className="mr-1.5 h-4 w-4" />
@@ -999,6 +1010,7 @@ const JobApplicants = ({
                 </Button>
               )}
             </div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeClosed} onChange={e=>setIncludeClosed(e.target.checked)} />Include closed candidates (does not reopen applications)</label>
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-muted-foreground">
                 Showing {filteredApplications.length} of {applications.length}
@@ -1114,6 +1126,7 @@ const JobApplicants = ({
                     >
                       {nextStep.label.replace(/^Next:\s*/, "")}
                     </Badge>
+                    {app.candidateReview && <p className="mt-2 text-xs font-medium text-primary">{candidateRatings[app.candidateReview.rating as keyof typeof candidateRatings]}{app.candidateReview.reason !== "none" && ` · ${candidateReasons[app.candidateReview.reason as keyof typeof candidateReasons]}`}{app.candidateReview.follow_up_date && ` · Follow up ${app.candidateReview.follow_up_date}`}</p>}
                   </div>
                   <div className="min-w-0">
                     {app.status === "accepted" ? (
@@ -1144,6 +1157,7 @@ const JobApplicants = ({
 
                   {isPaidSubscriber ? (
                     <div className="applicant-roster-actions">
+                      <CandidateReview application={app} onSaved={loadApplications} />
                       {isKairos(companyId) && app.interview && <Button size="sm" variant="outline" onClick={() => setNotesApplication(app)}>Interview questions</Button>}
                       {app.status === "interview_completed" && <NoOfferButton applicationId={app.id} officerName={app.officerName} onChanged={loadApplications} />}
                       {nextStep.label === "Next: Review application" && (

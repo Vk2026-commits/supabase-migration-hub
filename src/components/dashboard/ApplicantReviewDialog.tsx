@@ -1,3 +1,4 @@
+import { DriveExportButton } from "./DriveExportButton";
 import { eligibilityQuestions, additionalQuestions } from "@/lib/applicationQuestions";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -570,6 +571,7 @@ export function ApplicantReviewDialog({
                 <Download className="mr-2 h-4 w-4" />
                 Download PDF
               </Button>
+              <DriveExportButton applicationId={application?.id} kind="application" disabled={!applicationReady || loading} getPdf={async()=>{if(!data)throw new Error("Application is not loaded");const blob=await generateGuardApplicationPDF(data,"blob");if(!blob)throw new Error("Could not generate PDF");return blob;}} />
               <Button
                 variant="outline"
                 disabled={
