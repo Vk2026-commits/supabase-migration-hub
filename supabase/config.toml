@@ -61,3 +61,6 @@ verify_jwt = false
 
 [functions.company-drive]
 verify_jwt = false
+
+[functions.legacy-applicant-invitations]
+verify_jwt = false

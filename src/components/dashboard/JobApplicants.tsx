@@ -1,4 +1,3 @@
-import { LegacyApplicants } from "./LegacyApplicants";
 import { CandidateReview, candidateRatings, candidateReasons } from "./CandidateReview";
 import { displayInterviewNotes, isKairos, KAIROS_POSITIONS } from "@/lib/kairosWorkflow";
 import { ApplicantReviewAction } from "./ApplicantReviewAction";
@@ -310,7 +309,7 @@ const JobApplicants = ({
           test_run_id,
           job_posting:job_postings(title),
           officer:officer_profiles(id, user_id, phone),
-          hiring_application:guard_hiring_applications(id,status,applied_position:application_data->>position,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at)
+          hiring_application:guard_hiring_applications(id,status,applied_position:application_data->>position,submitted_at,created_at,evidence_snapshot_status,evidence_snapshot_kind,evidence_snapshot_completed_at,legacy_original_submitted_at)
         `,
         )
         .eq("job_posting.company_id", companyId)
@@ -436,6 +435,7 @@ const JobApplicants = ({
           hiring_application: hiringApplications,
           offerHiringApplicationId: offerApplication?.id || null,
           applicationSubmittedAt: offerApplication?.submitted_at || null,
+          legacyOriginalSubmittedAt: offerApplication?.legacy_original_submitted_at || null,
           officerName: profile?.full_name || "Unknown",
           officerAvatar: profile?.avatar_url || null,
           officerEmail: profile?.email || "",
@@ -645,7 +645,8 @@ const JobApplicants = ({
                 <div className="max-w-3xl">
                   <h2 className="text-lg font-bold">Submitted hiring application</h2>
                   <p className="mt-2 text-sm">
-                    Application submitted: {formatSubmissionTime(activeApplication.applicationSubmittedAt)}
+                    {activeApplication.legacyOriginalSubmittedAt ? "Confirmed in We Find Guards:" : "Application submitted:"} {formatSubmissionTime(activeApplication.applicationSubmittedAt)}
+                    {activeApplication.legacyOriginalSubmittedAt && <span className="block">Original application: {formatSubmissionTime(activeApplication.legacyOriginalSubmittedAt)}</span>}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     Review the officer’s submitted answers, work history, qualifications,
@@ -916,7 +917,6 @@ const JobApplicants = ({
         <CardDescription>Officers who have expressed interest in your positions</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        {isPaidSubscriber && <LegacyApplicants companyId={companyId} />}
         {!isPaidSubscriber && (
           <div className="mb-4 p-4 bg-muted rounded-lg">
             <div className="flex items-start gap-3 mb-3">
@@ -1095,7 +1095,8 @@ const JobApplicants = ({
                         </div>
                       </div>
                       <p className="pl-12 text-xs text-muted-foreground">
-                        Application submitted: {formatSubmissionTime(app.applicationSubmittedAt)}
+                        {app.legacyOriginalSubmittedAt ? "Confirmed in We Find Guards:" : "Application submitted:"} {formatSubmissionTime(app.applicationSubmittedAt)}
+                        {app.legacyOriginalSubmittedAt && <span className="block">Original application: {formatSubmissionTime(app.legacyOriginalSubmittedAt)}</span>}
                       </p>
                       {app.interview?.scheduled_at && <p className="pl-12 text-xs font-medium text-red-800">Interview: {new Date(app.interview.scheduled_at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>}
                       <div className="flex flex-wrap gap-x-3 gap-y-1 pl-12">

@@ -17,6 +17,7 @@ import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as CompleteTeamProfileRouteImport } from './routes/complete-team-profile'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as GetStartedRouteImport } from './routes/get-started'
+import { Route as ImportedApplicationRouteImport } from './routes/imported-application'
 import { Route as NotificationActionRouteImport } from './routes/notification-action'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -62,6 +63,11 @@ const GetStartedRoute = GetStartedRouteImport.update({
   path: '/get-started',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportedApplicationRoute = ImportedApplicationRouteImport.update({
+  id: '/imported-application',
+  path: '/imported-application',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NotificationActionRoute = NotificationActionRouteImport.update({
   id: '/notification-action',
   path: '/notification-action',
@@ -92,6 +98,7 @@ export interface FileRoutesByFullPath {
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
   '/get-started': typeof GetStartedRoute
+  '/imported-application': typeof ImportedApplicationRoute
   '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -106,6 +113,7 @@ export interface FileRoutesByTo {
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
   '/get-started': typeof GetStartedRoute
+  '/imported-application': typeof ImportedApplicationRoute
   '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -121,6 +129,7 @@ export interface FileRoutesById {
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
   '/get-started': typeof GetStartedRoute
+  '/imported-application': typeof ImportedApplicationRoute
   '/notification-action': typeof NotificationActionRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -137,6 +146,7 @@ export interface FileRouteTypes {
     | '/complete-team-profile'
     | '/dashboard'
     | '/get-started'
+    | '/imported-application'
     | '/notification-action'
     | '/privacy'
     | '/reset-password'
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/complete-team-profile'
     | '/dashboard'
     | '/get-started'
+    | '/imported-application'
     | '/notification-action'
     | '/privacy'
     | '/reset-password'
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/complete-team-profile'
     | '/dashboard'
     | '/get-started'
+    | '/imported-application'
     | '/notification-action'
     | '/privacy'
     | '/reset-password'
@@ -180,6 +192,7 @@ export interface RootRouteChildren {
   CompleteTeamProfileRoute: typeof CompleteTeamProfileRoute
   DashboardRoute: typeof DashboardRoute
   GetStartedRoute: typeof GetStartedRoute
+  ImportedApplicationRoute: typeof ImportedApplicationRoute
   NotificationActionRoute: typeof NotificationActionRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -244,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GetStartedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/imported-application': {
+      id: '/imported-application'
+      path: '/imported-application'
+      fullPath: '/imported-application'
+      preLoaderRoute: typeof ImportedApplicationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/notification-action': {
       id: '/notification-action'
       path: '/notification-action'
@@ -284,6 +304,7 @@ const rootRouteChildren: RootRouteChildren = {
   CompleteTeamProfileRoute: CompleteTeamProfileRoute,
   DashboardRoute: DashboardRoute,
   GetStartedRoute: GetStartedRoute,
+  ImportedApplicationRoute: ImportedApplicationRoute,
   NotificationActionRoute: NotificationActionRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,

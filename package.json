@@ -11,7 +11,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:legacy-invitations": "node scripts/test-legacy-invitations.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

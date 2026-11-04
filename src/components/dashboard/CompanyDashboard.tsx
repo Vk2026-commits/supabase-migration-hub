@@ -1,3 +1,4 @@
+import { LegacyApplicants } from "./LegacyApplicants";
 import { HiringTestPanel } from "./HiringTestPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +64,7 @@ const companyTabs = new Set([
   "jobs",
   "sites",
   "applicants",
+  "imported-applicants",
   "interested",
   "employment",
   "not-hired",
@@ -77,6 +79,7 @@ const companySectionDetails: Record<string, { title: string; description: string
   jobs: { title: "Job postings", description: "Create and manage open security positions.", icon: Briefcase },
   sites: { title: "Client sites", description: "Manage client locations, addresses, and shift details.", icon: MapPinned },
   applicants: { title: "Applicants", description: "Review applications and move candidates through hiring.", icon: UserCheck },
+  "imported-applicants": { title: "Imported Applicants", description: "Review saved applications and send invitations when you are ready.", icon: Users },
   interested: { title: "Interested officers", description: "Review officers who expressed interest in your jobs.", icon: Heart },
   employment: { title: "Hired officers", description: "Access employee records, documents, and evaluations.", icon: Users },
   "not-hired": { title: "Not Hired", description: "Review closed pending hires and retained decision history.", icon: UserX },
@@ -1126,6 +1129,10 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
                 onOpenOfficer={(officerId) => openOfficerRecord(officerId, "applicants")}
                 onCloseOfficer={closeOfficerRecord}
               />
+            )}
+
+            {activeTab === "imported-applicants" && companyProfile && (
+              <LegacyApplicants companyId={companyProfile.id} canInvite={["owner", "admin", "hiring_manager"].includes(companyTeamRole || "")} />
             )}
 
             {activeTab === "interested" && companyProfile && (

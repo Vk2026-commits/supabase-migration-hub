@@ -516,7 +516,14 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
                 );
             });
         }
-        const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
+        const freshLegacyReview = searchParams.get("legacyReview") === "1" && master?.status === "submitted";
+        const draft = { ...(master?.application_data || {}), ...(freshLegacyReview ? {signature: "", signatureImage: "", signatureDate: new Date().toISOString().slice(0,10)} : {}) } as Partial<GuardApplicationData>;
+        if(freshLegacyReview) {
+          setEditingSubmitted(true);
+          setAcknowledged(false);
+          submissionConfirmed.current = false;
+          intentionalAttempt.current = crypto.randomUUID();
+        }
         const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
         if (savedPhotoCompletion) {
           setPhotosSaved(true);
