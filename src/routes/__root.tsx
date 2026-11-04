@@ -74,6 +74,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           "WeFindGuards connects licensed security officers with security companies hiring now.",
       },
       { name: "author", content: "WeFindGuards" },
+      { name: "google-site-verification", content: "RIb8XLD29cNu98falXj69ebnIXfZcJ8982kQHBPXalo" },
       { property: "og:title", content: "WeFindGuards" },
       {
         property: "og:description",
