@@ -1,3 +1,4 @@
+import { eligibilityQuestions, additionalQuestions } from "@/lib/applicationQuestions";
 import { useEffect, useMemo, useState } from "react";
 import {
   Archive,
@@ -538,7 +539,12 @@ export function ApplicantReviewDialog({
         <DialogHeader className="sticky top-0 z-20 border-b bg-background/95 px-5 py-5 backdrop-blur sm:px-8">
           <div className="flex flex-col gap-4 pr-8 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <DialogTitle className="text-2xl">{data?.companyName && <span className="block text-sm text-primary">{data.companyName}</span>}{title}</DialogTitle>
+              <DialogTitle className="text-2xl">
+                {data?.companyName && (
+                  <span className="block text-sm text-primary">{data.companyName}</span>
+                )}
+                {title}
+              </DialogTitle>
               <DialogDescription>
                 Complete applicant review for {application?.job_posting?.title || "your position"}
               </DialogDescription>
@@ -671,6 +677,37 @@ export function ApplicantReviewDialog({
                   <Info label="Eligible to work in the U.S." content={data?.eligibleToWork} />
                   <Info label="18 or older" content={data?.isAdult} />
                   <Info label="Valid driver's license" content={data?.driversLicense} />
+                  {[...eligibilityQuestions, ...additionalQuestions].map((q) => (
+                    <div key={q.key}>
+                      <Info label={q.label} content={data?.[q.key]} wide />
+                      {data?.[q.key] === "Yes" && (
+                        <Info label={q.detailLabel} content={data?.[q.detail]} wide />
+                      )}
+                    </div>
+                  ))}
+                  <Info label="Driver's license number" content={data?.driversLicenseNumber} />
+                  <Info label="License class" content={data?.licenseClass} />
+                  <Info label="Driver's license state" content={data?.driverLicenseState} />
+                  <Info
+                    label="Professional activities"
+                    content={data?.professionalActivities}
+                    wide
+                  />
+                  <Info label="Equipment" content={data?.machinesEquipment} wide />
+                  {data?.schoolHistory?.map((row) => (
+                    <Info
+                      key={row.type}
+                      label={row.type}
+                      content={
+                        row.attended === "No"
+                          ? "Did not attend"
+                          : [row.name, row.years, row.degree, row.subjects]
+                              .filter(Boolean)
+                              .join(" | ") || "Not provided"
+                      }
+                      wide
+                    />
+                  ))}
                   <Info label="Education" content={data?.education} wide />
                   <Info label="Skills and training" content={data?.skills} wide />
                   <Info label="Electronic signature" content={data?.signature} />
@@ -864,6 +901,16 @@ export function ApplicantReviewDialog({
                             .filter(Boolean)
                             .join(" – ") || "Dates not provided"}
                         </p>
+                        <p className="mt-2 text-sm">
+                          {[job.address, job.cityStateZip, job.phone].filter(Boolean).join(" · ")}
+                        </p>
+                        <p className="mt-2 text-sm">
+                          Starting pay: {job.payStart || "Not provided"} · Final pay:{" "}
+                          {job.payFinal || "Not provided"}
+                        </p>
+                        <p className="mt-2 text-sm">
+                          Reason for leaving: {job.reason || "Not provided"}
+                        </p>
                         {(job.supervisor_name || job.supervisor) && (
                           <p className="mt-2 text-sm">
                             Supervisor: {job.supervisor_name || job.supervisor}
@@ -889,7 +936,9 @@ export function ApplicantReviewDialog({
                             {reference.relationship || "Relationship not provided"}
                           </p>
                           <p className="mt-2 text-sm">
-                            {reference.phone || reference.email || "No contact information"}
+                            {[reference.address, reference.phone, reference.email]
+                              .filter(Boolean)
+                              .join(" · ") || "No contact information"}
                           </p>
                         </div>
                       ))}

@@ -1,9 +1,29 @@
+import { blankSchools, applicationCertification } from "@/lib/applicationQuestions";
+import {
+  ApplicationQuestionFields,
+  ApplicationSchoolFields,
+  ApplicationText,
+  ApplicationYesNo,
+} from "./ApplicationQuestionFields";
 import { isKairos, KAIROS_POSITIONS } from "@/lib/kairosWorkflow";
 import { listOfficerPhotos } from "@/lib/officerPhotos";
 import { ensureHiringTestAttachments } from "@/lib/hiringTestFixtures";
 import { isVisibleHiringCompany } from "@/lib/hiringCompanyVisibility";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Cloud, Copy, Download, FileCheck2, PlayCircle, Plus, ShieldCheck, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  Cloud,
+  Copy,
+  Download,
+  FileCheck2,
+  PlayCircle,
+  Plus,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,14 +36,34 @@ import { toast } from "sonner";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import { OfficerPhotos } from "./OfficerPhotos";
 import { CertificationsManager, type Certification } from "./CertificationsManager";
-import { generateGuardApplicationPDF, type GuardApplicationData } from "@/lib/generateGuardApplicationPDF";
+import {
+  generateGuardApplicationPDF,
+  type GuardApplicationData,
+} from "@/lib/generateGuardApplicationPDF";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useSearchParams } from "@/lib/router-compat";
 import { SignaturePad } from "./SignaturePad";
-import { submissionAttemptKey, submitWithReceipt, withDeadline, type SubmissionReceipt } from "@/lib/hiringSubmission";
+import {
+  submissionAttemptKey,
+  submitWithReceipt,
+  withDeadline,
+  type SubmissionReceipt,
+} from "@/lib/hiringSubmission";
 import { formatUsPhone } from "@/lib/phone";
-import { REQUIRED_APPLICATION_STEPS, requirementsMet, resolveRestoreStep, resumeObjectPath, runResumeUpload } from "@/lib/hiringRestore";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  REQUIRED_APPLICATION_STEPS,
+  requirementsMet,
+  resolveRestoreStep,
+  resumeObjectPath,
+  runResumeUpload,
+} from "@/lib/hiringRestore";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Props {
   userId: string;
@@ -34,7 +74,14 @@ interface Props {
 type Schedule = Record<string, { start: string; end: string }>;
 type SharedData = { employmentTypes: string[]; shiftPreferences: string[]; schedule: Schedule };
 type WorkItem = Record<string, string>;
-type HiringDestination = { id: string; companyId: string; companyName: string; position: string; city: string; state: string };
+type HiringDestination = {
+  id: string;
+  companyId: string;
+  companyName: string;
+  position: string;
+  city: string;
+  state: string;
+};
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const weekdays = days.slice(0, 5);
@@ -45,24 +92,119 @@ const timeOptions = Array.from({ length: 48 }, (_, index) => {
   const label = `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
   return { value, label };
 });
-const blankJob: WorkItem = { id: "", employer: "", title: "", startDate: "", endDate: "", supervisor: "", phone: "", reason: "" };
+const blankJob: WorkItem = {
+  id: "",
+  employer: "",
+  title: "",
+  startDate: "",
+  endDate: "",
+  supervisor: "",
+  phone: "",
+  reason: "",
+};
 const blankReference = { name: "", relationship: "", phone: "", email: "" };
-const states = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"];
-const skillOptions = ["Pepper spray", "Baton", "Handcuffs", "Firearms", "First aid / CPR", "De-escalation", "Report writing"];
+const states = [
+  "AL",
+  "AK",
+  "AZ",
+  "AR",
+  "CA",
+  "CO",
+  "CT",
+  "DE",
+  "FL",
+  "GA",
+  "HI",
+  "ID",
+  "IL",
+  "IN",
+  "IA",
+  "KS",
+  "KY",
+  "LA",
+  "ME",
+  "MD",
+  "MA",
+  "MI",
+  "MN",
+  "MS",
+  "MO",
+  "MT",
+  "NE",
+  "NV",
+  "NH",
+  "NJ",
+  "NM",
+  "NY",
+  "NC",
+  "ND",
+  "OH",
+  "OK",
+  "OR",
+  "PA",
+  "RI",
+  "SC",
+  "SD",
+  "TN",
+  "TX",
+  "UT",
+  "VT",
+  "VA",
+  "WA",
+  "WV",
+  "WI",
+  "WY",
+  "DC",
+];
+const skillOptions = [
+  "Pepper spray",
+  "Baton",
+  "Handcuffs",
+  "Firearms",
+  "First aid / CPR",
+  "De-escalation",
+  "Report writing",
+];
 const steps = [
-  ["Position", "What role are you looking for?"], ["Personal information", "Tell us how to reach you"],
-  ["Eligibility", "Confirm your work credentials"], ["Qualifications", "Share your education and skills"],
-  ["Work history", "Add your recent experience (optional)"], ["References", "Add professional references (optional)"],
-  ["Availability", "Tell employers when you can work"], ["Photos", "Add optional professional photos"],
-  ["License or certification", "Optional — add credentials if you have them"], ["Review and signature", "Review and certify"],
+  ["Position", "What role are you looking for?"],
+  ["Personal information", "Tell us how to reach you"],
+  ["Eligibility", "Confirm your work credentials"],
+  ["Qualifications", "Share your education and skills"],
+  ["Work history", "Employment history and additional questions"],
+  ["References", "Provide references or confirm none"],
+  ["Availability", "Tell employers when you can work"],
+  ["Photos", "Add optional professional photos"],
+  ["License or certification", "Optional — add credentials if you have them"],
+  ["Review and signature", "Review and certify"],
 ];
 const initialForm: GuardApplicationData = {
-  applicantName: "", email: "", phone: "", address: "", city: "", state: "", zip: "",
-  companyName: "Kairos Security", companyCity: "Houston", companyState: "Texas", position: "Security Officer", employmentType: "full-time",
-  startDate: "", licenseLevels: [], eligibleToWork: "", isAdult: "", driversLicense: "",
-  securityLicenseNumber: "", securityLicenseState: "", education: "", skills: "",
-  workHistory: [{ ...blankJob }, { ...blankJob }], references: [{ ...blankReference }, { ...blankReference }, { ...blankReference }],
-  signature: "", signatureImage: "", signatureDate: new Date().toISOString().slice(0, 10),
+  applicantName: "",
+  email: "",
+  phone: "",
+  address: "",
+  city: "",
+  state: "",
+  zip: "",
+  companyName: "Kairos Security",
+  companyCity: "Houston",
+  companyState: "Texas",
+  position: "Security Officer",
+  employmentType: "full-time",
+  schoolHistory: blankSchools(),
+  startDate: "",
+  licenseLevels: [],
+  eligibleToWork: "",
+  isAdult: "",
+  driversLicense: "",
+  securityLicenseNumber: "",
+  securityLicenseState: "",
+  education: "",
+  skills: "",
+  workHistory: [{ ...blankJob }, { ...blankJob }],
+  references: [{ ...blankReference }, { ...blankReference }, { ...blankReference }],
+  signature: "",
+  signatureImage: "",
+  signatureDate: new Date().toISOString().slice(0, 10),
 };
 
 const parseApplicationStep = (value: string | null) => {
@@ -77,38 +219,103 @@ const initialApplicationStep = (userId: string, urlStep: string | null) => {
   return parseApplicationStep(window.localStorage.getItem(`guard-application-step:${userId}`)) ?? 0;
 };
 
-const initialPhotoCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-photos-complete:${userId}`) === "true";
-const initialCertificationCompletion = (userId: string) => typeof window !== "undefined" && window.localStorage.getItem(`guard-application-certification-complete:${userId}`) === "true";
+const initialPhotoCompletion = (userId: string) =>
+  typeof window !== "undefined" &&
+  window.localStorage.getItem(`guard-application-photos-complete:${userId}`) === "true";
+const initialCertificationCompletion = (userId: string) =>
+  typeof window !== "undefined" &&
+  window.localStorage.getItem(`guard-application-certification-complete:${userId}`) === "true";
 
 const requiredStepsList = REQUIRED_APPLICATION_STEPS;
 
-const Field = ({ label, value, onChange, type = "text", required = false }: { label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean }) => {
+const Field = ({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  required?: boolean;
+}) => {
   const id = `application-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   if (type === "date") {
-    return <DatePicker id={id} label={label} value={value} onChange={onChange} required={required} />;
+    return (
+      <DatePicker id={id} label={label} value={value} onChange={onChange} required={required} />
+    );
   }
-  return <div className="space-y-2"><Label htmlFor={id}>{label}{required ? " *" : ""}</Label><Input id={id} className="h-12 text-base" type={type} inputMode={type === "tel" ? "numeric" : undefined} placeholder={type === "tel" ? "123-456-7890" : undefined} value={value} onChange={e => onChange(type === "tel" ? formatUsPhone(e.target.value) : e.target.value)} /></div>;
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>
+        {label}
+        {required ? " *" : ""}
+      </Label>
+      <Input
+        id={id}
+        className="h-12 text-base"
+        type={type}
+        inputMode={type === "tel" ? "numeric" : undefined}
+        placeholder={type === "tel" ? "123-456-7890" : undefined}
+        value={value}
+        onChange={(e) => onChange(type === "tel" ? formatUsPhone(e.target.value) : e.target.value)}
+      />
+    </div>
+  );
 };
-const YesNo = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => <div className="space-y-3"><Label>{label} *</Label><RadioGroup value={value} onValueChange={onChange} className="flex gap-8">{["Yes", "No"].map(v => <div key={v} className="flex items-center gap-2"><RadioGroupItem value={v} id={`${label}-${v}`} /><Label htmlFor={`${label}-${v}`}>{v}</Label></div>)}</RadioGroup></div>;
+const YesNo = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) => (
+  <div className="space-y-3">
+    <Label>{label} *</Label>
+    <RadioGroup value={value} onValueChange={onChange} className="flex gap-8">
+      {["Yes", "No"].map((v) => (
+        <div key={v} className="flex items-center gap-2">
+          <RadioGroupItem value={v} id={`${label}-${v}`} />
+          <Label htmlFor={`${label}-${v}`}>{v}</Label>
+        </div>
+      ))}
+    </RadioGroup>
+  </div>
+);
 
 export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureProfile }: Props) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [resolvedOfficerId, setResolvedOfficerId] = useState<string | null>(officerId);
   const [form, setForm] = useState(initialForm);
-  const [shared, setShared] = useState<SharedData>({ employmentTypes: [], shiftPreferences: [], schedule: {} });
+  const [shared, setShared] = useState<SharedData>({
+    employmentTypes: [],
+    shiftPreferences: [],
+    schedule: {},
+  });
   const [photos, setPhotos] = useState<Record<string, string>>({});
   const [photosSaved, setPhotosSaved] = useState(() => initialPhotoCompletion(userId));
   const [certifications, setCertifications] = useState<Certification[]>([]);
-  const [certificationSaved, setCertificationSaved] = useState(() => initialCertificationCompletion(userId));
+  const [certificationSaved, setCertificationSaved] = useState(() =>
+    initialCertificationCompletion(userId),
+  );
   const [masterId, setMasterId] = useState<string | null>(null);
   const [masterStatus, setMasterStatus] = useState<"draft" | "submitted">("draft");
-  const [currentStep, setCurrentStep] = useState(() => initialApplicationStep(userId, searchParams.get("applicationStep")));
+  const [currentStep, setCurrentStep] = useState(() =>
+    initialApplicationStep(userId, searchParams.get("applicationStep")),
+  );
   const [jobs, setJobs] = useState<HiringDestination[]>([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [resumeNotice, setResumeNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const [resumeNotice, setResumeNotice] = useState<{
+    tone: "success" | "error";
+    text: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -152,25 +359,39 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     let mounted = true;
     Promise.all([
       listOfficerPhotos(userId),
-      activeOfficerId ? (supabase as any).rpc("get_my_certifications") : Promise.resolve({ data: [], error: null }),
-    ]).then(([photoResult, certificationResult]) => {
-      if (!mounted) return;
-      if (!photoResult.error) {
-        const photoTypes = (photoResult.data || []).map((file) => file.name.split(".")[0]);
-        const photoComplete = photoTypes.includes("headshot") && photoTypes.includes("full-body");
-        setPhotos(Object.fromEntries(photoTypes.map((type) => [type, "stored"])));
-        setPhotosSaved(photoComplete);
-        window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(photoComplete));
-      }
-      if (!certificationResult.error) {
-        const storedCertifications = (certificationResult.data || []) as Certification[];
-        const certificationComplete = storedCertifications.some((certification) => Boolean(certification.document_front_url));
-        setCertifications(storedCertifications);
-        setCertificationSaved(certificationComplete);
-        window.localStorage.setItem(`guard-application-certification-complete:${userId}`, String(certificationComplete));
-      }
-    }).catch((error) => console.error("Application completion status could not be loaded", error));
-    return () => { mounted = false; };
+      activeOfficerId
+        ? (supabase as any).rpc("get_my_certifications")
+        : Promise.resolve({ data: [], error: null }),
+    ])
+      .then(([photoResult, certificationResult]) => {
+        if (!mounted) return;
+        if (!photoResult.error) {
+          const photoTypes = (photoResult.data || []).map((file) => file.name.split(".")[0]);
+          const photoComplete = photoTypes.includes("headshot") && photoTypes.includes("full-body");
+          setPhotos(Object.fromEntries(photoTypes.map((type) => [type, "stored"])));
+          setPhotosSaved(photoComplete);
+          window.localStorage.setItem(
+            `guard-application-photos-complete:${userId}`,
+            String(photoComplete),
+          );
+        }
+        if (!certificationResult.error) {
+          const storedCertifications = (certificationResult.data || []) as Certification[];
+          const certificationComplete = storedCertifications.some((certification) =>
+            Boolean(certification.document_front_url),
+          );
+          setCertifications(storedCertifications);
+          setCertificationSaved(certificationComplete);
+          window.localStorage.setItem(
+            `guard-application-certification-complete:${userId}`,
+            String(certificationComplete),
+          );
+        }
+      })
+      .catch((error) => console.error("Application completion status could not be loaded", error));
+    return () => {
+      mounted = false;
+    };
   }, [userId, activeOfficerId, currentStep]);
 
   useEffect(() => {
@@ -179,13 +400,17 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
 
   useEffect(() => {
     if (!loaded || !activeOfficerId || !selectedJobId || editingSubmitted || submitting) return;
-    const attemptId = window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId));
+    const attemptId = window.localStorage.getItem(
+      submissionAttemptKey(userId, activeOfficerId, selectedJobId),
+    );
     if (!attemptId) return;
     let cancelled = false;
     setSubmissionUncertain(true);
     void (async () => {
       try {
-        const result = await (supabase as any).rpc("get_my_hiring_submission_receipt", { _attempt_id: attemptId }).abortSignal(AbortSignal.timeout(8000));
+        const result = await (supabase as any)
+          .rpc("get_my_hiring_submission_receipt", { _attempt_id: attemptId })
+          .abortSignal(AbortSignal.timeout(8000));
         if (cancelled || result.error || !result.data?.[0]) return;
         const receipt = result.data[0] as SubmissionReceipt;
         submissionConfirmed.current = true;
@@ -194,9 +419,13 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         setMasterId(receipt.master_application_id);
         setMasterStatus("submitted");
         setSubmissionUncertain(false);
-      } catch { /* Keep the attempt for safe reconciliation on Retry Submit. */ }
+      } catch {
+        /* Keep the attempt for safe reconciliation on Retry Submit. */
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [loaded, activeOfficerId, selectedJobId, userId, editingSubmitted, submitting]);
 
   useEffect(() => {
@@ -216,168 +445,336 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     const isLive = () => mounted && generation === restoreGeneration.current;
     if (restoredUserRef.current !== userId) {
       restoredUserRef.current = userId;
-      setLoaded(false); setForm(initialForm); setMasterId(null); masterIdRef.current = null; setResumePath(""); setResumeNotice(null);
+      setLoaded(false);
+      setForm(initialForm);
+      setMasterId(null);
+      masterIdRef.current = null;
+      setResumePath("");
+      setResumeNotice(null);
     }
     setLoadError(null);
     const officerId = officerIdRef.current;
     const startedAt = performance.now();
     (async () => {
-     try {
-      // Draft reads are scoped by the signed-in userId. Returning applicants
-      // must not wait on another officer-profile lookup before their saved
-      // application can be restored.
-      const appTable = (supabase as any).from("guard_hiring_applications");
-      // Only wait for the four records required to paint the saved draft.
-      // Work history and hiring destinations load after the form is visible.
-      const requests: any[] = [
-        supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
-        supabase.from("officer_profiles").select("phone,address_street,address_unit,address_city,address_state,address_zip,employment_type,shift_preference,availability_schedule,resume_url").eq("user_id", userId).maybeSingle(),
-        appTable.select("id,officer_id,status,current_step,application_data,created_at,submitted_at").eq("user_id", userId).eq("application_type", "master").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-        supabase.auth.getSession(),
-      ];
-      const [profileResult, officerResult, masterResult, authResult] = await withDeadline(Promise.all(requests), 12000);
-      if (!isLive()) return;
-      // Never show an empty "new" application when the saved draft could not
-      // be read; surface a recoverable error instead.
-      if (masterResult.error || profileResult.error || officerResult.error) {
-        console.warn("[hiring-app] restore failed", { ms: Math.round(performance.now() - startedAt), code: (masterResult.error || profileResult.error || officerResult.error)?.code });
-        setLoadError("We couldn't load your saved application.");
-        return;
-      }
-      const profile = profileResult.data; const officer = officerResult.data; const master = masterResult.data;
-      const restoredOfficerId = officerId || officer?.id || master?.officer_id || null;
-      if (restoredOfficerId) {
-        setResolvedOfficerId(restoredOfficerId);
-      } else if (onEnsureProfile) {
-        // New accounts still create their officer profile, but this background
-        // work no longer blocks a saved application's first render.
-        void onEnsureProfile().then((created: any) => {
-          if (isLive() && created?.id) setResolvedOfficerId(created.id);
-        }).catch(() => {
-          if (isLive()) setSaveError("We couldn't create the officer record needed to save this application.");
-        });
-      }
-      const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
-      const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
-      if (savedPhotoCompletion) {
-        setPhotosSaved(true);
-        window.localStorage.setItem(`guard-application-photos-complete:${userId}`, "true");
-      }
-      const savedCertificationCompletion = Boolean((draft as any).certificationRequirementsComplete);
-      if (savedCertificationCompletion) {
-        setCertificationSaved(true);
-        window.localStorage.setItem(`guard-application-certification-complete:${userId}`, "true");
-      }
-      const capturedLead = (() => {
-        const leadId = searchParams.get("lead");
-        if (!leadId) return null;
-        try { return JSON.parse(sessionStorage.getItem(`candidate-lead:${leadId}`) || "null"); }
-        catch { return null; }
-      })();
-      setForm({
-        ...initialForm,
-        ...draft,
-        applicantName: draft.applicantName || profile?.full_name || "",
-        email: draft.email || profile?.email || "",
-        phone: formatUsPhone(draft.phone || officer?.phone || authResult?.data?.session?.user?.user_metadata?.phone || capturedLead?.phone || ""),
-        address: draft.address || officer?.address_street || "",
-        city: draft.city || officer?.address_city || "",
-        state: draft.state || officer?.address_state || "",
-        zip: draft.zip || officer?.address_zip || "",
-        workHistory: draft.workHistory?.length ? draft.workHistory : initialForm.workHistory,
-      });
-      setResumePath((draft as any).resumePath || officer?.resume_url || "");
-      const savedAvailability = (draft as any).availability as SharedData | undefined;
-      setShared(savedAvailability || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} });
-      const savedStep = Math.min(Number(master?.current_step || 0), 9);
-      const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
-      // Without an explicit deep link, resume at the first unfinished required
-      // section so a returning applicant does not have to hunt for it.
-      const restoredForm = { ...initialForm, ...draft, phone: draft.phone || officer?.phone || "", address: draft.address || officer?.address_street || "", city: draft.city || officer?.address_city || "", state: draft.state || officer?.address_state || "", zip: draft.zip || officer?.address_zip || "", applicantName: draft.applicantName || profile?.full_name || "", email: draft.email || profile?.email || "" } as GuardApplicationData;
-      const restoredShared = (draft as any).availability as SharedData | undefined || { employmentTypes: officer?.employment_type || [], shiftPreferences: officer?.shift_preference || [], schedule: officer?.availability_schedule || {} };
-      const restoredJob = searchParams.get("job") || (draft as any).jobPostingId || "";
-      const restoredStep = resolveRestoreStep({ urlStep, savedStep, hasDraft: Boolean(master), submitted: master?.status === "submitted", form: restoredForm, shared: restoredShared, selectedJobId: restoredJob });
-      masterIdRef.current = master?.id || null;
-      submittedAtRef.current = master?.submitted_at || null;
-      setMasterId(master?.id || null); setMasterStatus(master?.status === "submitted" ? "submitted" : "draft"); setCurrentStep(restoredStep);
-      const savedVisitedSteps = Array.isArray((draft as any).visitedSteps)
-        ? (draft as any).visitedSteps.filter((step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9)
-        : master ? Array.from({ length: savedStep + 1 }, (_, index) => index) : [];
-      visitedStepsRef.current = savedVisitedSteps;
-      setVisitedSteps(savedVisitedSteps);
-      const savedCompletedSteps = Array.isArray((draft as any).completedSteps)
-        ? (draft as any).completedSteps.filter((step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9)
-        : [];
-      completedStepsRef.current = savedCompletedSteps;
-      setCompletedSteps(savedCompletedSteps);
-      setApplicationStarted(Boolean(master));
-      window.localStorage.setItem(`guard-application-step:${userId}`, String(restoredStep + 1));
-      const referredJobId = searchParams.get("job") || "";
-      const savedJobId = referredJobId || (draft as any).jobPostingId || "";
-      setSelectedJobId(savedJobId);
-      if ((draft as any).isTestApplication && restoredOfficerId) {
-        const runKey = `hiring-test-active-run:${userId}`;
-        const runId = String((draft as any).testRunId || "");
-        if (window.localStorage.getItem(runKey) !== runId) {
-          Object.keys(window.localStorage).filter(key => key.includes(userId) &&
-            (key.startsWith("guard-application-") || key.startsWith("hiring-submission-attempt:")))
-            .forEach(key => window.localStorage.removeItem(key));
-          window.localStorage.setItem(runKey, runId);
-        }
-        await ensureHiringTestAttachments(userId, restoredOfficerId);
-        if (!isLive()) return;
-      }
-      setLoaded(true);
-      console.info("[hiring-app] restore ready", { ms: Math.round(performance.now() - startedAt), resumedStep: restoredStep + 1 });
-
-      // Secondary records hydrate the already-visible application.
-      void Promise.all([
-        restoredOfficerId && !draft.workHistory?.length
-          ? supabase.from("work_history").select("*").eq("officer_id", restoredOfficerId).order("start_date", { ascending: false })
-          : Promise.resolve({ data: [] }),
-        (supabase as any).rpc("list_active_hiring_destinations"),
-      ]).then(([workResult, jobsResult]) => {
-        if (!isLive()) return;
-        const canonicalWork = (workResult?.data || []).map((w: any) => ({ id: w.id, employer: w.company_name || "", title: w.position_title || "", startDate: w.start_date || "", endDate: w.end_date || "", supervisor: w.supervisor_name || "", phone: w.supervisor_phone || w.company_phone || "", reason: w.reason_for_leaving || "" }));
-        if (canonicalWork.length) setForm((current) => ({ ...current, workHistory: current.workHistory.some((item) => item.employer?.trim()) ? current.workHistory : canonicalWork }));
-        const destinations: HiringDestination[] = (jobsResult?.data || []).filter((item: any) => isVisibleHiringCompany(item.company_id, item.city || "", item.state || "")).map((item: any) => ({ id: item.id, companyId: item.company_id, companyName: item.company_name, position: item.position, city: item.city || "", state: item.state || "" }));
-        const matchingDestination = destinations.find((item) => item.id === savedJobId) || destinations.find((item) =>
-          item.companyName.trim().toLowerCase() === (draft.companyName || initialForm.companyName).trim().toLowerCase()
-          && item.position.trim().toLowerCase() === (draft.position || initialForm.position).trim().toLowerCase()
-          && item.city.trim().toLowerCase() === (draft.companyCity || initialForm.companyCity).trim().toLowerCase()
+      try {
+        // Draft reads are scoped by the signed-in userId. Returning applicants
+        // must not wait on another officer-profile lookup before their saved
+        // application can be restored.
+        const appTable = (supabase as any).from("guard_hiring_applications");
+        // Only wait for the four records required to paint the saved draft.
+        // Work history and hiring destinations load after the form is visible.
+        const requests: any[] = [
+          supabase.from("profiles").select("full_name,email").eq("id", userId).maybeSingle(),
+          supabase
+            .from("officer_profiles")
+            .select(
+              "phone,address_street,address_unit,address_city,address_state,address_zip,employment_type,shift_preference,availability_schedule,resume_url",
+            )
+            .eq("user_id", userId)
+            .maybeSingle(),
+          appTable
+            .select("id,officer_id,status,current_step,application_data,created_at,submitted_at")
+            .eq("user_id", userId)
+            .eq("application_type", "master")
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabase.auth.getSession(),
+        ];
+        const [profileResult, officerResult, masterResult, authResult] = await withDeadline(
+          Promise.all(requests),
+          12000,
         );
-        const activeDestination = matchingDestination || (destinations.length === 1 ? destinations[0] : undefined);
-        setJobs(destinations);
-        if (activeDestination) {
-          setSelectedJobId(activeDestination.id);
-          setForm((current) => ({ ...current, companyName: activeDestination.companyName, position: isKairos(activeDestination.companyId) && savedJobId === activeDestination.id && draft.position ? draft.position : activeDestination.position, companyCity: activeDestination.city, companyState: activeDestination.state }));
+        if (!isLive()) return;
+        // Never show an empty "new" application when the saved draft could not
+        // be read; surface a recoverable error instead.
+        if (masterResult.error || profileResult.error || officerResult.error) {
+          console.warn("[hiring-app] restore failed", {
+            ms: Math.round(performance.now() - startedAt),
+            code: (masterResult.error || profileResult.error || officerResult.error)?.code,
+          });
+          setLoadError("We couldn't load your saved application.");
+          return;
         }
-      }).catch((error) => console.warn("Secondary application data is still loading", error));
-     } catch (error: any) {
-      if (!isLive()) return;
-      console.warn("[hiring-app] restore failed", { ms: Math.round(performance.now() - startedAt), reason: error?.message?.slice(0, 80) });
-      setLoadError("Loading your saved application is taking too long.");
-     }
+        const profile = profileResult.data;
+        const officer = officerResult.data;
+        const master = masterResult.data;
+        const restoredOfficerId = officerId || officer?.id || master?.officer_id || null;
+        if (restoredOfficerId) {
+          setResolvedOfficerId(restoredOfficerId);
+        } else if (onEnsureProfile) {
+          // New accounts still create their officer profile, but this background
+          // work no longer blocks a saved application's first render.
+          void onEnsureProfile()
+            .then((created: any) => {
+              if (isLive() && created?.id) setResolvedOfficerId(created.id);
+            })
+            .catch(() => {
+              if (isLive())
+                setSaveError(
+                  "We couldn't create the officer record needed to save this application.",
+                );
+            });
+        }
+        const draft = (master?.application_data || {}) as Partial<GuardApplicationData>;
+        const savedPhotoCompletion = Boolean((draft as any).photoRequirementsComplete);
+        if (savedPhotoCompletion) {
+          setPhotosSaved(true);
+          window.localStorage.setItem(`guard-application-photos-complete:${userId}`, "true");
+        }
+        const savedCertificationCompletion = Boolean(
+          (draft as any).certificationRequirementsComplete,
+        );
+        if (savedCertificationCompletion) {
+          setCertificationSaved(true);
+          window.localStorage.setItem(`guard-application-certification-complete:${userId}`, "true");
+        }
+        const capturedLead = (() => {
+          const leadId = searchParams.get("lead");
+          if (!leadId) return null;
+          try {
+            return JSON.parse(sessionStorage.getItem(`candidate-lead:${leadId}`) || "null");
+          } catch {
+            return null;
+          }
+        })();
+        setForm({
+          ...initialForm,
+          ...draft,
+          schoolHistory: blankSchools().map(
+            (row) => draft.schoolHistory?.find((saved) => saved.type === row.type) || row,
+          ),
+          applicantName: draft.applicantName || profile?.full_name || "",
+          email: draft.email || profile?.email || "",
+          phone: formatUsPhone(
+            draft.phone ||
+              officer?.phone ||
+              authResult?.data?.session?.user?.user_metadata?.phone ||
+              capturedLead?.phone ||
+              "",
+          ),
+          address: draft.address || officer?.address_street || "",
+          city: draft.city || officer?.address_city || "",
+          state: draft.state || officer?.address_state || "",
+          zip: draft.zip || officer?.address_zip || "",
+          workHistory: draft.workHistory?.length ? draft.workHistory : initialForm.workHistory,
+        });
+        setResumePath((draft as any).resumePath || officer?.resume_url || "");
+        const savedAvailability = (draft as any).availability as SharedData | undefined;
+        setShared(
+          savedAvailability || {
+            employmentTypes: officer?.employment_type || [],
+            shiftPreferences: officer?.shift_preference || [],
+            schedule: officer?.availability_schedule || {},
+          },
+        );
+        const savedStep = Math.min(Number(master?.current_step || 0), 9);
+        const urlStep = parseApplicationStep(searchParams.get("applicationStep"));
+        // Without an explicit deep link, resume at the first unfinished required
+        // section so a returning applicant does not have to hunt for it.
+        const restoredForm = {
+          ...initialForm,
+          ...draft,
+          phone: draft.phone || officer?.phone || "",
+          address: draft.address || officer?.address_street || "",
+          city: draft.city || officer?.address_city || "",
+          state: draft.state || officer?.address_state || "",
+          zip: draft.zip || officer?.address_zip || "",
+          applicantName: draft.applicantName || profile?.full_name || "",
+          email: draft.email || profile?.email || "",
+        } as GuardApplicationData;
+        const restoredShared = ((draft as any).availability as SharedData | undefined) || {
+          employmentTypes: officer?.employment_type || [],
+          shiftPreferences: officer?.shift_preference || [],
+          schedule: officer?.availability_schedule || {},
+        };
+        const restoredJob = searchParams.get("job") || (draft as any).jobPostingId || "";
+        const restoredStep = resolveRestoreStep({
+          urlStep,
+          savedStep,
+          hasDraft: Boolean(master),
+          submitted: master?.status === "submitted",
+          form: restoredForm,
+          shared: restoredShared,
+          selectedJobId: restoredJob,
+        });
+        masterIdRef.current = master?.id || null;
+        submittedAtRef.current = master?.submitted_at || null;
+        setMasterId(master?.id || null);
+        setMasterStatus(master?.status === "submitted" ? "submitted" : "draft");
+        setCurrentStep(restoredStep);
+        const savedVisitedSteps = Array.isArray((draft as any).visitedSteps)
+          ? (draft as any).visitedSteps.filter(
+              (step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9,
+            )
+          : master
+            ? Array.from({ length: savedStep + 1 }, (_, index) => index)
+            : [];
+        visitedStepsRef.current = savedVisitedSteps;
+        setVisitedSteps(savedVisitedSteps);
+        const savedCompletedSteps = Array.isArray((draft as any).completedSteps)
+          ? (draft as any).completedSteps.filter(
+              (step: unknown) => Number.isInteger(step) && Number(step) >= 0 && Number(step) <= 9,
+            )
+          : [];
+        completedStepsRef.current = savedCompletedSteps;
+        setCompletedSteps(savedCompletedSteps);
+        setApplicationStarted(Boolean(master));
+        window.localStorage.setItem(`guard-application-step:${userId}`, String(restoredStep + 1));
+        const referredJobId = searchParams.get("job") || "";
+        const savedJobId = referredJobId || (draft as any).jobPostingId || "";
+        setSelectedJobId(savedJobId);
+        if ((draft as any).isTestApplication && restoredOfficerId) {
+          const runKey = `hiring-test-active-run:${userId}`;
+          const runId = String((draft as any).testRunId || "");
+          if (window.localStorage.getItem(runKey) !== runId) {
+            Object.keys(window.localStorage)
+              .filter(
+                (key) =>
+                  key.includes(userId) &&
+                  (key.startsWith("guard-application-") ||
+                    key.startsWith("hiring-submission-attempt:")),
+              )
+              .forEach((key) => window.localStorage.removeItem(key));
+            window.localStorage.setItem(runKey, runId);
+          }
+          await ensureHiringTestAttachments(userId, restoredOfficerId);
+          if (!isLive()) return;
+        }
+        setLoaded(true);
+        console.info("[hiring-app] restore ready", {
+          ms: Math.round(performance.now() - startedAt),
+          resumedStep: restoredStep + 1,
+        });
+
+        // Secondary records hydrate the already-visible application.
+        void Promise.all([
+          restoredOfficerId && !draft.workHistory?.length
+            ? supabase
+                .from("work_history")
+                .select("*")
+                .eq("officer_id", restoredOfficerId)
+                .order("start_date", { ascending: false })
+            : Promise.resolve({ data: [] }),
+          (supabase as any).rpc("list_active_hiring_destinations"),
+        ])
+          .then(([workResult, jobsResult]) => {
+            if (!isLive()) return;
+            const canonicalWork = (workResult?.data || []).map((w: any) => ({
+              id: w.id,
+              employer: w.company_name || "",
+              title: w.position_title || "",
+              startDate: w.start_date || "",
+              endDate: w.end_date || "",
+              supervisor: w.supervisor_name || "",
+              phone: w.supervisor_phone || w.company_phone || "",
+              reason: w.reason_for_leaving || "",
+            }));
+            if (canonicalWork.length)
+              setForm((current) => ({
+                ...current,
+                workHistory: current.workHistory.some((item) => item.employer?.trim())
+                  ? current.workHistory
+                  : canonicalWork,
+              }));
+            const destinations: HiringDestination[] = (jobsResult?.data || [])
+              .filter((item: any) =>
+                isVisibleHiringCompany(item.company_id, item.city || "", item.state || ""),
+              )
+              .map((item: any) => ({
+                id: item.id,
+                companyId: item.company_id,
+                companyName: item.company_name,
+                position: item.position,
+                city: item.city || "",
+                state: item.state || "",
+              }));
+            const matchingDestination =
+              destinations.find((item) => item.id === savedJobId) ||
+              destinations.find(
+                (item) =>
+                  item.companyName.trim().toLowerCase() ===
+                    (draft.companyName || initialForm.companyName).trim().toLowerCase() &&
+                  item.position.trim().toLowerCase() ===
+                    (draft.position || initialForm.position).trim().toLowerCase() &&
+                  item.city.trim().toLowerCase() ===
+                    (draft.companyCity || initialForm.companyCity).trim().toLowerCase(),
+              );
+            const activeDestination =
+              matchingDestination || (destinations.length === 1 ? destinations[0] : undefined);
+            setJobs(destinations);
+            if (activeDestination) {
+              setSelectedJobId(activeDestination.id);
+              setForm((current) => ({
+                ...current,
+                companyName: activeDestination.companyName,
+                position:
+                  isKairos(activeDestination.companyId) &&
+                  savedJobId === activeDestination.id &&
+                  draft.position
+                    ? draft.position
+                    : activeDestination.position,
+                companyCity: activeDestination.city,
+                companyState: activeDestination.state,
+              }));
+            }
+          })
+          .catch((error) => console.warn("Secondary application data is still loading", error));
+      } catch (error: any) {
+        if (!isLive()) return;
+        console.warn("[hiring-app] restore failed", {
+          ms: Math.round(performance.now() - startedAt),
+          reason: error?.message?.slice(0, 80),
+        });
+        setLoadError("Loading your saved application is taking too long.");
+      }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [userId, loadAttempt]);
 
   const syncShared = async (includeWorkHistory = false) => {
     if (!activeOfficerId) throw new Error("Your officer profile is not ready yet");
     const [profileResult, officerResult] = await Promise.all([
       supabase.from("profiles").update({ full_name: form.applicantName }).eq("id", userId),
-      supabase.from("officer_profiles").update({ phone: form.phone, address_street: form.address, address_city: form.city, address_state: form.state, address_zip: form.zip, employment_type: shared.employmentTypes, shift_preference: shared.shiftPreferences, availability_schedule: shared.schedule } as any).eq("id", activeOfficerId),
+      supabase
+        .from("officer_profiles")
+        .update({
+          phone: form.phone,
+          address_street: form.address,
+          address_city: form.city,
+          address_state: form.state,
+          address_zip: form.zip,
+          employment_type: shared.employmentTypes,
+          shift_preference: shared.shiftPreferences,
+          availability_schedule: shared.schedule,
+        } as any)
+        .eq("id", activeOfficerId),
     ]);
     if (profileResult.error) throw profileResult.error;
     if (officerResult.error) throw officerResult.error;
     if (!includeWorkHistory) return;
-    for (const item of form.workHistory.filter(j => j.employer?.trim())) {
-      const payload: any = { officer_id: activeOfficerId, company_name: item.employer, position_title: item.title || null, start_date: item.startDate || null, end_date: item.endDate || null, supervisor_name: item.supervisor || null, supervisor_phone: item.phone || null, reason_for_leaving: item.reason || null };
+    for (const item of form.workHistory.filter((j) => j.employer?.trim())) {
+      const payload: any = {
+        officer_id: activeOfficerId,
+        company_name: item.employer,
+        position_title: item.title || null,
+        start_date: item.startDate || null,
+        end_date: item.endDate || null,
+        supervisor_name: item.supervisor || null,
+        supervisor_phone: item.phone || null,
+        reason_for_leaving: item.reason || null,
+      };
       if (item.id) {
         const { error } = await supabase.from("work_history").update(payload).eq("id", item.id);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.from("work_history").insert(payload).select("id").single();
+        const { data, error } = await supabase
+          .from("work_history")
+          .insert(payload)
+          .select("id")
+          .single();
         if (error) throw error;
         if (data?.id) item.id = data.id;
       }
@@ -387,22 +784,75 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const saveDraft = (step = currentStep, syncManagementRecords = false): Promise<boolean> => {
     // Explicit revisions use an optimistic receipt version; ordinary draft
     // writes may never modify a submitted master.
-    if (submissionLocked.current || submissionConfirmed.current || (masterStatus === "submitted" && !editingSubmitted) || submissionUncertain) return Promise.resolve(true);
-    if (activeOfficerId && selectedJobId && !editingSubmitted && window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId))) return Promise.resolve(true);
+    if (
+      submissionLocked.current ||
+      submissionConfirmed.current ||
+      (masterStatus === "submitted" && !editingSubmitted) ||
+      submissionUncertain
+    )
+      return Promise.resolve(true);
+    if (
+      activeOfficerId &&
+      selectedJobId &&
+      !editingSubmitted &&
+      window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId))
+    )
+      return Promise.resolve(true);
     if (!loaded || !activeOfficerId) return Promise.resolve(false);
     pendingSaveCount.current += 1;
     setSaving(true);
     const expectedSubmittedAt = submittedAtRef.current;
     const performSave = async () => {
       try {
-        const payload: any = { officer_id: activeOfficerId, user_id: userId, application_type: "master", job_application_id: null, company_name: "General We Find Guards Application", position: form.position, applicant_name: form.applicantName || "Incomplete application", applicant_email: form.email || "pending", status: masterStatus, current_step: step, signature_name: form.signature || null, signature_date: form.signatureDate || null, application_data: { ...form, resumePath, jobPostingId: selectedJobId, availability: shared, visitedSteps: visitedStepsRef.current, completedSteps: completedStepsRef.current, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosSaved, canonicalCertificationIds: certifications.filter((certification) => certification.document_front_url).map((certification) => certification.id), certificationRequirementsComplete: certificationSaved } };
+        const payload: any = {
+          officer_id: activeOfficerId,
+          user_id: userId,
+          application_type: "master",
+          job_application_id: null,
+          company_name: "General We Find Guards Application",
+          position: form.position,
+          applicant_name: form.applicantName || "Incomplete application",
+          applicant_email: form.email || "pending",
+          status: masterStatus,
+          current_step: step,
+          signature_name: form.signature || null,
+          signature_date: form.signatureDate || null,
+          application_data: {
+            ...form,
+            resumePath,
+            jobPostingId: selectedJobId,
+            availability: shared,
+            visitedSteps: visitedStepsRef.current,
+            completedSteps: completedStepsRef.current,
+            canonicalPhotoTypes: Object.keys(photos),
+            photoRequirementsComplete: photosSaved,
+            canonicalCertificationIds: certifications
+              .filter((certification) => certification.document_front_url)
+              .map((certification) => certification.id),
+            certificationRequirementsComplete: certificationSaved,
+          },
+        };
         const savedMasterId = masterIdRef.current;
         const nextMasterId = savedMasterId || crypto.randomUUID();
-        const { error } = savedMasterId && masterStatus === "submitted" && editingSubmitted
-          ? await (supabase as any).rpc("save_my_hiring_revision", { _master_id: savedMasterId, _expected_submitted_at: expectedSubmittedAt, _data: payload.application_data, _step: step })
-          : savedMasterId
-          ? await (supabase as any).from("guard_hiring_applications").update(payload).eq("id", savedMasterId).eq("status", "draft").select("id").single()
-          : await (supabase as any).from("guard_hiring_applications").insert({ id: nextMasterId, ...payload });
+        const { error } =
+          savedMasterId && masterStatus === "submitted" && editingSubmitted
+            ? await (supabase as any).rpc("save_my_hiring_revision", {
+                _master_id: savedMasterId,
+                _expected_submitted_at: expectedSubmittedAt,
+                _data: payload.application_data,
+                _step: step,
+              })
+            : savedMasterId
+              ? await (supabase as any)
+                  .from("guard_hiring_applications")
+                  .update(payload)
+                  .eq("id", savedMasterId)
+                  .eq("status", "draft")
+                  .select("id")
+                  .single()
+              : await (supabase as any)
+                  .from("guard_hiring_applications")
+                  .insert({ id: nextMasterId, ...payload });
         if (error) throw error;
         if (!savedMasterId) {
           masterIdRef.current = nextMasterId;
@@ -437,37 +887,86 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   useEffect(() => {
-    if (!loaded || !activeOfficerId || !applicationStarted || submitting || submissionUncertain || (masterStatus === "submitted" && !editingSubmitted)) return;
-    if (!editingSubmitted && selectedJobId && window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId))) return;
+    if (
+      !loaded ||
+      !activeOfficerId ||
+      !applicationStarted ||
+      submitting ||
+      submissionUncertain ||
+      (masterStatus === "submitted" && !editingSubmitted)
+    )
+      return;
+    if (
+      !editingSubmitted &&
+      selectedJobId &&
+      window.localStorage.getItem(submissionAttemptKey(userId, activeOfficerId, selectedJobId))
+    )
+      return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     // Avoid writing the entire JSON application after nearly every keystroke.
     // Continue/Back still queue an immediate durable save; this timer is only
     // a quiet-period safety net while the applicant remains on one step.
-    saveTimer.current = setTimeout(() => { void saveDraft(); }, 1500);
-    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [form, shared, photos, photosSaved, certifications, certificationSaved, resumePath, currentStep, loaded, activeOfficerId, selectedJobId, applicationStarted, visitedSteps, completedSteps, submitting, submissionUncertain, masterStatus, editingSubmitted]);
+    saveTimer.current = setTimeout(() => {
+      void saveDraft();
+    }, 1500);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [
+    form,
+    shared,
+    photos,
+    photosSaved,
+    certifications,
+    certificationSaved,
+    resumePath,
+    currentStep,
+    loaded,
+    activeOfficerId,
+    selectedJobId,
+    applicationStarted,
+    visitedSteps,
+    completedSteps,
+    submitting,
+    submissionUncertain,
+    masterStatus,
+    editingSubmitted,
+  ]);
 
-  const availabilityComplete = shared.employmentTypes.length > 0 && shared.shiftPreferences.length > 0 && Object.values(shared.schedule).some(v => v.start && v.end);
+  const availabilityComplete =
+    shared.employmentTypes.length > 0 &&
+    shared.shiftPreferences.length > 0 &&
+    Object.values(shared.schedule).some((v) => v.start && v.end);
   const photosComplete = photosSaved;
   const certificationComplete = certificationSaved;
-  const stepRequirementsMet = (step: number) => step === 7
-    ? photosComplete
-    : step === 8
-      ? certificationComplete
-      : requirementsMet(step, form, shared, selectedJobId, acknowledged);
+  const stepRequirementsMet = (step: number) =>
+    step === 7
+      ? photosComplete
+      : step === 8
+        ? certificationComplete
+        : requirementsMet(step, form, shared, selectedJobId, acknowledged);
   void availabilityComplete;
   const requiredSteps = requiredStepsList;
   const stepStatus = (step: number): "not_started" | "in_progress" | "completed" => {
-    if (masterStatus === "submitted" || (completedSteps.includes(step) && stepRequirementsMet(step))) return "completed";
+    if (
+      masterStatus === "submitted" ||
+      (completedSteps.includes(step) && stepRequirementsMet(step))
+    )
+      return "completed";
     if (visitedSteps.includes(step)) return "in_progress";
     return "not_started";
   };
-  const complete = useMemo(() => requiredSteps.every(stepRequirementsMet), [form, shared, acknowledged, selectedJobId, photosComplete, certificationComplete]);
+  const complete = useMemo(
+    () => requiredSteps.every(stepRequirementsMet),
+    [form, shared, acknowledged, selectedJobId, photosComplete, certificationComplete],
+  );
   const requiredStepLabels: Record<number, string> = {
     0: "company and position",
     1: "personal information",
     2: "eligibility questions",
     3: "qualifications",
+    4: "work history and additional questions",
+    5: "references",
     6: "availability",
     9: "review, consent, and signature",
   };
@@ -478,7 +977,8 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     { label: "Signature", complete: Boolean(form.signatureImage) },
     { label: "Date signed", complete: Boolean(form.signatureDate) },
   ];
-  const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) => setForm(current => ({ ...current, [key]: value }));
+  const update = <K extends keyof GuardApplicationData>(key: K, value: GuardApplicationData[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
   const updatePhotoCompletion = (complete: boolean) => {
     setPhotosSaved(complete);
     window.localStorage.setItem(`guard-application-photos-complete:${userId}`, String(complete));
@@ -487,16 +987,41 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     const complete = items.some((certification) => Boolean(certification.document_front_url));
     setCertifications(items);
     setCertificationSaved(complete);
-    window.localStorage.setItem(`guard-application-certification-complete:${userId}`, String(complete));
+    window.localStorage.setItem(
+      `guard-application-certification-complete:${userId}`,
+      String(complete),
+    );
   };
-  const updateList = (key: "workHistory" | "references", index: number, field: string, value: string) => setForm(current => ({ ...current, [key]: current[key].map((item, i) => i === index ? { ...item, [field]: value } : item) }));
+  const updateList = (
+    key: "workHistory" | "references",
+    index: number,
+    field: string,
+    value: string,
+  ) =>
+    setForm((current) => ({
+      ...current,
+      [key]: current[key].map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+    }));
   const uploadResume = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!activeOfficerId) { setResumeNotice({ tone: "error", text: "Your officer profile is still loading. Try the upload again in a moment." }); event.target.value = ""; return; }
-    if (file.size > 10 * 1024 * 1024) { toast.error("Resume must be 10 MB or smaller"); return; }
+    if (!activeOfficerId) {
+      setResumeNotice({
+        tone: "error",
+        text: "Your officer profile is still loading. Try the upload again in a moment.",
+      });
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Resume must be 10 MB or smaller");
+      return;
+    }
     const extension = file.name.split(".").pop()?.toLowerCase();
-    if (!extension || !["pdf", "doc", "docx"].includes(extension)) { toast.error("Upload a PDF, DOC, or DOCX resume"); return; }
+    if (!extension || !["pdf", "doc", "docx"].includes(extension)) {
+      toast.error("Upload a PDF, DOC, or DOCX resume");
+      return;
+    }
     setUploadingResume(true);
     setResumeNotice(null);
     const startedAt = performance.now();
@@ -512,25 +1037,45 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
         isCurrent,
         hasPrevious: Boolean(previousPath && previousPath !== path),
         deadline: (operation) => withDeadline(operation, 90000),
-        upload: () => supabase.storage.from("resumes").upload(path, file, { upsert: false, contentType: file.type }) as any,
+        upload: () =>
+          supabase.storage
+            .from("resumes")
+            .upload(path, file, { upsert: false, contentType: file.type }) as any,
         // Cancellable so a timed-out reference update cannot land after a newer retry.
-        persistReference: () => supabase.from("officer_profiles").update({ resume_url: path } as any).eq("id", activeOfficerId).abortSignal(AbortSignal.timeout(20000)) as any,
+        persistReference: () =>
+          supabase
+            .from("officer_profiles")
+            .update({ resume_url: path } as any)
+            .eq("id", activeOfficerId)
+            .abortSignal(AbortSignal.timeout(20000)) as any,
         removePrevious: () => supabase.storage.from("resumes").remove([previousPath]),
       });
       if (result === "stale") return;
       setResumePath(path);
       setResumeNotice({ tone: "success", text: "Resume uploaded." });
-      console.info("[hiring-app] resume upload ok", { ms: Math.round(performance.now() - startedAt) });
+      console.info("[hiring-app] resume upload ok", {
+        ms: Math.round(performance.now() - startedAt),
+      });
     } catch (error: any) {
-      console.warn("[hiring-app] resume upload failed", { ms: Math.round(performance.now() - startedAt) });
-      if (isCurrent()) setResumeNotice({ tone: "error", text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.` });
+      console.warn("[hiring-app] resume upload failed", {
+        ms: Math.round(performance.now() - startedAt),
+      });
+      if (isCurrent())
+        setResumeNotice({
+          tone: "error",
+          text: `${error?.message || "Resume could not be uploaded"}. Choose the file again to retry.`,
+        });
+    } finally {
+      if (isCurrent()) setUploadingResume(false);
+      input.value = "";
     }
-    finally { if (isCurrent()) setUploadingResume(false); input.value = ""; }
   };
   const go = async (step: number) => {
     if (submissionLocked.current) return;
     const nextStep = Math.max(0, Math.min(9, step));
-    const nextVisited = Array.from(new Set([...visitedStepsRef.current, currentStep, nextStep])).sort((a, b) => a - b);
+    const nextVisited = Array.from(
+      new Set([...visitedStepsRef.current, currentStep, nextStep]),
+    ).sort((a, b) => a - b);
     visitedStepsRef.current = nextVisited;
     setVisitedSteps(nextVisited);
     const nextCompleted = stepRequirementsMet(currentStep)
@@ -546,7 +1091,11 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("applicationStep", String(nextStep + 1));
     setSearchParams(nextParams, { replace: true });
-    requestAnimationFrame(() => document.getElementById("guard-application-top")?.scrollIntoView({ behavior: "auto", block: "start" }));
+    requestAnimationFrame(() =>
+      document
+        .getElementById("guard-application-top")
+        ?.scrollIntoView({ behavior: "auto", block: "start" }),
+    );
     // The application JSON is the durable in-progress record. Canonical
     // profile/work-history tables are synchronized once at submission instead
     // of being rewritten on every Back or Continue action.
@@ -554,13 +1103,19 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
   // Credentials are optional: skipping never saves or fabricates a credential,
   // and partially typed fields are simply left unsaved.
-  const skipCredentials = () => { void go(currentStep + 1); };
+  const skipCredentials = () => {
+    void go(currentStep + 1);
+  };
   const next = async () => {
     if (currentStep === 8 && savePendingLicensesRef.current) {
       const licensesSaved = await savePendingLicensesRef.current();
       if (!licensesSaved) {
         // Never trap the applicant on an optional step because of a partial entry.
-        toast("Credential not saved", { description: "Finish the entry, or skip this optional step. Unsaved credential details will not be kept.", action: { label: "Skip without saving", onClick: skipCredentials } });
+        toast("Credential not saved", {
+          description:
+            "Finish the entry, or skip this optional step. Unsaved credential details will not be kept.",
+          action: { label: "Skip without saving", onClick: skipCredentials },
+        });
         return;
       }
     }
@@ -577,12 +1132,17 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submissionLocked.current || submissionConfirmed.current) return;
-    if (!activeOfficerId) { toast.error("Your officer profile is not ready yet. Refresh the page and try again."); return; }
+    if (!activeOfficerId) {
+      toast.error("Your officer profile is not ready yet. Refresh the page and try again.");
+      return;
+    }
     if (!complete) {
       const firstMissingStep = missingRequiredSteps[0];
-      const missingLabel = requiredStepLabels[firstMissingStep] || "required application information";
+      const missingLabel =
+        requiredStepLabels[firstMissingStep] || "required application information";
       toast.error(`Still needed: ${missingLabel}. We are taking you to that section.`);
-      if (firstMissingStep !== undefined && firstMissingStep !== currentStep) await go(firstMissingStep);
+      if (firstMissingStep !== undefined && firstMissingStep !== currentStep)
+        await go(firstMissingStep);
       return;
     }
     submissionLocked.current = true;
@@ -590,10 +1150,35 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
     setSubmitting(true);
     try {
       await withDeadline(saveQueue.current, 15000);
-      const selectedJob = jobs.find(j => j.id === selectedJobId);
+      const selectedJob = jobs.find((j) => j.id === selectedJobId);
       if (!selectedJob) throw new Error("Select an active company position before submitting");
-      const snapshot = { ...form, resumePath, jobPostingId: selectedJob.id, availability: shared, visitedSteps: Array.from({ length: 10 }, (_, index) => index), completedSteps: Array.from({ length: 10 }, (_, index) => index).filter(stepRequirementsMet), photosComplete, certificationComplete, canonicalPhotoTypes: Object.keys(photos), photoRequirementsComplete: photosComplete, canonicalCertificationIds: certifications.filter(c => c.document_front_url).map(c => c.id), certificationRequirementsComplete: certificationComplete } as any;
-      const employerSnapshot = { ...snapshot, consentAccepted: acknowledged, companyName: selectedJob.companyName, companyCity: selectedJob.city, companyState: selectedJob.state, position: isKairos(selectedJob.companyId) ? form.position : selectedJob.position };
+      const snapshot = {
+        ...form,
+        applicationQuestionVersion: 2,
+        workHistory: form.hasWorkHistory === "No" ? [] : form.workHistory,
+        references: form.hasReferences === "No" ? [] : form.references,
+        resumePath,
+        jobPostingId: selectedJob.id,
+        availability: shared,
+        visitedSteps: Array.from({ length: 10 }, (_, index) => index),
+        completedSteps: Array.from({ length: 10 }, (_, index) => index).filter(stepRequirementsMet),
+        photosComplete,
+        certificationComplete,
+        canonicalPhotoTypes: Object.keys(photos),
+        photoRequirementsComplete: photosComplete,
+        canonicalCertificationIds: certifications
+          .filter((c) => c.document_front_url)
+          .map((c) => c.id),
+        certificationRequirementsComplete: certificationComplete,
+      } as any;
+      const employerSnapshot = {
+        ...snapshot,
+        consentAccepted: acknowledged,
+        companyName: selectedJob.companyName,
+        companyCity: selectedJob.city,
+        companyState: selectedJob.state,
+        position: isKairos(selectedJob.companyId) ? form.position : selectedJob.position,
+      };
       const attemptKey = submissionAttemptKey(userId, activeOfficerId, selectedJob.id);
       const previousAttempt = intentionalAttempt.current || window.localStorage.getItem(attemptKey);
       const attemptId = previousAttempt || crypto.randomUUID();
@@ -602,28 +1187,33 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       window.localStorage.setItem(attemptKey, attemptId);
       setSubmissionUncertain(true);
       const lookup = async (): Promise<SubmissionReceipt | null> => {
-        const result = await (supabase as any).rpc("get_my_hiring_submission_receipt", { _attempt_id: attemptId }).abortSignal(AbortSignal.timeout(8000));
+        const result = await (supabase as any)
+          .rpc("get_my_hiring_submission_receipt", { _attempt_id: attemptId })
+          .abortSignal(AbortSignal.timeout(8000));
         if (result.error) throw result.error;
         return result.data?.[0] || null;
       };
       const send = async (): Promise<SubmissionReceipt> => {
-        const submission = await (supabase as any).rpc("submit_my_hiring_application_v2", {
-        _attempt_id: attemptId,
-        _master_application_id: masterIdRef.current,
-        _officer_id: activeOfficerId,
-        _job_posting_id: selectedJob.id,
-        _position: form.position,
-        _applicant_name: form.applicantName,
-        _applicant_email: form.email,
-        _signature_name: form.signature,
-        _signature_date: form.signatureDate,
-        _application_data: employerSnapshot,
-        }).abortSignal(AbortSignal.timeout(20000));
-        if (submission.error || !submission.data?.[0]) throw submission.error || new Error("Could not submit the application");
+        const submission = await (supabase as any)
+          .rpc("submit_my_hiring_application_v2", {
+            _attempt_id: attemptId,
+            _master_application_id: masterIdRef.current,
+            _officer_id: activeOfficerId,
+            _job_posting_id: selectedJob.id,
+            _position: form.position,
+            _applicant_name: form.applicantName,
+            _applicant_email: form.email,
+            _signature_name: form.signature,
+            _signature_date: form.signatureDate,
+            _application_data: employerSnapshot,
+          })
+          .abortSignal(AbortSignal.timeout(20000));
+        if (submission.error || !submission.data?.[0])
+          throw submission.error || new Error("Could not submit the application");
         return submission.data[0];
       };
       const priorReceipt = previousAttempt ? await lookup() : null;
-      const savedSubmission = priorReceipt || await submitWithReceipt(send, lookup);
+      const savedSubmission = priorReceipt || (await submitWithReceipt(send, lookup));
       submissionConfirmed.current = true;
       submittedAtRef.current = savedSubmission.submitted_at;
       masterIdRef.current = savedSubmission.master_application_id;
@@ -638,13 +1228,27 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
       onChanged?.();
 
       // The transaction durably queued archiving and profile synchronization.
-    } catch (error: any) { toast.error(`${error.message || "Could not confirm submission"}. Your information is still on this page. Retry Submit to check the same submission safely.`); }
-    finally { submissionLocked.current = false; setSubmitting(false); }
+    } catch (error: any) {
+      toast.error(
+        `${error.message || "Could not confirm submission"}. Your information is still on this page. Retry Submit to check the same submission safely.`,
+      );
+    } finally {
+      submissionLocked.current = false;
+      setSubmitting(false);
+    }
   };
 
-  const completedRequiredSteps = requiredSteps.filter((step) => stepStatus(step) === "completed").length;
+  const completedRequiredSteps = requiredSteps.filter(
+    (step) => stepStatus(step) === "completed",
+  ).length;
   const progress = Math.round((completedRequiredSteps / requiredSteps.length) * 100);
-  const pdfApplication: GuardApplicationData = { ...form, availability: shared, photosComplete, certificationComplete };
+  const pdfApplication: GuardApplicationData = {
+    ...form,
+    applicationQuestionVersion: 2,
+    availability: shared,
+    photosComplete,
+    certificationComplete,
+  };
   const editForAnotherCompany = () => {
     submissionConfirmed.current = false;
     intentionalAttempt.current = crypto.randomUUID();
@@ -671,139 +1275,1166 @@ export function GuardHiringApplication({ userId, officerId, onChanged, onEnsureP
   };
 
   if (!loaded && loadError) {
-    return <div role="alert" className="mx-auto flex min-h-[240px] max-w-4xl flex-col items-center justify-center gap-4 rounded-2xl border bg-card p-6 text-center"><p className="font-semibold">{loadError}</p><p className="text-sm text-muted-foreground">Nothing was changed on this page. Check your connection, then try again.</p><Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Try again</Button></div>;
+    return (
+      <div
+        role="alert"
+        className="mx-auto flex min-h-[240px] max-w-4xl flex-col items-center justify-center gap-4 rounded-2xl border bg-card p-6 text-center"
+      >
+        <p className="font-semibold">{loadError}</p>
+        <p className="text-sm text-muted-foreground">
+          Nothing was changed on this page. Check your connection, then try again.
+        </p>
+        <Button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>
+          Try again
+        </Button>
+      </div>
+    );
   }
   if (!loaded) {
-    return <div className="mx-auto flex min-h-[360px] max-w-4xl items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">Preparing your application…</div>;
+    return (
+      <div className="mx-auto flex min-h-[360px] max-w-4xl items-center justify-center rounded-2xl border bg-card text-sm text-muted-foreground">
+        Preparing your application…
+      </div>
+    );
   }
 
   if (loaded && masterStatus === "submitted" && !editingSubmitted) {
     return (
-      <><Dialog open={showSubmissionConfirmation} onOpenChange={setShowSubmissionConfirmation}><DialogContent className="max-w-md rounded-2xl"><DialogHeader><div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700"><CheckCircle2 className="h-7 w-7" /></div><DialogTitle className="text-2xl">Thank you for submitting your application</DialogTitle><DialogDescription className="text-base">Your application was successfully sent to {form.companyName || "the hiring company"}. You can leave this page—your submitted application is saved.</DialogDescription></DialogHeader><Button type="button" onClick={() => setShowSubmissionConfirmation(false)}>Done</Button></DialogContent></Dialog><section className="mx-auto w-full max-w-4xl rounded-2xl border border-green-200 bg-green-50/70 p-5 shadow-sm sm:p-8">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
-              <CheckCircle2 className="h-7 w-7" />
-            </span>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[.16em] text-green-700">Application complete</p>
-              <h2 className="mt-1 text-xl font-bold text-foreground sm:text-2xl">Thank you—your hiring application was submitted</h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Your application for {form.position || "Security Officer"} with {form.companyName || "the selected company"} is saved. The submitted company copy remains unchanged.
-              </p>
+      <>
+        <Dialog open={showSubmissionConfirmation} onOpenChange={setShowSubmissionConfirmation}>
+          <DialogContent className="max-w-md rounded-2xl">
+            <DialogHeader>
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+              <DialogTitle className="text-2xl">
+                Thank you for submitting your application
+              </DialogTitle>
+              <DialogDescription className="text-base">
+                Your application was successfully sent to {form.companyName || "the hiring company"}
+                . You can leave this page—your submitted application is saved.
+              </DialogDescription>
+            </DialogHeader>
+            <Button type="button" onClick={() => setShowSubmissionConfirmation(false)}>
+              Done
+            </Button>
+          </DialogContent>
+        </Dialog>
+        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-green-200 bg-green-50/70 p-5 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-green-600 text-white">
+                <CheckCircle2 className="h-7 w-7" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[.16em] text-green-700">
+                  Application complete
+                </p>
+                <h2 className="mt-1 text-xl font-bold text-foreground sm:text-2xl">
+                  Thank you—your hiring application was submitted
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your application for {form.position || "Security Officer"} with{" "}
+                  {form.companyName || "the selected company"} is saved. The submitted company copy
+                  remains unchanged.
+                </p>
+              </div>
             </div>
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800">
+              <Check className="h-4 w-4" /> Submitted
+            </span>
           </div>
-          <span className="inline-flex w-fit items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800">
-            <Check className="h-4 w-4" /> Submitted
-          </span>
-        </div>
-        <div className="mt-6 flex flex-col gap-3 border-t border-green-200 pt-5 sm:flex-row sm:justify-end">
-          <Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(pdfApplication)}>
-            <Download className="mr-2 h-4 w-4" />Download completed PDF
-          </Button>
-          <Button type="button" onClick={editForAnotherCompany}>Edit Application</Button>
-        </div>
-      </section></>
+          <div className="mt-6 flex flex-col gap-3 border-t border-green-200 pt-5 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => generateGuardApplicationPDF(pdfApplication)}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download completed PDF
+            </Button>
+            <Button type="button" onClick={editForAnotherCompany}>
+              Edit Application
+            </Button>
+          </div>
+        </section>
+      </>
     );
   }
 
   if (!applicationStarted) {
     const destination = jobs.find((job) => job.id === selectedJobId);
-    return <section className="mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
-      <div className="px-6 py-10 sm:px-10 sm:py-14">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm"><ShieldCheck className="h-8 w-8" /></div>
-        <p className="mt-7 text-sm font-bold uppercase tracking-[.18em] text-primary">Welcome to We Find Guards</p>
-        <h1 className="mt-2 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">Let’s create your security officer application.</h1>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">You’ll add your contact information, qualifications, work availability, and signature. Your progress saves as you go, and nothing is marked complete until you finish the required information.</p>
+    return (
+      <section className="mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background shadow-sm">
+        <div className="px-6 py-10 sm:px-10 sm:py-14">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+            <ShieldCheck className="h-8 w-8" />
+          </div>
+          <p className="mt-7 text-sm font-bold uppercase tracking-[.18em] text-primary">
+            Welcome to We Find Guards
+          </p>
+          <h1 className="mt-2 max-w-2xl text-3xl font-bold tracking-tight sm:text-4xl">
+            Let’s create your security officer application.
+          </h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
+            You’ll add your contact information, qualifications, work availability, and signature.
+            Your progress saves as you go, and nothing is marked complete until you finish the
+            required information.
+          </p>
 
-        <div className="mt-8 rounded-2xl border-2 border-primary/20 bg-background p-5 sm:p-6">
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Current hiring destination</p>
-          <h2 className="mt-2 text-xl font-bold">{destination ? destination.companyName : "Choose your hiring destination"}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{destination ? `${destination.position}${destination.city || destination.state ? ` · ${[destination.city, destination.state].filter(Boolean).join(", ")}` : ""}` : "You’ll select an active company and position in Step 1."}</p>
-          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Please make sure this is the company and position you intend to apply for before submitting.</p>
+          <div className="mt-8 rounded-2xl border-2 border-primary/20 bg-background p-5 sm:p-6">
+            <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">
+              Current hiring destination
+            </p>
+            <h2 className="mt-2 text-xl font-bold">
+              {destination ? destination.companyName : "Choose your hiring destination"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {destination
+                ? `${destination.position}${destination.city || destination.state ? ` · ${[destination.city, destination.state].filter(Boolean).join(", ")}` : ""}`
+                : "You’ll select an active company and position in Step 1."}
+            </p>
+            <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+              Please make sure this is the company and position you intend to apply for before
+              submitting.
+            </p>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button type="button" size="lg" onClick={startApplication}>
+              Start Application
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Step 1 of 10 · You can leave and return anytime
+            </span>
+          </div>
         </div>
-
-        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center"><Button type="button" size="lg" onClick={startApplication}>Start Application<ArrowRight className="ml-2 h-5 w-5" /></Button><span className="text-sm text-muted-foreground">Step 1 of 10 · You can leave and return anytime</span></div>
-      </div>
-    </section>;
+      </section>
+    );
   }
 
-  return <form id="guard-application-top" onSubmit={submit} className="onboarding-form mx-auto w-full max-w-6xl scroll-mt-4 pb-24 lg:pb-8">
-    {submissionUncertain && !submitting && <div role="status" className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Submission has not been confirmed yet. Keep this page open and retry Submit; we will check the same submission instead of creating a duplicate. Automatic draft saving is paused while its status is uncertain.</div>}
-    <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background"><div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:px-8"><div className="flex min-w-0 flex-1 items-center gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground"><ShieldCheck className="h-7 w-7" /></div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">Step {currentStep + 1}: {steps[currentStep][0]}</p><h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1><p className="mt-1 text-sm text-muted-foreground">{completedRequiredSteps} of {requiredSteps.length} required sections completed</p>{saveError && <p className="mt-2 text-sm font-semibold text-destructive">Draft not saved. Please check your connection and try again.</p>}</div></div><span className={`flex items-center gap-1 text-xs ${saveError ? "text-destructive" : "text-muted-foreground"}`}><Cloud className="h-4 w-4" />{saveError ? "Save failed" : saving ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Autosave on"}</span></div><div className="h-2 bg-muted"><div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} /></div></div>
-    <div className="onboarding-layout grid gap-6"><aside className="onboarding-navigation hidden"><nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">{steps.map((s, i) => { const status = stepStatus(i); return <button key={s[0]} type="button" onClick={() => void go(i)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}><span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : status === "completed" ? "bg-green-100 text-green-700" : status === "in_progress" ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}>{status === "completed" ? <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} /> : status === "in_progress" ? <PlayCircle className="h-4 w-4" aria-label={`Step ${i + 1} in progress`} /> : i + 1}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{s[0]}</span><span className={`block text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}>{status === "completed" ? "Completed" : status === "in_progress" ? "In progress" : "Not started"}</span></span></button>; })}</nav></aside>
-      <main className="min-w-0"><div className="onboarding-step-picker mb-4 space-y-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">{stepStatus(currentStep) === "completed" && <Check className="h-4 w-4" />}Step {currentStep + 1} of 10</span><span className="text-sm text-muted-foreground">{progress}% required complete</span></div><select aria-label="Application section" className="h-12 w-full rounded-xl border bg-background px-3 font-medium" value={currentStep} onChange={(event) => void go(Number(event.target.value))}>{steps.map((step, index) => <option key={step[0]} value={index}>{index + 1}. {step[0]} — {stepStatus(index) === "completed" ? "Completed" : stepStatus(index) === "in_progress" ? "In progress" : "Not started"}</option>)}</select></div><Card className="min-w-0 rounded-2xl shadow-sm"><CardHeader className="border-b px-5 py-6 sm:px-8"><CardTitle className="break-words text-2xl sm:text-3xl">{steps[currentStep][0]}</CardTitle><CardDescription className="text-base">{steps[currentStep][1]}</CardDescription></CardHeader><CardContent className="min-w-0 px-5 py-7 sm:px-8 sm:py-9">
-        {currentStep === 0 && <div className="space-y-6"><div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-5"><p className="text-xs font-bold uppercase tracking-[.16em] text-primary">Current hiring destination</p><h3 className="mt-2 text-xl font-bold">{selectedJobId ? form.companyName : "Choose a hiring company"}</h3><p className="mt-1 text-sm text-muted-foreground">{selectedJobId ? `${form.position} · ${[form.companyCity, form.companyState].filter(Boolean).join(", ")}` : "Select an active position below."}</p><p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">Please make sure this is the company and position you intend to apply for before continuing.</p></div><div className="grid gap-5 md:grid-cols-2"><div className="min-w-0 space-y-2 md:col-span-2"><Label>Company and job location *</Label><select className="h-12 w-full min-w-0 rounded-lg border bg-background px-4" value={selectedJobId} onChange={e => { const job = jobs.find(item => item.id === e.target.value); setSelectedJobId(e.target.value); if (job) setForm(c => ({ ...c, companyName: job.companyName, position: job.position, companyCity: job.city, companyState: job.state })); }}><option value="">Select a company and position</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} — {j.position}</option>)}</select><p className="text-sm text-muted-foreground">Companies appear here after they create an active job posting.</p></div>{isKairos(jobs.find(job => job.id === selectedJobId)?.companyId) ? <div className="space-y-2"><Label htmlFor="kairos-position">Position applied for *</Label><select id="kairos-position" className="h-12 w-full rounded-lg border bg-background px-4" value={form.position} onChange={event => update("position", event.target.value)}>{!KAIROS_POSITIONS.includes(form.position) && <option value={form.position}>{form.position}</option>}{KAIROS_POSITIONS.map(position => <option key={position} value={position}>{position}</option>)}</select></div> : <Field label="Position applied for" value={form.position} onChange={v => update("position", v)} required />}<Field label="Available start date" value={form.startDate} onChange={v => update("startDate", v)} type="date" /></div></div>}
-        {currentStep === 1 && <div className="space-y-5"><p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">Information entered here is the same information shown in your Profile tab.</p><div className="grid gap-5 md:grid-cols-2"><Field label="Full legal name" value={form.applicantName} onChange={v => update("applicantName", v)} required /><Field label="Email" value={form.email} onChange={v => update("email", v)} type="email" required /><Field label="Phone" value={form.phone} onChange={v => update("phone", v)} type="tel" required /></div><AddressAutocomplete value={{ street: form.address, unit: "", city: form.city, state: form.state, zip: form.zip }} onChange={a => setForm(c => ({ ...c, address: a.street, city: a.city, state: a.state, zip: a.zip }))} /><div className="rounded-xl border p-4"><Label htmlFor="application-resume" className="text-base">Upload Resume <span className="font-normal text-muted-foreground">(optional)</span></Label><p className="mt-1 text-sm text-muted-foreground">PDF, DOC, or DOCX, up to 10 MB. Employers can download the resume with your submitted application.</p><div className="mt-4 flex flex-wrap items-center gap-3"><Input id="application-resume" type="file" accept=".pdf,.doc,.docx" onChange={uploadResume} disabled={uploadingResume} className="max-w-md" /><span className="text-sm font-medium" aria-live="polite">{uploadingResume ? "Uploading…" : resumePath ? "✓ Resume on file" : "No resume uploaded"}</span></div>{resumeNotice && <div role={resumeNotice.tone === "error" ? "alert" : "status"} className={`mt-3 flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-sm ${resumeNotice.tone === "error" ? "bg-destructive/10 text-destructive" : "bg-green-50 text-green-800"}`}><span>{resumeNotice.text}</span><button type="button" aria-label="Dismiss message" className="shrink-0" onClick={() => setResumeNotice(null)}><X className="h-4 w-4" /></button></div>}</div></div>}
-        {currentStep === 2 && <div className="grid gap-7 md:grid-cols-2"><fieldset className="space-y-3 rounded-xl border bg-muted/20 p-4 md:col-span-2"><legend className="px-2 font-semibold">Security license status *</legend><p className="text-sm text-muted-foreground">Select every license level you currently hold, or select No license. An answer is required; a license is not required to complete this application.</p><div className="grid gap-3 sm:grid-cols-2">{[{ value: "Level II", label: "Level 2 (II) — Unarmed" }, { value: "Level III", label: "Level 3 (III) — Armed" }, { value: "Level IV", label: "Level 4 (IV) — Personal protection" }, { value: "No license", label: "No license" }].map(option => <label key={option.value} className="flex items-center gap-3 rounded-lg border bg-background p-3"><Checkbox checked={form.licenseLevels.includes(option.value)} onCheckedChange={checked => setForm(current => ({ ...current, licenseLevels: checked ? option.value === "No license" ? ["No license"] : [...current.licenseLevels.filter(level => level !== "No license" && level !== option.value), option.value] : current.licenseLevels.filter(level => level !== option.value) }))} />{option.label}</label>)}</div></fieldset><YesNo label="Are you 18 years of age or older?" value={form.isAdult} onChange={v => update("isAdult", v)} /><YesNo label="Can you provide proof that you may work in the U.S.?" value={form.eligibleToWork} onChange={v => update("eligibleToWork", v)} /><YesNo label="Do you have a valid driver's license?" value={form.driversLicense} onChange={v => update("driversLicense", v)} /><Field label="Security license number (optional)" value={form.securityLicenseNumber} onChange={v => update("securityLicenseNumber", v)} /><div className="space-y-2"><Label htmlFor="security-license-state">Security license state (optional)</Label><select id="security-license-state" className="h-12 w-full rounded-lg border bg-background px-4" value={form.securityLicenseState} onChange={e => update("securityLicenseState", e.target.value)}><option value="">Select state</option>{states.map(state => <option key={state} value={state}>{state}</option>)}</select></div></div>}
-        {currentStep === 3 && <div className="space-y-6"><div className="space-y-2"><Label>Highest education, school, diploma, or degree</Label><Textarea value={form.education} onChange={e => update("education", e.target.value)} /></div><div className="space-y-3"><Label>Security training, skills, and equipment</Label><div className="grid gap-3 sm:grid-cols-2">{skillOptions.map(skill => { const selected = form.skills.split(",").map(item => item.trim()).filter(Boolean).includes(skill); return <label key={skill} className="flex items-center gap-2 rounded-lg border p-3"><Checkbox checked={selected} onCheckedChange={checked => { const current = form.skills.split(",").map(item => item.trim()).filter(Boolean); update("skills", (checked ? Array.from(new Set([...current, skill])) : current.filter(item => item !== skill)).join(", ")); }} />{skill}</label>; })}</div><p className="text-sm text-muted-foreground">Select every qualification that applies.</p></div></div>}
-        {currentStep === 4 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional. Entries save to Work History and can be edited there later.</p>{form.workHistory.map((j, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><div className="flex items-center justify-between md:col-span-2"><p className="font-semibold text-primary">Employer {i + 1}</p>{form.workHistory.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => setForm(current => ({ ...current, workHistory: current.workHistory.filter((_, index) => index !== i) }))}><X className="mr-1 h-4 w-4" />Remove</Button>}</div><Field label="Employer" value={j.employer || ""} onChange={v => updateList("workHistory", i, "employer", v)} /><Field label="Job title" value={j.title || ""} onChange={v => updateList("workHistory", i, "title", v)} /><Field label="Start date" type="date" value={j.startDate || ""} onChange={v => updateList("workHistory", i, "startDate", v)} /><Field label="End date" type="date" value={j.endDate || ""} onChange={v => updateList("workHistory", i, "endDate", v)} /><Field label="Supervisor" value={j.supervisor || ""} onChange={v => updateList("workHistory", i, "supervisor", v)} /><Field label="Supervisor phone" type="tel" value={j.phone || ""} onChange={v => updateList("workHistory", i, "phone", v)} /></div>)}<Button type="button" variant="outline" onClick={() => setForm(current => ({ ...current, workHistory: [...current.workHistory, { ...blankJob }] }))}><Plus className="mr-2 h-4 w-4" />Add Another Employer</Button></div>}
-        {currentStep === 5 && <div className="space-y-5"><p className="text-sm text-muted-foreground">Optional professional references (not relatives).</p>{form.references.map((r, i) => <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2"><p className="font-semibold text-primary md:col-span-2">Reference {i + 1}</p><Field label="Name" value={r.name} onChange={v => updateList("references", i, "name", v)} /><Field label="Relationship" value={r.relationship} onChange={v => updateList("references", i, "relationship", v)} /><Field label="Phone" type="tel" value={r.phone} onChange={v => updateList("references", i, "phone", v)} /><Field label="Email" type="email" value={r.email} onChange={v => updateList("references", i, "email", v)} /></div>)}</div>}
-        {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
-        {currentStep === 7 && <OfficerPhotos userId={userId} embedded optional onChanged={setPhotos} onSaved={updatePhotoCompletion} />}
-        {currentStep === 8 && <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 xl:flex-row xl:items-center xl:justify-between"><p><span className="font-semibold">This step is optional.</span> If you don’t have a security license or certification yet, you can still submit your application.</p><Button type="button" variant="outline" className="h-auto min-h-10 w-full max-w-full whitespace-normal bg-background py-2 text-center xl:w-auto xl:shrink-0" onClick={skipCredentials}>I don’t have a license yet — skip</Button></div>}
-        {currentStep === 8 && <CertificationsManager officerId={activeOfficerId || ""} userId={userId} onEnsureProfile={onEnsureProfile} onChanged={updateCertifications} embedded onRegisterSave={(save) => { savePendingLicensesRef.current = save; }} />}
-        {currentStep === 9 && <div className="space-y-8"><section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-semibold">New-hire paperwork comes later</p><p className="mt-1">Form I-9, Form W-4, payroll, and company policies are completed only after you accept an employment offer.</p></section><section className="space-y-5"><h3 className="text-lg font-semibold">Certification and electronic signature</h3><p className="text-sm text-muted-foreground">I certify that this application is true and complete and authorize verification of the information provided.</p><div className="flex items-start gap-2"><Checkbox id="certify" checked={acknowledged} onCheckedChange={v => setAcknowledged(Boolean(v))} /><Label htmlFor="certify">I have read and agree to the certification above. *</Label></div><div className="grid gap-4 md:grid-cols-2"><Field label="Printed full legal name" value={form.signature} onChange={v => update("signature", v)} required /><Field label="Date signed" type="date" value={form.signatureDate} onChange={v => update("signatureDate", v)} required /></div><div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5"><SignaturePad value={form.signatureImage} suggestedName={form.signature || form.applicantName} onChange={value => update("signatureImage", value)} /></div><div className={`rounded-xl border p-4 text-sm ${complete ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}><p className="font-semibold">Before you submit</p><div className="mt-3 grid gap-2 sm:grid-cols-2">{signatureChecklist.map((item) => <p key={item.label} className={item.complete ? "text-green-800" : "font-semibold text-amber-900"}>{item.complete ? "✓" : "○"} {item.label}{item.complete ? " complete" : " required"}</p>)}</div>{missingRequiredSteps.some((step) => step !== 9) && <p className="mt-3 font-semibold text-amber-900">Also needed: {missingRequiredSteps.filter((step) => step !== 9).map((step) => requiredStepLabels[step]).join(", ")}.</p>}<p className="mt-3 text-muted-foreground">Resume, photos, and credentials are optional and do not prevent submission.</p></div></section></div>}
-      </CardContent></Card><Actions current={currentStep} go={go} next={next} submit={submitting} complete={complete} form={pdfApplication} resubmitting={editingSubmitted} optionalStep={(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete)} /></main></div>
-    <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden"><Button type="button" variant="outline" size="lg" onClick={() => go(currentStep - 1)} disabled={!currentStep}><ArrowLeft className="h-5 w-5" /></Button>{currentStep < 9 ? <Button type="button" size="lg" className="flex-1" onClick={next}>{(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete) ? "Skip for now" : "Continue"}<ArrowRight className="ml-2 h-5 w-5" /></Button> : <Button type="submit" size="lg" className="flex-1" disabled={submitting}><FileCheck2 className="mr-2 h-5 w-5" />{submitting ? "Submitting…" : editingSubmitted ? "Resubmit" : "Submit Application"}</Button>}</div>
-  </form>;
-}
-
-function Availability({ shared, setShared }: { shared: SharedData; setShared: React.Dispatch<React.SetStateAction<SharedData>> }) {
-  const toggle = (key: "employmentTypes" | "shiftPreferences", value: string, checked: boolean) => setShared(c => ({ ...c, [key]: checked ? Array.from(new Set([...c[key], value])) : c[key].filter(v => v !== value) }));
-  const updateTime = (day: string, field: "start" | "end", value: string) => setShared(current => ({
-    ...current,
-    schedule: {
-      ...current.schedule,
-      [day]: {
-        start: field === "start" ? value : current.schedule[day]?.start || "",
-        end: field === "end" ? value : current.schedule[day]?.end || "",
-      },
-    },
-  }));
-  const copyDay = (sourceDay: string, targetDays: string[]) => setShared(current => {
-    const source = current.schedule[sourceDay];
-    if (!source?.start || !source?.end) return current;
-    const schedule = { ...current.schedule };
-    targetDays.forEach(day => { schedule[day] = { ...source }; });
-    return { ...current, schedule };
-  });
-  const setAnytime = () => setShared(current => ({
-    ...current,
-    shiftPreferences: ["first_shift", "second_shift", "third_shift", "weekend"],
-    schedule: Object.fromEntries(days.map(day => [day, { start: "00:00", end: "23:30" }])),
-  }));
-
-  return <div className="space-y-7">
-    <section className="space-y-3"><Label className="text-base">Employment type *</Label><div className="flex flex-wrap gap-5">{[["full_time", "Full-time"], ["part_time", "Part-time"], ["contract", "Contract"]].map(([v,l]) => <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3"><Checkbox checked={shared.employmentTypes.includes(v)} onCheckedChange={c => toggle("employmentTypes", v, Boolean(c))} />{l}</label>)}</div></section>
-    <section className="space-y-3"><Label className="text-base">Preferred shift *</Label><div className="flex flex-wrap gap-5">{[["first_shift", "Day"], ["second_shift", "Evening"], ["third_shift", "Night"], ["weekend", "Weekend"]].map(([v,l]) => <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3"><Checkbox checked={shared.shiftPreferences.includes(v)} onCheckedChange={c => toggle("shiftPreferences", v, Boolean(c))} />{l}</label>)}</div></section>
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><Label className="text-base">Weekly schedule *</Label><p className="mt-1 text-sm text-muted-foreground">Choose a start and end time, then copy that schedule to other days if needed.</p></div><Button type="button" variant="outline" onClick={setAnytime}>Anytime</Button></div>
-      {days.map(day => {
-        const schedule = shared.schedule[day];
-        const canCopy = Boolean(schedule?.start && schedule?.end);
-        return <div key={day} className="space-y-3 rounded-xl border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-semibold">{day}</span>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" disabled={!canCopy} onClick={() => copyDay(day, weekdays)}><Copy className="mr-1.5 h-3.5 w-3.5" />Copy to weekdays</Button>
-              <Button type="button" variant="outline" size="sm" disabled={!canCopy} onClick={() => copyDay(day, days)}><Copy className="mr-1.5 h-3.5 w-3.5" />Copy to every day</Button>
+  return (
+    <form
+      id="guard-application-top"
+      onSubmit={submit}
+      className="onboarding-form mx-auto w-full max-w-6xl scroll-mt-4 pb-24 lg:pb-8"
+    >
+      {submissionUncertain && !submitting && (
+        <div
+          role="status"
+          className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950"
+        >
+          Submission has not been confirmed yet. Keep this page open and retry Submit; we will check
+          the same submission instead of creating a duplicate. Automatic draft saving is paused
+          while its status is uncertain.
+        </div>
+      )}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background">
+        <div className="flex flex-col gap-3 px-5 py-5 sm:flex-row sm:items-center sm:px-8">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+              <ShieldCheck className="h-7 w-7" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[.18em] text-primary">
+                Step {currentStep + 1}: {steps[currentStep][0]}
+              </p>
+              <h1 className="text-xl font-bold sm:text-2xl">Security Officer Application</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {completedRequiredSteps} of {requiredSteps.length} required sections completed
+              </p>
+              {saveError && (
+                <p className="mt-2 text-sm font-semibold text-destructive">
+                  Draft not saved. Please check your connection and try again.
+                </p>
+              )}
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <TimeSelect label={`${day} start time`} value={schedule?.start || ""} placeholder="Select start time" onChange={value => updateTime(day, "start", value)} />
-            <TimeSelect label={`${day} end time`} value={schedule?.end || ""} placeholder="Select end time" onChange={value => updateTime(day, "end", value)} />
+          <span
+            className={`flex items-center gap-1 text-xs ${saveError ? "text-destructive" : "text-muted-foreground"}`}
+          >
+            <Cloud className="h-4 w-4" />
+            {saveError
+              ? "Save failed"
+              : saving
+                ? "Saving…"
+                : savedAt
+                  ? `Saved ${savedAt}`
+                  : "Autosave on"}
+          </span>
+        </div>
+        <div className="h-2 bg-muted">
+          <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+      <div className="onboarding-layout grid gap-6">
+        <aside className="onboarding-navigation hidden">
+          <nav className="sticky top-4 space-y-1 rounded-2xl border bg-card p-3">
+            {steps.map((s, i) => {
+              const status = stepStatus(i);
+              return (
+                <button
+                  key={s[0]}
+                  type="button"
+                  onClick={() => void go(i)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${i === currentStep ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                >
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === currentStep ? "bg-white/20" : status === "completed" ? "bg-green-100 text-green-700" : status === "in_progress" ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"}`}
+                  >
+                    {status === "completed" ? (
+                      <Check className="h-4 w-4" aria-label={`Step ${i + 1} complete`} />
+                    ) : status === "in_progress" ? (
+                      <PlayCircle className="h-4 w-4" aria-label={`Step ${i + 1} in progress`} />
+                    ) : (
+                      i + 1
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold">{s[0]}</span>
+                    <span
+                      className={`block text-xs ${i === currentStep ? "text-white/75" : "text-muted-foreground"}`}
+                    >
+                      {status === "completed"
+                        ? "Completed"
+                        : status === "in_progress"
+                          ? "In progress"
+                          : "Not started"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+        <main className="min-w-0">
+          <div className="onboarding-step-picker mb-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary">
+                {stepStatus(currentStep) === "completed" && <Check className="h-4 w-4" />}Step{" "}
+                {currentStep + 1} of 10
+              </span>
+              <span className="text-sm text-muted-foreground">{progress}% required complete</span>
+            </div>
+            <select
+              aria-label="Application section"
+              className="h-12 w-full rounded-xl border bg-background px-3 font-medium"
+              value={currentStep}
+              onChange={(event) => void go(Number(event.target.value))}
+            >
+              {steps.map((step, index) => (
+                <option key={step[0]} value={index}>
+                  {index + 1}. {step[0]} —{" "}
+                  {stepStatus(index) === "completed"
+                    ? "Completed"
+                    : stepStatus(index) === "in_progress"
+                      ? "In progress"
+                      : "Not started"}
+                </option>
+              ))}
+            </select>
           </div>
-        </div>;
-      })}
-    </section>
-  </div>;
+          <Card className="min-w-0 rounded-2xl shadow-sm">
+            <CardHeader className="border-b px-5 py-6 sm:px-8">
+              <CardTitle className="break-words text-2xl sm:text-3xl">
+                {steps[currentStep][0]}
+              </CardTitle>
+              <CardDescription className="text-base">{steps[currentStep][1]}</CardDescription>
+            </CardHeader>
+            <CardContent className="min-w-0 px-5 py-7 sm:px-8 sm:py-9">
+              {currentStep === 0 && (
+                <div className="space-y-6">
+                  <div className="rounded-2xl border-2 border-primary/20 bg-primary/5 p-5">
+                    <p className="text-xs font-bold uppercase tracking-[.16em] text-primary">
+                      Current hiring destination
+                    </p>
+                    <h3 className="mt-2 text-xl font-bold">
+                      {selectedJobId ? form.companyName : "Choose a hiring company"}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {selectedJobId
+                        ? `${form.position} · ${[form.companyCity, form.companyState].filter(Boolean).join(", ")}`
+                        : "Select an active position below."}
+                    </p>
+                    <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+                      Please make sure this is the company and position you intend to apply for
+                      before continuing.
+                    </p>
+                  </div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="min-w-0 space-y-2 md:col-span-2">
+                      <Label>Company and job location *</Label>
+                      <select
+                        className="h-12 w-full min-w-0 rounded-lg border bg-background px-4"
+                        value={selectedJobId}
+                        onChange={(e) => {
+                          const job = jobs.find((item) => item.id === e.target.value);
+                          setSelectedJobId(e.target.value);
+                          if (job)
+                            setForm((c) => ({
+                              ...c,
+                              companyName: job.companyName,
+                              position: job.position,
+                              companyCity: job.city,
+                              companyState: job.state,
+                            }));
+                        }}
+                      >
+                        <option value="">Select a company and position</option>
+                        {jobs.map((j) => (
+                          <option key={j.id} value={j.id}>
+                            {j.companyName} — {[j.city, j.state].filter(Boolean).join(", ")} —{" "}
+                            {j.position}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-sm text-muted-foreground">
+                        Companies appear here after they create an active job posting.
+                      </p>
+                    </div>
+                    {isKairos(jobs.find((job) => job.id === selectedJobId)?.companyId) ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="kairos-position">Position applied for *</Label>
+                        <select
+                          id="kairos-position"
+                          className="h-12 w-full rounded-lg border bg-background px-4"
+                          value={form.position}
+                          onChange={(event) => update("position", event.target.value)}
+                        >
+                          {!KAIROS_POSITIONS.includes(form.position) && (
+                            <option value={form.position}>{form.position}</option>
+                          )}
+                          {KAIROS_POSITIONS.map((position) => (
+                            <option key={position} value={position}>
+                              {position}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <Field
+                        label="Position applied for"
+                        value={form.position}
+                        onChange={(v) => update("position", v)}
+                        required
+                      />
+                    )}
+                    <Field
+                      label="Available start date"
+                      value={form.startDate}
+                      onChange={(v) => update("startDate", v)}
+                      type="date"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+              {currentStep === 1 && (
+                <div className="space-y-5">
+                  <p className="rounded-xl bg-primary/5 p-4 text-sm text-muted-foreground">
+                    Information entered here is the same information shown in your Profile tab.
+                  </p>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="grid gap-4 md:col-span-2 sm:grid-cols-3">
+                      {(["firstName", "middleName", "lastName"] as const).map((key, i) => (
+                        <ApplicationText
+                          key={key}
+                          label={["First name", "Middle name (optional)", "Last name"][i]}
+                          value={form[key]}
+                          required={key !== "middleName"}
+                          onChange={(value) =>
+                            setForm((current) => {
+                              const next = { ...current, [key]: value };
+                              return {
+                                ...next,
+                                applicantName: [next.firstName, next.middleName, next.lastName]
+                                  .filter(Boolean)
+                                  .join(" "),
+                              };
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                    <p className="text-sm md:col-span-2">
+                      Full legal name: {form.applicantName || "Not provided"}
+                    </p>
+                    <Field
+                      label="Email"
+                      value={form.email}
+                      onChange={(v) => update("email", v)}
+                      type="email"
+                      required
+                    />
+                    <Field
+                      label="Phone"
+                      value={form.phone}
+                      onChange={(v) => update("phone", v)}
+                      type="tel"
+                      required
+                    />
+                  </div>
+                  <AddressAutocomplete
+                    value={{
+                      street: form.address,
+                      unit: "",
+                      city: form.city,
+                      state: form.state,
+                      zip: form.zip,
+                    }}
+                    onChange={(a) =>
+                      setForm((c) => ({
+                        ...c,
+                        address: a.street,
+                        city: a.city,
+                        state: a.state,
+                        zip: a.zip,
+                      }))
+                    }
+                  />
+                  <div className="rounded-xl border p-4">
+                    <Label htmlFor="application-resume" className="text-base">
+                      Upload Resume{" "}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      PDF, DOC, or DOCX, up to 10 MB. Employers can download the resume with your
+                      submitted application.
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <Input
+                        id="application-resume"
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={uploadResume}
+                        disabled={uploadingResume}
+                        className="max-w-md"
+                      />
+                      <span className="text-sm font-medium" aria-live="polite">
+                        {uploadingResume
+                          ? "Uploading…"
+                          : resumePath
+                            ? "✓ Resume on file"
+                            : "No resume uploaded"}
+                      </span>
+                    </div>
+                    {resumeNotice && (
+                      <div
+                        role={resumeNotice.tone === "error" ? "alert" : "status"}
+                        className={`mt-3 flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-sm ${resumeNotice.tone === "error" ? "bg-destructive/10 text-destructive" : "bg-green-50 text-green-800"}`}
+                      >
+                        <span>{resumeNotice.text}</span>
+                        <button
+                          type="button"
+                          aria-label="Dismiss message"
+                          className="shrink-0"
+                          onClick={() => setResumeNotice(null)}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {currentStep === 2 && (
+                <div className="grid gap-7 md:grid-cols-2">
+                  <fieldset className="space-y-3 rounded-xl border bg-muted/20 p-4 md:col-span-2">
+                    <legend className="px-2 font-semibold">Security license status *</legend>
+                    <p className="text-sm text-muted-foreground">
+                      Select every license level you currently hold, or select No license. An answer
+                      is required; a license is not required to complete this application.
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {[
+                        { value: "Level II", label: "Level 2 (II) — Unarmed" },
+                        { value: "Level III", label: "Level 3 (III) — Armed" },
+                        { value: "Level IV", label: "Level 4 (IV) — Personal protection" },
+                        { value: "No license", label: "No license" },
+                      ].map((option) => (
+                        <label
+                          key={option.value}
+                          className="flex items-center gap-3 rounded-lg border bg-background p-3"
+                        >
+                          <Checkbox
+                            checked={form.licenseLevels.includes(option.value)}
+                            onCheckedChange={(checked) =>
+                              setForm((current) => ({
+                                ...current,
+                                licenseLevels: checked
+                                  ? option.value === "No license"
+                                    ? ["No license"]
+                                    : [
+                                        ...current.licenseLevels.filter(
+                                          (level) =>
+                                            level !== "No license" && level !== option.value,
+                                        ),
+                                        option.value,
+                                      ]
+                                  : current.licenseLevels.filter((level) => level !== option.value),
+                              }))
+                            }
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <YesNo
+                    label="Are you 18 years of age or older?"
+                    value={form.isAdult}
+                    onChange={(v) => update("isAdult", v)}
+                  />
+                  <YesNo
+                    label="Can you provide proof that you may work in the U.S.?"
+                    value={form.eligibleToWork}
+                    onChange={(v) => update("eligibleToWork", v)}
+                  />
+                  <YesNo
+                    label="Do you have a valid driver's license?"
+                    value={form.driversLicense}
+                    onChange={(v) => update("driversLicense", v)}
+                  />
+                  {form.driversLicense === "Yes" && (
+                    <div className="grid gap-4 md:col-span-2 sm:grid-cols-3">
+                      <ApplicationText
+                        label="Driver's license number"
+                        value={form.driversLicenseNumber}
+                        required
+                        onChange={(v) => update("driversLicenseNumber", v)}
+                      />
+                      <ApplicationText
+                        label="Class of license"
+                        value={form.licenseClass}
+                        required
+                        onChange={(v) => update("licenseClass", v)}
+                      />
+                      <ApplicationText
+                        label="State licensed in"
+                        value={form.driverLicenseState}
+                        required
+                        onChange={(v) => update("driverLicenseState", v)}
+                      />
+                    </div>
+                  )}
+                  <div className="md:col-span-2">
+                    <ApplicationQuestionFields kind="eligibility" form={form} update={update} />
+                  </div>
+                  <Field
+                    label="Security license number (optional)"
+                    value={form.securityLicenseNumber}
+                    onChange={(v) => update("securityLicenseNumber", v)}
+                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="security-license-state">
+                      Security license state (optional)
+                    </Label>
+                    <select
+                      id="security-license-state"
+                      className="h-12 w-full rounded-lg border bg-background px-4"
+                      value={form.securityLicenseState}
+                      onChange={(e) => update("securityLicenseState", e.target.value)}
+                    >
+                      <option value="">Select state</option>
+                      {states.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+              {currentStep === 3 && (
+                <div className="space-y-6">
+                  <ApplicationSchoolFields
+                    form={form.schoolHistory || blankSchools()}
+                    onChange={(rows) => setForm((current) => ({ ...current, schoolHistory: rows }))}
+                  />
+                  <ApplicationText
+                    label="Professional, trade, business or civic activities and offices held (or None)"
+                    value={form.professionalActivities}
+                    onChange={(v) => update("professionalActivities", v)}
+                    required
+                  />
+                  <ApplicationText
+                    label="Machines or equipment you can operate (or None)"
+                    value={form.machinesEquipment}
+                    onChange={(v) => update("machinesEquipment", v)}
+                    required
+                  />
+                  <div className="space-y-2">
+                    <Label>Additional education notes (optional)</Label>
+                    <Textarea
+                      value={form.education}
+                      onChange={(e) => update("education", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <ApplicationText
+                      label="Skills or additional training related to the job (or None)"
+                      value={form.skills}
+                      onChange={(v) => update("skills", v)}
+                      required
+                    />
+                    <Label>Security training, skills, and equipment</Label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {skillOptions.map((skill) => {
+                        const selected = form.skills
+                          .split(",")
+                          .map((item) => item.trim())
+                          .filter(Boolean)
+                          .includes(skill);
+                        return (
+                          <label
+                            key={skill}
+                            className="flex items-center gap-2 rounded-lg border p-3"
+                          >
+                            <Checkbox
+                              checked={selected}
+                              onCheckedChange={(checked) => {
+                                const current = form.skills
+                                  .split(",")
+                                  .map((item) => item.trim())
+                                  .filter(Boolean);
+                                update(
+                                  "skills",
+                                  (checked
+                                    ? Array.from(new Set([...current, skill]))
+                                    : current.filter((item) => item !== skill)
+                                  ).join(", "),
+                                );
+                              }}
+                            />
+                            {skill}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Select every qualification that applies.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {currentStep === 4 && (
+                <div className="space-y-5">
+                  <p className="text-sm text-muted-foreground">
+                    List employers in consecutive order with the present or last employer first.
+                    Include military service and periods of unemployment.
+                  </p>
+                  <ApplicationYesNo
+                    label="Do you have employment history to provide?"
+                    value={form.hasWorkHistory}
+                    onChange={(v) => update("hasWorkHistory", v)}
+                  />
+                  {form.hasWorkHistory === "Yes" &&
+                    form.workHistory.map((j, i) => (
+                      <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2">
+                        <div className="flex items-center justify-between md:col-span-2">
+                          <p className="font-semibold text-primary">Employer {i + 1}</p>
+                          {form.workHistory.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  workHistory: current.workHistory.filter(
+                                    (_, index) => index !== i,
+                                  ),
+                                }))
+                              }
+                            >
+                              <X className="mr-1 h-4 w-4" />
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <Field
+                          label="Employer"
+                          value={j.employer || ""}
+                          onChange={(v) => updateList("workHistory", i, "employer", v)}
+                        />
+                        <Field
+                          label="Job title"
+                          value={j.title || ""}
+                          onChange={(v) => updateList("workHistory", i, "title", v)}
+                        />
+                        <Field
+                          label="Start date"
+                          type="date"
+                          value={j.startDate || ""}
+                          onChange={(v) => updateList("workHistory", i, "startDate", v)}
+                        />
+                        <Field
+                          label="End date"
+                          type="date"
+                          value={j.endDate || ""}
+                          onChange={(v) => updateList("workHistory", i, "endDate", v)}
+                        />
+                        {[
+                          ["address", "Employer street address"],
+                          ["cityStateZip", "City, state, ZIP"],
+                          ["payStart", "Starting pay (or N/A)"],
+                          ["payFinal", "Final pay (or N/A)"],
+                          ["reason", "Reason for leaving (or Currently employed)"],
+                        ].map(([key, label]) => (
+                          <ApplicationText
+                            key={key}
+                            label={label}
+                            value={j[key]}
+                            onChange={(v) => updateList("workHistory", i, key, v)}
+                            required
+                          />
+                        ))}
+                        <Field
+                          label="Supervisor"
+                          value={j.supervisor || ""}
+                          onChange={(v) => updateList("workHistory", i, "supervisor", v)}
+                        />
+                        <Field
+                          label="Supervisor phone"
+                          type="tel"
+                          value={j.phone || ""}
+                          onChange={(v) => updateList("workHistory", i, "phone", v)}
+                        />
+                      </div>
+                    ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        workHistory: [...current.workHistory, { ...blankJob }],
+                      }))
+                    }
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Another Employer
+                  </Button>
+                  <ApplicationQuestionFields kind="additional" form={form} update={update} />
+                </div>
+              )}
+              {currentStep === 5 && (
+                <div className="space-y-5">
+                  <p className="text-sm text-muted-foreground">
+                    Professional references (not relatives).
+                  </p>
+                  <ApplicationYesNo
+                    label="Do you have references to provide?"
+                    value={form.hasReferences}
+                    onChange={(v) => update("hasReferences", v)}
+                  />
+                  {form.hasReferences === "Yes" &&
+                    form.references.map((r, i) => (
+                      <div key={i} className="grid gap-4 rounded-xl border p-4 md:grid-cols-2">
+                        <p className="font-semibold text-primary md:col-span-2">
+                          Reference {i + 1}
+                        </p>
+                        <Field
+                          label="Name"
+                          value={r.name}
+                          onChange={(v) => updateList("references", i, "name", v)}
+                        />
+                        <ApplicationText
+                          label="Reference address"
+                          value={r.address}
+                          onChange={(v) => updateList("references", i, "address", v)}
+                          required
+                        />
+                        <Field
+                          label="Relationship"
+                          value={r.relationship}
+                          onChange={(v) => updateList("references", i, "relationship", v)}
+                        />
+                        <Field
+                          label="Phone"
+                          type="tel"
+                          value={r.phone}
+                          onChange={(v) => updateList("references", i, "phone", v)}
+                        />
+                        <Field
+                          label="Email"
+                          type="email"
+                          value={r.email}
+                          onChange={(v) => updateList("references", i, "email", v)}
+                        />
+                      </div>
+                    ))}
+                </div>
+              )}
+              {currentStep === 6 && <Availability shared={shared} setShared={setShared} />}
+              {currentStep === 7 && (
+                <OfficerPhotos
+                  userId={userId}
+                  embedded
+                  optional
+                  onChanged={setPhotos}
+                  onSaved={updatePhotoCompletion}
+                />
+              )}
+              {currentStep === 8 && (
+                <div className="mb-5 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 xl:flex-row xl:items-center xl:justify-between">
+                  <p>
+                    <span className="font-semibold">This step is optional.</span> If you don’t have
+                    a security license or certification yet, you can still submit your application.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-auto min-h-10 w-full max-w-full whitespace-normal bg-background py-2 text-center xl:w-auto xl:shrink-0"
+                    onClick={skipCredentials}
+                  >
+                    I don’t have a license yet — skip
+                  </Button>
+                </div>
+              )}
+              {currentStep === 8 && (
+                <CertificationsManager
+                  officerId={activeOfficerId || ""}
+                  userId={userId}
+                  onEnsureProfile={onEnsureProfile}
+                  onChanged={updateCertifications}
+                  embedded
+                  onRegisterSave={(save) => {
+                    savePendingLicensesRef.current = save;
+                  }}
+                />
+              )}
+              {currentStep === 9 && (
+                <div className="space-y-8">
+                  <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+                    <p className="font-semibold">New-hire paperwork comes later</p>
+                    <p className="mt-1">
+                      Form I-9, Form W-4, payroll, and company policies are completed only after you
+                      accept an employment offer.
+                    </p>
+                  </section>
+                  <section className="space-y-5">
+                    <h3 className="text-lg font-semibold">
+                      Certification and electronic signature
+                    </h3>
+                    {applicationCertification.map((text) => (
+                      <p key={text} className="text-sm text-muted-foreground">
+                        {text}
+                      </p>
+                    ))}
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="certify"
+                        checked={acknowledged}
+                        onCheckedChange={(v) => setAcknowledged(Boolean(v))}
+                      />
+                      <Label htmlFor="certify">
+                        I have read and agree to the certification above. *
+                      </Label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field
+                        label="Printed full legal name"
+                        value={form.signature}
+                        onChange={(v) => update("signature", v)}
+                        required
+                      />
+                      <Field
+                        label="Date signed"
+                        type="date"
+                        value={form.signatureDate}
+                        onChange={(v) => update("signatureDate", v)}
+                        required
+                      />
+                    </div>
+                    <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+                      <SignaturePad
+                        value={form.signatureImage}
+                        suggestedName={form.signature || form.applicantName}
+                        onChange={(value) => update("signatureImage", value)}
+                      />
+                    </div>
+                    <div
+                      className={`rounded-xl border p-4 text-sm ${complete ? "border-green-200 bg-green-50" : "border-amber-300 bg-amber-50"}`}
+                    >
+                      <p className="font-semibold">Before you submit</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {signatureChecklist.map((item) => (
+                          <p
+                            key={item.label}
+                            className={
+                              item.complete ? "text-green-800" : "font-semibold text-amber-900"
+                            }
+                          >
+                            {item.complete ? "✓" : "○"} {item.label}
+                            {item.complete ? " complete" : " required"}
+                          </p>
+                        ))}
+                      </div>
+                      {missingRequiredSteps.some((step) => step !== 9) && (
+                        <p className="mt-3 font-semibold text-amber-900">
+                          Also needed:{" "}
+                          {missingRequiredSteps
+                            .filter((step) => step !== 9)
+                            .map((step) => requiredStepLabels[step])
+                            .join(", ")}
+                          .
+                        </p>
+                      )}
+                      <p className="mt-3 text-muted-foreground">
+                        Resume, photos, and credentials are optional and do not prevent submission.
+                      </p>
+                    </div>
+                  </section>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Actions
+            current={currentStep}
+            go={go}
+            next={next}
+            submit={submitting}
+            complete={complete}
+            form={pdfApplication}
+            resubmitting={editingSubmitted}
+            optionalStep={
+              (currentStep === 7 && !photosComplete) ||
+              (currentStep === 8 && !certificationComplete)
+            }
+          />
+        </main>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-3 border-t bg-background/95 p-3 shadow-xl backdrop-blur lg:hidden">
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={() => go(currentStep - 1)}
+          disabled={!currentStep}
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        {currentStep < 9 ? (
+          <Button type="button" size="lg" className="flex-1" onClick={next}>
+            {(currentStep === 7 && !photosComplete) || (currentStep === 8 && !certificationComplete)
+              ? "Skip for now"
+              : "Continue"}
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+        ) : (
+          <Button type="submit" size="lg" className="flex-1" disabled={submitting}>
+            <FileCheck2 className="mr-2 h-5 w-5" />
+            {submitting ? "Submitting…" : editingSubmitted ? "Resubmit" : "Submit Application"}
+          </Button>
+        )}
+      </div>
+    </form>
+  );
 }
 
-function TimeSelect({ label, value, placeholder, onChange }: { label: string; value: string; placeholder: string; onChange: (value: string) => void }) {
-  const options = value && !timeOptions.some(option => option.value === value)
-    ? [{ value, label: value }, ...timeOptions]
-    : timeOptions;
-  return <div className="space-y-2"><Label className="text-sm">{label}</Label><select aria-label={label} className="h-12 w-full rounded-lg border bg-background px-3 text-base" value={value} onChange={event => onChange(event.target.value)}><option value="">{placeholder}</option>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>;
+function Availability({
+  shared,
+  setShared,
+}: {
+  shared: SharedData;
+  setShared: React.Dispatch<React.SetStateAction<SharedData>>;
+}) {
+  const toggle = (key: "employmentTypes" | "shiftPreferences", value: string, checked: boolean) =>
+    setShared((c) => ({
+      ...c,
+      [key]: checked ? Array.from(new Set([...c[key], value])) : c[key].filter((v) => v !== value),
+    }));
+  const updateTime = (day: string, field: "start" | "end", value: string) =>
+    setShared((current) => ({
+      ...current,
+      schedule: {
+        ...current.schedule,
+        [day]: {
+          start: field === "start" ? value : current.schedule[day]?.start || "",
+          end: field === "end" ? value : current.schedule[day]?.end || "",
+        },
+      },
+    }));
+  const copyDay = (sourceDay: string, targetDays: string[]) =>
+    setShared((current) => {
+      const source = current.schedule[sourceDay];
+      if (!source?.start || !source?.end) return current;
+      const schedule = { ...current.schedule };
+      targetDays.forEach((day) => {
+        schedule[day] = { ...source };
+      });
+      return { ...current, schedule };
+    });
+  const setAnytime = () =>
+    setShared((current) => ({
+      ...current,
+      shiftPreferences: ["first_shift", "second_shift", "third_shift", "weekend"],
+      schedule: Object.fromEntries(days.map((day) => [day, { start: "00:00", end: "23:30" }])),
+    }));
+
+  return (
+    <div className="space-y-7">
+      <section className="space-y-3">
+        <Label className="text-base">Employment type *</Label>
+        <div className="flex flex-wrap gap-5">
+          {[
+            ["full_time", "Full-time"],
+            ["part_time", "Part-time"],
+            ["contract", "Contract"],
+          ].map(([v, l]) => (
+            <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3">
+              <Checkbox
+                checked={shared.employmentTypes.includes(v)}
+                onCheckedChange={(c) => toggle("employmentTypes", v, Boolean(c))}
+              />
+              {l}
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className="space-y-3">
+        <Label className="text-base">Preferred shift *</Label>
+        <div className="flex flex-wrap gap-5">
+          {[
+            ["first_shift", "Day"],
+            ["second_shift", "Evening"],
+            ["third_shift", "Night"],
+            ["weekend", "Weekend"],
+          ].map(([v, l]) => (
+            <label key={v} className="flex items-center gap-2 rounded-lg border px-4 py-3">
+              <Checkbox
+                checked={shared.shiftPreferences.includes(v)}
+                onCheckedChange={(c) => toggle("shiftPreferences", v, Boolean(c))}
+              />
+              {l}
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <Label className="text-base">Weekly schedule *</Label>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose a start and end time, then copy that schedule to other days if needed.
+            </p>
+          </div>
+          <Button type="button" variant="outline" onClick={setAnytime}>
+            Anytime
+          </Button>
+        </div>
+        {days.map((day) => {
+          const schedule = shared.schedule[day];
+          const canCopy = Boolean(schedule?.start && schedule?.end);
+          return (
+            <div key={day} className="space-y-3 rounded-xl border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold">{day}</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canCopy}
+                    onClick={() => copyDay(day, weekdays)}
+                  >
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copy to weekdays
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canCopy}
+                    onClick={() => copyDay(day, days)}
+                  >
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Copy to every day
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TimeSelect
+                  label={`${day} start time`}
+                  value={schedule?.start || ""}
+                  placeholder="Select start time"
+                  onChange={(value) => updateTime(day, "start", value)}
+                />
+                <TimeSelect
+                  label={`${day} end time`}
+                  value={schedule?.end || ""}
+                  placeholder="Select end time"
+                  onChange={(value) => updateTime(day, "end", value)}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </section>
+    </div>
+  );
 }
-function Actions({ current, go, next, submit, form, resubmitting, optionalStep }: any) { return <div className="mt-5 hidden items-center justify-between lg:flex"><Button type="button" variant="outline" onClick={() => go(current - 1)} disabled={!current}><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>{current < 9 ? <Button type="button" onClick={next}>{optionalStep ? "Skip for now" : "Continue"}<ArrowRight className="ml-2 h-4 w-4" /></Button> : <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(form)}><Download className="mr-2 h-4 w-4" />Preview PDF</Button><Button type="submit" disabled={submit}><FileCheck2 className="mr-2 h-4 w-4" />{submit ? "Submitting…" : resubmitting ? "Resubmit" : "Submit Application"}</Button></div>}</div>; }
+
+function TimeSelect({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
+  const options =
+    value && !timeOptions.some((option) => option.value === value)
+      ? [{ value, label: value }, ...timeOptions]
+      : timeOptions;
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm">{label}</Label>
+      <select
+        aria-label={label}
+        className="h-12 w-full rounded-lg border bg-background px-3 text-base"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+function Actions({ current, go, next, submit, form, resubmitting, optionalStep }: any) {
+  return (
+    <div className="mt-5 hidden items-center justify-between lg:flex">
+      <Button type="button" variant="outline" onClick={() => go(current - 1)} disabled={!current}>
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back
+      </Button>
+      {current < 9 ? (
+        <Button type="button" onClick={next}>
+          {optionalStep ? "Skip for now" : "Continue"}
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
+      ) : (
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={() => generateGuardApplicationPDF(form)}>
+            <Download className="mr-2 h-4 w-4" />
+            Preview PDF
+          </Button>
+          <Button type="submit" disabled={submit}>
+            <FileCheck2 className="mr-2 h-4 w-4" />
+            {submit ? "Submitting…" : resubmitting ? "Resubmit" : "Submit Application"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
