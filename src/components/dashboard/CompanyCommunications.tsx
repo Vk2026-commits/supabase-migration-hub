@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Phone, MessageSquare, Clock, ArrowRightLeft, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,43 @@ const date = (s: string) =>
     : "Not available";
 const duration = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+function CallRecording({ src }: { src: string }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  const [position, setPosition] = useState(0);
+  const [length, setLength] = useState(0);
+  const [failed, setFailed] = useState(false);
+  const updateDuration = () => {
+    const value = audio.current?.duration;
+    setLength(value && Number.isFinite(value) ? value : 0);
+  };
+  return (
+    <div className="min-w-0 rounded-lg border bg-slate-50 p-4 space-y-3">
+      <audio ref={audio} controls preload="metadata" className="w-full min-w-0" src={src}
+        onLoadedMetadata={updateDuration} onDurationChange={updateDuration}
+        onTimeUpdate={() => setPosition(audio.current?.currentTime ?? 0)}
+        onError={() => setFailed(true)} />
+      <label className="block text-sm font-medium" htmlFor="call-recording-position">Recording timeline</label>
+      <input id="call-recording-position" type="range" min={0} max={length || 1} step={0.1}
+        value={Math.min(position, length || 1)} disabled={!length || failed}
+        aria-label="Seek through call recording"
+        aria-valuetext={`${duration(position * 1000)} of ${duration(length * 1000)}`}
+        onChange={(event) => {
+          const seconds = Number(event.target.value);
+          if (audio.current && length) {
+            audio.current.currentTime = seconds;
+            setPosition(seconds);
+          }
+        }}
+        className="block h-8 w-full cursor-pointer accent-blue-700 disabled:cursor-wait" />
+      <div className="flex justify-between text-xs text-slate-600 tabular-nums">
+        <span>{duration(position * 1000)}</span>
+        <span>{length ? duration(length * 1000) : "Loading duration…"}</span>
+      </div>
+      {failed && <p role="alert" className="text-sm text-red-700">The recording could not load. Close and reopen the call to retry.</p>}
+    </div>
+  );
+}
+
 export function CompanyCommunications({ companyId, view }: { companyId: string; view: string }) {
   const [rows, setRows] = useState<Row[]>([]),
     [loading, setLoading] = useState(true),
@@ -391,7 +428,7 @@ export function CompanyCommunications({ companyId, view }: { companyId: string; 
           ) : (
             <>
               {detail.recording_url && (
-                <audio controls preload="none" className="w-full" src={detail.recording_url} />
+                <CallRecording key={detail.recording_url} src={detail.recording_url} />
               )}
               <h3 className="font-semibold">Transcript</h3>
               <div className="whitespace-pre-wrap text-sm leading-relaxed">
