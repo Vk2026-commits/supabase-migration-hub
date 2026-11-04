@@ -88,7 +88,7 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   const fields = (items: [string, string | undefined, number][], boxed = false) => {
     const cells = items.map(([label, value, fraction]) => {
       font(7); const labels = doc.splitTextToSize(label, cw * fraction - 4);
-      font(9); const lines = doc.splitTextToSize(display(value), cw * fraction - 4);
+      font(9, true); const lines = doc.splitTextToSize(display(value), cw * fraction - 4);
       return { fraction, labels, lines };
     });
     const labelHeight = Math.max(...cells.map(c => c.labels.length)) * 3;
@@ -100,7 +100,7 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
       if (boxed) doc.rect(x, y - 3, w, h + 1);
       else doc.line(x, y + h - 2, x + w - 3, y + h - 2);
       font(7); doc.text(cell.labels, x + (boxed ? 1.5 : 0), y);
-      font(9); doc.text(cell.lines, x + (boxed ? 1.5 : 0), y + labelHeight + .8);
+      font(9, true); doc.text(cell.lines, x + (boxed ? 1.5 : 0), y + labelHeight + .8);
       x += w;
     }
     y += h + (boxed ? 1 : 3);
@@ -119,10 +119,10 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   const heading = (text: string) => { space(15); y += 3; font(9); doc.text(text, margin, y); y += 6; };
   const table = (headers: string[], rows: string[][], fractions: number[]) => {
     const draw = (row: string[], header: boolean) => {
-      font(7); const lines = row.map((v,i) => doc.splitTextToSize(v, cw * fractions[i] - 4));
+      font(7, !header); const lines = row.map((v,i) => doc.splitTextToSize(v, cw * fractions[i] - 4));
       const h = Math.max(8, Math.max(...lines.map(v => v.length)) * 3.3 + 4);
       space(h); let x = margin;
-      lines.forEach((cell, i) => { doc.setDrawColor(180); doc.setLineWidth(.2); if(header) { doc.setFillColor(230, 230, 230); doc.rect(x,y,cw * fractions[i],h,"F"); } else doc.rect(x,y,cw * fractions[i],h); font(7); doc.text(cell,x + 2,y + 4); x += cw * fractions[i]; }); y += h;
+      lines.forEach((cell, i) => { doc.setDrawColor(180); doc.setLineWidth(.2); if(header) { doc.setFillColor(230, 230, 230); doc.rect(x,y,cw * fractions[i],h,"F"); } else doc.rect(x,y,cw * fractions[i],h); font(7, !header); doc.text(cell,x + 2,y + 4); x += cw * fractions[i]; }); y += h;
     };
     draw(headers,true); rows.forEach(row => draw(row,false)); y += 4;
   };
@@ -175,9 +175,9 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   space(30); font(7); doc.text("Applicant Signature",margin,y); doc.text("Date",margin + cw * .72,y);
   if (data.signatureImage) {
     try { const props = doc.getImageProperties(data.signatureImage); const scale = Math.min(85 / props.width,16 / props.height); doc.addImage(data.signatureImage,"PNG",margin,y + 1,props.width * scale,props.height * scale); }
-    catch { font(9); doc.text(display(data.signature),margin,y + 10); }
-  } else { font(9); doc.text(display(data.signature),margin,y + 10); }
-  font(9); doc.text(formatDate(data.signatureDate),margin + cw * .72,y + 10); doc.setDrawColor(150); doc.line(margin,y + 18,margin + cw * .68,y + 18); doc.line(margin + cw * .72,y + 18,width - margin,y + 18); y += 24;
+    catch { font(9, true); doc.text(display(data.signature),margin,y + 10); }
+  } else { font(9, true); doc.text(display(data.signature),margin,y + 10); }
+  font(9, true); doc.text(formatDate(data.signatureDate),margin + cw * .72,y + 10); doc.setDrawColor(150); doc.line(margin,y + 18,margin + cw * .68,y + 18); doc.line(margin + cw * .72,y + 18,width - margin,y + 18); y += 24;
   paragraph("Supporting photos, resume, and license documents are maintained separately in the applicant record.");
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) { doc.setPage(page); font(7); if(data.isTestApplication) doc.text("SAMPLE - TEST ACCOUNT - NOT FOR EMPLOYMENT USE",width / 2,height - 12,{align:"center"}); doc.text(`Application for Employment - Page ${page} of ${pages}`,width / 2,height - 7,{align:"center"}); }
