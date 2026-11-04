@@ -401,18 +401,11 @@ export function LegacyApplicants({
       >
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Review invitation emails</DialogTitle>
+            <DialogTitle>Send invitations</DialogTitle>
             <DialogDescription>
-              No email is sent until you click Confirm and send.
+              {preview?.length} applicant{preview?.length === 1 ? "" : "s"} selected
             </DialogDescription>
           </DialogHeader>
-          <ul className="space-y-1 text-sm">
-            {preview?.map((r) => (
-              <li key={r.id}>
-                {r.applicant_name} — {r.email}
-              </li>
-            ))}
-          </ul>
           <label htmlFor="legacy-job" className="font-medium">
             Kairos job
           </label>
@@ -434,7 +427,9 @@ export function LegacyApplicants({
           {!jobs.length && (
             <p>No active positions available. Create or activate a job before sending.</p>
           )}
-          <div className="rounded-lg border bg-muted/30 p-4 text-sm space-y-3">
+          <details className="rounded-lg border bg-muted/30 p-4 text-sm">
+            <summary className="cursor-pointer font-medium">Email preview</summary>
+            <div className="mt-4 space-y-3">
             <p className="font-semibold">Kairos Security: review your saved application</p>
             <p>
               Kairos Security already has your application. Join We Find Guards to review your saved
@@ -447,16 +442,19 @@ export function LegacyApplicants({
             </p>
             <p className="font-semibold">Review my application [secure personal link]</p>
             <p>This invitation expires in 7 days.</p>
-          </div>
+            </div>
+          </details>
           {preview?.some((r) => latestInvite(r)) && (
             <p className="text-sm">Resending replaces the previous invitation link.</p>
           )}
-          <Button disabled={sending || !jobId} onClick={send}>
-            {sending ? "Sending…" : "Confirm and send"}
-          </Button>
-          <Button variant="outline" disabled={sending} onClick={() => setPreview(null)}>
-            Cancel
-          </Button>
+          <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
+            <Button variant="outline" disabled={sending} onClick={() => setPreview(null)}>
+              Cancel
+            </Button>
+            <Button disabled={sending || !jobId} onClick={send}>
+              {sending ? "Sending…" : "Confirm and send"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </section>
