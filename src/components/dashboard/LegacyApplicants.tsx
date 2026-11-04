@@ -1,5 +1,5 @@
 import { Mail } from "lucide-react";
-import { legacyEmailValid, legacyInviteStatus } from "@/lib/legacyApplication";
+import { legacyEmailValid, legacyInviteStatus, legacyGroupConfirmed } from "@/lib/legacyApplication";
 import {
   Dialog,
   DialogContent,
@@ -66,6 +66,7 @@ export function LegacyApplicants({
   const [rows, setRows] = useState<any[]>([]);
   const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
@@ -116,6 +117,29 @@ export function LegacyApplicants({
       active = false;
     };
   }, [companyId, retry]);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      const { data, error } = await (supabase as any)
+        .from("legacy_applicant_invitations")
+        .select("id,legacy_id,group_id,job_posting_id,recipient_email,created_at,expires_at,revoked_at,claimed_at,confirmed_at,email_status,last_error")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false });
+      if (active && !error) {
+        setInvites(data || []);
+        const claimedGroups = new Set((data || []).filter((i: any) => i.claimed_at || i.confirmed_at).map((i: any) => i.group_id));
+        setSelected((current) => current.filter((id) => !claimedGroups.has(id)));
+      }
+    };
+    const onVisible = () => { if (!document.hidden) void refresh(); };
+    window.addEventListener("focus", onVisible);
+    const interval = window.setInterval(onVisible, 30000);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", onVisible);
+      window.clearInterval(interval);
+    };
+  }, [companyId]);
   if (error)
     return (
       <div className="my-4 rounded border p-4">
@@ -184,7 +208,11 @@ export function LegacyApplicants({
     const key = row.duplicate_group_id || row.id;
     groups.set(key, [...(groups.get(key) || []), row]);
   }
-  const applicants = [...groups.values()];
+  const allGroups = [...groups.values()];
+  const isConfirmed = (group: any[]) => legacyGroupConfirmed(group[0].duplicate_group_id || group[0].id, invites);
+  const pending = allGroups.filter((group) => !isConfirmed(group));
+  const history = allGroups.filter(isConfirmed);
+  const applicants = showHistory ? history : pending;
   const filtered = applicants.filter((submissions) =>
     submissions.some((r) =>
       `${r.applicant_name} ${r.email} ${r.phone} ${r.position}`
@@ -192,7 +220,7 @@ export function LegacyApplicants({
         .includes(search.toLowerCase()),
     ),
   );
-  const allRecipients = applicants
+  const allRecipients = pending
     .map((group) => group[0])
     .filter((row) => legacyEmailValid(row.email) && !latestInvite(row)?.claimed_at);
   const selectableIds = filtered
@@ -208,7 +236,7 @@ export function LegacyApplicants({
           Imported Applicants{" "}
           <span className="text-sm font-normal text-muted-foreground">({applicants.length})</span>
         </h2>
-        {canInvite && (
+        {canInvite && !showHistory && (
           <Button
             disabled={!loadReady || sending || !allRecipients.length}
             onClick={() => openPreview(allRecipients)}
@@ -218,7 +246,7 @@ export function LegacyApplicants({
           </Button>
         )}
       </div>
-      {canInvite && (
+      {canInvite && !showHistory && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
@@ -260,6 +288,10 @@ export function LegacyApplicants({
           )}
         </div>
       )}
+      <div className="mb-4 flex gap-2">
+        <Button variant={showHistory ? "outline" : "secondary"} onClick={() => { setShowHistory(false); setSelected([]); }}>Pending ({pending.length})</Button>
+        <Button variant={showHistory ? "secondary" : "outline"} onClick={() => { setShowHistory(true); setSelected([]); }}>History ({history.length})</Button>
+      </div>
       <Input
         aria-label="Search imported applications"
         placeholder="Search applicants"
@@ -267,15 +299,16 @@ export function LegacyApplicants({
         onChange={(e) => setSearch(e.target.value)}
       />
       <p className="my-2 text-xs text-muted-foreground">
-        {filtered.length} applicants · {allRecipients.length} available to email
+        {filtered.length} applicants{!showHistory && ` · ${allRecipients.length} available to email`}
       </p>
+      {filtered.length === 0 && <p className="py-6 text-sm text-muted-foreground">{showHistory ? "Confirmed applications will appear here." : "No pending imported applicants."}</p>}
       <div className="space-y-2">
         {filtered.map((submissions) => {
           const r = submissions[0];
           return (
             <div key={r.id} className="rounded-lg border">
               <div className="flex flex-wrap items-center gap-3 p-3">
-                {canInvite && (
+                {canInvite && !showHistory && (
                   <input
                     type="checkbox"
                     aria-label={`Select ${r.applicant_name}`}
@@ -298,7 +331,7 @@ export function LegacyApplicants({
                     ? legacyInviteStatus(latestInvite(r))
                     : "Email missing or invalid"}
                 </span>
-                {canInvite && (
+                {canInvite && !showHistory && (
                   <Button
                     className="ml-auto"
                     variant="outline"

@@ -3,12 +3,16 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 const compile = s => ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
 const load = async s => import(`data:text/javascript;base64,${Buffer.from(s).toString('base64')}`);
-const {mapLegacyApplication,legacyEmailValid}=await load(compile(readFileSync('src/lib/legacyApplication.ts','utf8')));
+const {mapLegacyApplication,legacyEmailValid,legacyGroupConfirmed}=await load(compile(readFileSync('src/lib/legacyApplication.ts','utf8')));
 const mapped=mapLegacyApplication({applicant_name:'Sample',application_data:{first_name:'Sample',is_18_or_older:true,level2_license:true,level3_license:false,ssn:'sensitive',signature_date:'2020-01-01',certification_acknowledged:true,full_form_data:{employer1:{name:'Sample Employer',jobTitle:'Officer'},reference1:{name:'Sample Reference'},highSchool:'Sample School'}}});
 assert.equal(mapped.isAdult,'Yes');assert.deepEqual(mapped.licenseLevels,['Level II']);assert.equal(mapped.workHistory[0].employer,'Sample Employer');assert.equal(mapped.references[0].name,'Sample Reference');
 assert(!('ssn' in mapped));assert(!('signature' in mapped));assert(!('consentAccepted' in mapped));
 assert.deepEqual(mapLegacyApplication({application_data:{}}).licenseLevels,[]);
 assert(!legacyEmailValid(''));assert(!legacyEmailValid('bad@'));assert(legacyEmailValid('sample@example.invalid'));
+assert.equal(legacyGroupConfirmed('a', [{group_id:'a',claimed_at:'2026-11-03'}]), false);
+assert.equal(legacyGroupConfirmed('a', [{group_id:'a',confirmed_at:'2026-11-03'}]), true);
+assert.equal(legacyGroupConfirmed('b', [{group_id:'a',confirmed_at:'2026-11-03'}]), false);
+assert.equal(legacyGroupConfirmed('a', [{group_id:'a',confirmed_at:null},{group_id:'a',confirmed_at:'2026-11-03'}]), true);
 // Execute the actual edge handler with mocked auth, database and email transport.
 let handler; let sends=0; let roleAllowed=true; let providerFails=false; let saved=[]; const reserved=new Set();
 globalThis.Deno={env:{get:k=>k==='SUPABASE_SERVICE_ROLE_KEY'?'service':'synthetic'},serve:f=>handler=f};

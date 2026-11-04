@@ -118,3 +118,8 @@ export const legacyInviteStatus = (invite: any) =>
                 : invite.email_status === "accepted"
                   ? "Invited — delivery pending"
                   : "Sending";
+
+// Confirmation means the signed application was submitted, not just an account claim.
+export function legacyGroupConfirmed(groupId: string, invitations: { group_id: string; confirmed_at?: string | null }[]): boolean {
+  return invitations.some((invite) => invite.group_id === groupId && Boolean(invite.confirmed_at));
+}
