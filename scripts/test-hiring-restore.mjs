@@ -7,7 +7,7 @@ const m = await import(`data:text/javascript;base64,${Buffer.from(src).toString(
 const { resolveRestoreStep, requirementsMet, runResumeUpload, createGeneration, shouldAutoOpenApplication, resumeObjectPath } = m;
 
 // Synthetic fixture only — no real applicant data.
-const full = { position: 'Officer', applicantName: 'Test', email: 't@example.invalid', phone: '123-456-7890', address: '1 St', city: 'X', state: 'TX', zip: '00000', isAdult: 'Yes', eligibleToWork: 'Yes', driversLicense: 'Yes', education: 'HS' };
+const full = { position: 'Officer', applicantName: 'Test', email: 't@example.invalid', phone: '123-456-7890', address: '1 St', city: 'X', state: 'TX', zip: '00000', isAdult: 'Yes', eligibleToWork: 'Yes', driversLicense: 'Yes', education: 'HS', licenseLevels: ['No license'] };
 const shared = { employmentTypes: ['full_time'], shiftPreferences: ['first_shift'], schedule: { Monday: { start: '09:00', end: '17:00' } } };
 const base = { urlStep: null, savedStep: 2, hasDraft: true, submitted: false, form: full, shared, selectedJobId: 'job' };
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
@@ -36,3 +36,9 @@ await assert.rejects(runResumeUpload(deps({ deadline: () => Promise.reject(new E
 calls.splice(0);
 assert.equal(await runResumeUpload(deps({ isCurrent: () => false })), 'stale'); assert.deepEqual(calls.splice(0), ['upload']); console.log('ok superseded upload never persists or deletes'); n++;
 console.log(`PASS ${n} hiring restore/upload regression tests`);
+
+for (const levels of [[], ['No license', 'Level II'], ['unknown']]) assert.equal(requirementsMet(2, { ...full, licenseLevels: levels }, shared, 'job', false), false);
+for (const levels of [['No license'], ['Level II'], ['Level III', 'Level IV']]) assert.equal(requirementsMet(2, { ...full, licenseLevels: levels }, shared, 'job', false), true);
+for (const value of ['', 'maybe', 'false']) assert.equal(requirementsMet(2, { ...full, driversLicense: value }, shared, 'job', false), false);
+assert.equal(requirementsMet(2, { ...full, driversLicense: 'No' }, shared, 'job', false), true);
+console.log('PASS explicit license and Yes/No validation');

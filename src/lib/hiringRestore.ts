@@ -12,6 +12,7 @@ export type RestoreForm = {
   city?: string;
   state?: string;
   zip?: string;
+  licenseLevels?: string[];
   isAdult?: string;
   eligibleToWork?: string;
   driversLicense?: string;
@@ -31,7 +32,7 @@ export function requirementsMet(step: number, form: RestoreForm, shared: Restore
   switch (step) {
     case 0: return Boolean(selectedJobId && form.position);
     case 1: return Boolean(form.applicantName && form.email && (form.phone || "").replace(/\D/g, "").length === 10 && form.address && form.city && form.state && form.zip);
-    case 2: return Boolean(form.isAdult && form.eligibleToWork && form.driversLicense);
+    case 2: return [form.isAdult, form.eligibleToWork, form.driversLicense].every(value => value === "Yes" || value === "No") && Array.isArray(form.licenseLevels) && form.licenseLevels.length > 0 && form.licenseLevels.every(value => ["Level II", "Level III", "Level IV", "No license"].includes(value)) && (!form.licenseLevels.includes("No license") || form.licenseLevels.length === 1);
     case 3: return Boolean((form.education || "").trim() || (form.skills || "").trim());
     case 4: return (form.workHistory || []).some((item) => Boolean(item.employer?.trim() || item.title?.trim()));
     case 5: return (form.references || []).some((item) => Boolean(item.name?.trim() || item.phone?.trim() || item.email?.trim()));

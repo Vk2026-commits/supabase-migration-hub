@@ -72,7 +72,7 @@ const formatTime = (value?: string) => {
 export async function generateGuardApplicationPDF(data: GuardApplicationData, mode: "download" | "print" | "blob" = "download"): Promise<void | Blob> {
   const printWindow = mode === "print" ? window.open("", "_blank") : null;
   const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF();
+  const doc = new jsPDF({ format: "letter" });
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
   const margin = 16;
@@ -90,20 +90,20 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
 
   const section = (title: string) => {
     ensureSpace(16);
-    doc.setFillColor(30, 81, 180);
+    doc.setFillColor(235, 237, 240);
     doc.rect(margin, y, contentWidth, 8, "F");
-    doc.setTextColor(255, 255, 255);
+    doc.setTextColor(20, 24, 35);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.text(title.toUpperCase(), margin + 3, y + 5.5);
     doc.setTextColor(20, 24, 35);
-    y += 12;
+    y += 11;
   };
 
   const field = (label: string, value?: string) => {
     const questionLines = doc.splitTextToSize(label, contentWidth);
     const answerLines = doc.splitTextToSize(display(value), contentWidth - 6);
-    const answerHeight = Math.max(9, answerLines.length * 4 + 5);
+    const answerHeight = Math.max(7, answerLines.length * 4 + 3);
     ensureSpace(questionLines.length * 3.5 + answerHeight + 5);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
@@ -112,12 +112,12 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
     y += questionLines.length * 3.5 + 2;
     doc.setFillColor(247, 249, 252);
     doc.setDrawColor(220, 225, 234);
-    doc.roundedRect(margin, y, contentWidth, answerHeight, 1.5, 1.5, "FD");
+    doc.line(margin, y + answerHeight, margin + contentWidth, y + answerHeight);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(20, 24, 35);
     doc.text(answerLines, margin + 3, y + 5.5);
-    y += answerHeight + 5;
+    y += answerHeight + 4;
   };
 
   const row = (leftLabel: string, leftValue: string, rightLabel: string, rightValue: string) => {
@@ -127,7 +127,7 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
     const leftAnswer = doc.splitTextToSize(display(leftValue), half - 6);
     const rightAnswer = doc.splitTextToSize(display(rightValue), half - 6);
     const questionHeight = Math.max(leftQuestion.length, rightQuestion.length) * 3.5;
-    const answerHeight = Math.max(9, Math.max(leftAnswer.length, rightAnswer.length) * 4 + 5);
+    const answerHeight = Math.max(7, Math.max(leftAnswer.length, rightAnswer.length) * 4 + 3);
     ensureSpace(questionHeight + answerHeight + 5);
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
@@ -137,14 +137,14 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
     y += questionHeight + 2;
     doc.setFillColor(247, 249, 252);
     doc.setDrawColor(220, 225, 234);
-    doc.roundedRect(margin, y, half, answerHeight, 1.5, 1.5, "FD");
-    doc.roundedRect(margin + half + 8, y, half, answerHeight, 1.5, 1.5, "FD");
+    doc.line(margin, y + answerHeight, margin + half, y + answerHeight);
+    doc.line(margin + half + 8, y + answerHeight, margin + contentWidth, y + answerHeight);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(20, 24, 35);
     doc.text(leftAnswer, margin + 3, y + 5.5);
     doc.text(rightAnswer, margin + half + 11, y + 5.5);
-    y += answerHeight + 5;
+    y += answerHeight + 4;
   };
 
   doc.setFont("helvetica", "bold");
@@ -155,7 +155,7 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   y += companyHeading.length * 8;
   doc.setTextColor(20, 24, 35);
   doc.setFontSize(15);
-  doc.text("SECURITY OFFICER EMPLOYMENT APPLICATION", width / 2, y, { align: "center" });
+  doc.text("APPLICATION FOR EMPLOYMENT", width / 2, y, { align: "center" });
   y += 7;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
@@ -163,11 +163,32 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
   doc.text("An Equal Opportunity Employment Application", width / 2, y, { align: "center" });
   y += 10;
 
+  const choice = (label: string, checked: boolean, x: number) => {
+    doc.setDrawColor(50); doc.setLineWidth(0.25);
+    doc.rect(x, y - 3, 3, 3);
+    if (checked) { doc.line(x + .5, y - 2.5, x + 2.5, y - .5); doc.line(x + .5, y - .5, x + 2.5, y - 2.5); }
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(20, 24, 35);
+    doc.text(label, x + 5, y);
+  };
+  const yesNo = (label: string, answer: string) => {
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9);
+    const lines = doc.splitTextToSize(label, contentWidth - 55);
+    ensureSpace(lines.length * 4 + 6);
+    doc.text(lines, margin, y);
+    choice("Yes", answer === "Yes", width - margin - 48);
+    choice("No", answer === "No", width - margin - 27);
+    y += lines.length * 4 + 5;
+    if (!["Yes", "No"].includes(answer)) { doc.setFontSize(8); doc.text("Not answered", margin, y); y += 5; }
+  };
+  section("Security license status");
+  ["Level II", "Level III", "Level IV", "No license"].forEach((level, i) => choice(["Level 2 (II)", "Level 3 (III)", "Level 4 (IV)", "No license"][i], (data.licenseLevels || []).includes(level), margin + i * contentWidth / 4));
+  y += 8;
+  if (!data.licenseLevels?.length) { doc.setFontSize(8); doc.text("Not answered in this application", margin, y); y += 7; }
   section("Application Details");
   row("Which company are you applying to?", data.companyName, "What position are you applying for?", data.position);
   row("In which city is the job located?", data.companyCity, "In which state is the job located?", data.companyState);
   row("What type of employment are you seeking?", data.employmentType, "When are you available to start?", formatDate(data.startDate));
-  field("Which security license level or levels do you currently hold?", data.licenseLevels.join(", "));
+
 
   section("Applicant Information");
   field("What is your full legal name?", data.applicantName);
@@ -177,9 +198,11 @@ export async function generateGuardApplicationPDF(data: GuardApplicationData, mo
 
   ensureSpace(78);
   section("Eligibility and Credentials");
-  row("Are you 18 years of age or older?", data.isAdult, "Can you provide proof that you may work in the United States?", data.eligibleToWork);
-  row("Do you have a valid driver's license?", data.driversLicense, "Which state issued your security license?", data.securityLicenseState);
-  field("What is your security license number?", data.securityLicenseNumber);
+  yesNo("Are you 18 years of age or older?", data.isAdult);
+  yesNo("Can you provide proof that you may work in the United States?", data.eligibleToWork);
+  yesNo("Do you have a valid driver's license?", data.driversLicense);
+  field("Which state issued your security license?", data.licenseLevels?.includes("No license") ? "Not applicable - no license" : data.securityLicenseState);
+  field("What is your security license number?", data.licenseLevels?.includes("No license") ? "Not applicable - no license" : data.securityLicenseNumber);
 
   section("Education and Qualifications");
   field("What is your highest level of education, school, diploma, or degree?", data.education);
