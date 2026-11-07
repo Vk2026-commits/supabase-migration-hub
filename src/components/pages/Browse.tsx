@@ -41,7 +41,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import HireButton from "@/components/dashboard/HireButton";
 import { toast } from "sonner";
-import { ApplicantReviewDialog } from "@/components/dashboard/ApplicantReviewDialog";
+import { OfficerProfileDetails } from "@/components/dashboard/OfficerProfileDetails";
 import { loadCompanyWorkspaces, selectCompanyWorkspace } from "@/lib/company-workspaces";
 
 const Browse = () => {
@@ -58,11 +58,9 @@ const Browse = () => {
   const [shiftFilter, setShiftFilter] = useState<string>("all");
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>("all");
   const [selectedOfficer, setSelectedOfficer] = useState<any>(null);
-  const [selectedApplication, setSelectedApplication] = useState<any>(null);
   const [companyProfile, setCompanyProfile] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [selectedOfficerCertifications, setSelectedOfficerCertifications] = useState<any[]>([]);
   const [officerInterests, setOfficerInterests] = useState<Record<string, string>>({});
   const [chatOpen, setChatOpen] = useState(false);
 
@@ -319,46 +317,7 @@ const Browse = () => {
       setSearchParams(nextParams, { replace: false });
     }
 
-    if (companyProfile && ["professional", "premium"].includes(companyProfile.subscription_tier)) {
-      const { data: applicantRecord, error: applicantError } = await (supabase as any)
-        .from("job_applications")
-        .select(
-          `
-          *,
-          job_posting:job_postings!inner(title,company_id),
-          officer:officer_profiles(id,user_id),
-          hiring_application:guard_hiring_applications(application_data,status,submitted_at)
-        `,
-        )
-        .eq("officer_id", officer.id)
-        .eq("job_posting.company_id", companyProfile.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!applicantError && applicantRecord) {
-        setSelectedApplication({
-          ...applicantRecord,
-          officerName: officer.profiles?.full_name || "Applicant",
-        });
-        return;
-      }
-    }
     setSelectedOfficer(officer);
-
-    // Load officer certifications
-    try {
-      const { data: certs } = await supabase
-        .from("certifications")
-        .select("*")
-        .eq("officer_id", officer.id)
-        .eq("certification_type", "license")
-        .order("created_at", { ascending: false });
-
-      setSelectedOfficerCertifications(certs || []);
-    } catch (error) {
-      console.error("Error loading certifications:", error);
-    }
 
     // Track profile view if user is a company
     if (companyProfile && currentUser) {
@@ -376,7 +335,6 @@ const Browse = () => {
 
   const closeOfficerRecord = () => {
     setSelectedOfficer(null);
-    setSelectedApplication(null);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("officerId");
     nextParams.delete("officerSource");
@@ -387,10 +345,9 @@ const Browse = () => {
     const requestedOfficerId = searchParams.get("officerId");
     if (!requestedOfficerId) {
       setSelectedOfficer(null);
-      setSelectedApplication(null);
-      return;
+        return;
     }
-    if (selectedOfficer?.id === requestedOfficerId || selectedApplication?.officer?.id === requestedOfficerId) return;
+    if (selectedOfficer?.id === requestedOfficerId) return;
     const officer = officers.find((entry) => entry.id === requestedOfficerId);
     if (officer) void handleViewProfile(officer);
   }, [officers, searchParams]);
@@ -632,8 +589,8 @@ const Browse = () => {
 
       {/* Profile Detail Dialog */}
       <Dialog open={!!selectedOfficer} onOpenChange={(open) => !open && closeOfficerRecord()}>
-        <DialogContent className="h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-0 sm:h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)]">
-          <DialogHeader className="sticky top-0 z-20 bg-slate-950 px-5 py-4 text-white shadow-sm">
+        <DialogContent className="flex flex-col gap-0 h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-0 sm:h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)]">
+          <DialogHeader className="shrink-0 sticky top-0 z-20 bg-slate-950 px-5 py-4 text-white shadow-sm">
             <div className="flex items-center gap-4"><ProfileAvatar name={selectedOfficer?.profiles?.full_name} src={selectedOfficer?.profiles?.avatar_url} className="h-16 w-16 border-2 border-white/30" /><div><DialogTitle className="text-2xl text-white">
               {isFreeTier && selectedOfficer?.profiles?.full_name
                 ? `${selectedOfficer.profiles.full_name.split(" ")[0]} ${selectedOfficer.profiles.full_name
@@ -675,154 +632,14 @@ const Browse = () => {
                 )}
               </div>
 
-              {selectedOfficer.bio && (
-                <div>
-                  <h3 className="font-semibold mb-2">About</h3>
-                  <p className="text-sm text-muted-foreground">{selectedOfficer.bio}</p>
-                </div>
-              )}
-
-              <div className="grid md:grid-cols-2 gap-4">
-                {selectedOfficer.location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">{selectedOfficer.location}</span>
-                  </div>
-                )}
-
-                {selectedOfficer.years_experience && (
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">
-                      {selectedOfficer.years_experience} years experience
-                    </span>
-                  </div>
-                )}
-
-                {canViewFullDetails && selectedOfficer.hourly_rate && (
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm">${selectedOfficer.hourly_rate}/hour</span>
-                  </div>
-                )}
-
-                {companyProfile?.subscription_tier === "premium" && selectedOfficer.phone && (
-                  <div className="text-sm">
-                    <span className="font-medium">Phone: </span>
-                    {selectedOfficer.phone}
-                  </div>
-                )}
-
-                {canViewFullDetails && selectedOfficer.profiles?.email && (
-                  <div className="text-sm">
-                    <span className="font-medium">Email: </span>
-                    {selectedOfficer.profiles.email}
-                  </div>
-                )}
-              </div>
-
-              {canViewFullDetails && selectedOfficer.main_region && (
-                <div>
-                  <h3 className="font-semibold mb-2">Main Region</h3>
-                  <p className="text-sm">{selectedOfficer.main_region}</p>
-                </div>
-              )}
-
-              {/* License Credentials */}
-              {canViewFullDetails && selectedOfficerCertifications.length > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-2">License Credentials</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedOfficerCertifications.map((cert) => {
-                      const getLicenseLabel = (level: string) => {
-                        switch (level) {
-                          case "level-ii":
-                            return "Non-Commission Certificate or License";
-                          case "level-iii":
-                            return "Commission Certificate or License";
-                          case "level-iv":
-                            return "Personal Protection Officer (PPO)";
-                          default:
-                            return cert.name;
-                        }
-                      };
-
-                      const getBadgeColor = (level: string) => {
-                        switch (level) {
-                          case "level-ii":
-                            return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100";
-                          case "level-iii":
-                            return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100";
-                          case "level-iv":
-                            return "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100";
-                          default:
-                            return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100";
-                        }
-                      };
-
-                      return (
-                        <Badge key={cert.id} className={getBadgeColor(cert.license_level)}>
-                          {getLicenseLabel(cert.license_level)}
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Employment Type */}
-              {canViewFullDetails &&
-                selectedOfficer.employment_type &&
-                selectedOfficer.employment_type.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-2">Employment Type Preference</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedOfficer.employment_type.map((type: string) => {
-                        const getTypeLabel = (empType: string) => {
-                          switch (empType) {
-                            case "full_time":
-                              return "Full-time";
-                            case "part_time":
-                              return "Part-time";
-                            case "seasonal":
-                              return "Seasonal";
-                            default:
-                              return empType;
-                          }
-                        };
-
-                        return (
-                          <Badge key={type} variant="outline">
-                            {getTypeLabel(type)}
-                          </Badge>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-              {/* Availability Schedule */}
-              {canViewFullDetails && selectedOfficer.availability_schedule && (
-                <div>
-                  <h3 className="font-semibold mb-2">Weekly Availability</h3>
-                  <div className="space-y-2 text-sm">
-                    {Object.entries(selectedOfficer.availability_schedule).map(
-                      ([day, schedule]: [string, any]) => {
-                        if (schedule?.start && schedule?.end) {
-                          return (
-                            <div key={day} className="flex justify-between items-center">
-                              <span className="font-medium capitalize">{day}:</span>
-                              <span className="text-muted-foreground">
-                                {schedule.start} - {schedule.end}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      },
-                    )}
-                  </div>
-                </div>
+              {canViewFullDetails ? (
+                <OfficerProfileDetails key={selectedOfficer.id} officerId={selectedOfficer.id} />
+              ) : (
+                <section className="rounded-xl border bg-slate-50 p-5">
+                  <h3 className="font-semibold">Professional profile</h3>
+                  <p className="mt-2 text-sm">{selectedOfficer.bio || "No biography provided."}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{selectedOfficer.location || "Location not provided"}</p>
+                </section>
               )}
 
               {companyProfile && (
@@ -922,12 +739,6 @@ const Browse = () => {
           )}
         </DialogContent>
       </Dialog>
-
-      <ApplicantReviewDialog
-        open={Boolean(selectedApplication)}
-        onOpenChange={(open) => !open && closeOfficerRecord()}
-        application={selectedApplication}
-      />
 
       {/* Chat Dialog */}
       {selectedOfficer && companyProfile && chatOpen && (
