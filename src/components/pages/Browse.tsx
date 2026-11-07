@@ -34,6 +34,7 @@ import { ProfileAvatar } from "@/components/dashboard/ProfileAvatar";
 import {
   Dialog,
   DialogContent,
+  DialogClose,
   DialogDescription,
   DialogHeader,
   DialogTitle,
@@ -589,8 +590,11 @@ const Browse = () => {
 
       {/* Profile Detail Dialog */}
       <Dialog open={!!selectedOfficer} onOpenChange={(open) => !open && closeOfficerRecord()}>
-        <DialogContent className="flex flex-col gap-0 h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-0 sm:h-[calc(100vh-2rem)] sm:w-[calc(100vw-2rem)]">
-          <DialogHeader className="shrink-0 sticky top-0 z-20 bg-slate-950 px-5 py-4 text-white shadow-sm">
+        <DialogContent className="flex max-h-[85dvh] w-[calc(100vw-2rem)] max-w-4xl flex-col gap-0 overflow-hidden rounded-xl p-0 shadow-2xl [&>button]:hidden">
+          <DialogHeader className="relative shrink-0 bg-slate-950 px-5 py-4 pr-28 text-left text-white shadow-sm">
+            <DialogClose asChild>
+              <Button variant="outline" className="absolute right-4 top-4 min-h-11 bg-white text-slate-900 hover:bg-slate-100">Close ×</Button>
+            </DialogClose>
             <div className="flex items-center gap-4"><ProfileAvatar name={selectedOfficer?.profiles?.full_name} src={selectedOfficer?.profiles?.avatar_url} className="h-16 w-16 border-2 border-white/30" /><div><DialogTitle className="text-2xl text-white">
               {isFreeTier && selectedOfficer?.profiles?.full_name
                 ? `${selectedOfficer.profiles.full_name.split(" ")[0]} ${selectedOfficer.profiles.full_name
@@ -604,7 +608,7 @@ const Browse = () => {
           </DialogHeader>
 
           {selectedOfficer && (
-            <div className="mx-auto w-full max-w-6xl space-y-4 p-5">
+            <div className="mx-auto min-h-0 w-full flex-1 space-y-4 overflow-y-auto p-5">
               {isFreeTier && (
                 <Alert>
                   <Lock className="h-4 w-4" />
