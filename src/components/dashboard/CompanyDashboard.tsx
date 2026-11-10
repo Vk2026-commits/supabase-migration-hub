@@ -1141,7 +1141,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
             {["call-log", "sms-log", "communications-analytics"].includes(activeTab) && companyProfile && (
               <CompanyCommunications key={companyProfile.id} companyId={companyProfile.id} view={activeTab} />
             )}
-            {activeTab === "employee-records" && companyProfile && <EmployeeRecords key={companyProfile.id} companyId={companyProfile.id} />}
+            {activeTab === "employee-records" && companyProfile && <EmployeeRecords key={companyProfile.id} companyId={companyProfile.id} canManage={["owner", "admin", "hiring_manager"].includes(companyTeamRole || "")} />}
             {activeTab === "imported-applicants" && companyProfile && (
               <LegacyApplicants companyId={companyProfile.id} canInvite={["owner", "admin", "hiring_manager"].includes(companyTeamRole || "")} />
             )}

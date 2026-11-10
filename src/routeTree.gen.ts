@@ -16,6 +16,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as CompleteTeamProfileRouteImport } from './routes/complete-team-profile'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as EmployeeSetupRouteImport } from './routes/employee-setup'
 import { Route as GetStartedRouteImport } from './routes/get-started'
 import { Route as ImportedApplicationRouteImport } from './routes/imported-application'
 import { Route as NotificationActionRouteImport } from './routes/notification-action'
@@ -58,6 +59,11 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmployeeSetupRoute = EmployeeSetupRouteImport.update({
+  id: '/employee-setup',
+  path: '/employee-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GetStartedRoute = GetStartedRouteImport.update({
   id: '/get-started',
   path: '/get-started',
@@ -97,6 +103,7 @@ export interface FileRoutesByFullPath {
   '/browse': typeof BrowseRoute
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
+  '/employee-setup': typeof EmployeeSetupRoute
   '/get-started': typeof GetStartedRoute
   '/imported-application': typeof ImportedApplicationRoute
   '/notification-action': typeof NotificationActionRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/browse': typeof BrowseRoute
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
+  '/employee-setup': typeof EmployeeSetupRoute
   '/get-started': typeof GetStartedRoute
   '/imported-application': typeof ImportedApplicationRoute
   '/notification-action': typeof NotificationActionRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/browse': typeof BrowseRoute
   '/complete-team-profile': typeof CompleteTeamProfileRoute
   '/dashboard': typeof DashboardRoute
+  '/employee-setup': typeof EmployeeSetupRoute
   '/get-started': typeof GetStartedRoute
   '/imported-application': typeof ImportedApplicationRoute
   '/notification-action': typeof NotificationActionRoute
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/complete-team-profile'
     | '/dashboard'
+    | '/employee-setup'
     | '/get-started'
     | '/imported-application'
     | '/notification-action'
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/complete-team-profile'
     | '/dashboard'
+    | '/employee-setup'
     | '/get-started'
     | '/imported-application'
     | '/notification-action'
@@ -175,6 +186,7 @@ export interface FileRouteTypes {
     | '/browse'
     | '/complete-team-profile'
     | '/dashboard'
+    | '/employee-setup'
     | '/get-started'
     | '/imported-application'
     | '/notification-action'
@@ -191,6 +203,7 @@ export interface RootRouteChildren {
   BrowseRoute: typeof BrowseRoute
   CompleteTeamProfileRoute: typeof CompleteTeamProfileRoute
   DashboardRoute: typeof DashboardRoute
+  EmployeeSetupRoute: typeof EmployeeSetupRoute
   GetStartedRoute: typeof GetStartedRoute
   ImportedApplicationRoute: typeof ImportedApplicationRoute
   NotificationActionRoute: typeof NotificationActionRoute
@@ -250,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/employee-setup': {
+      id: '/employee-setup'
+      path: '/employee-setup'
+      fullPath: '/employee-setup'
+      preLoaderRoute: typeof EmployeeSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/get-started': {
       id: '/get-started'
       path: '/get-started'
@@ -303,6 +323,7 @@ const rootRouteChildren: RootRouteChildren = {
   BrowseRoute: BrowseRoute,
   CompleteTeamProfileRoute: CompleteTeamProfileRoute,
   DashboardRoute: DashboardRoute,
+  EmployeeSetupRoute: EmployeeSetupRoute,
   GetStartedRoute: GetStartedRoute,
   ImportedApplicationRoute: ImportedApplicationRoute,
   NotificationActionRoute: NotificationActionRoute,
