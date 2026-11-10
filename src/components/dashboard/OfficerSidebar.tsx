@@ -1,5 +1,5 @@
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarSeparator, useSidebar } from "@/components/ui/sidebar";
-import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole, CalendarClock, LayoutDashboard, Settings } from "lucide-react";
+import { User, Clock, Images, Award, Briefcase, Check, MessageCircle, Search, Video, ClipboardList, ClipboardCheck, LockKeyhole, CalendarClock, LayoutDashboard, Settings, ExternalLink } from "lucide-react";
 
 interface OfficerSidebarProps {
   activeTab: string;
@@ -94,6 +94,27 @@ export function OfficerSidebar({ activeTab, onTabChange, completionStatus, onboa
             </SidebarGroupContent>
           </SidebarGroup>
         </div>)}
+        <SidebarSeparator className="mx-3 w-auto" />
+        <SidebarGroup className="py-2">
+          <SidebarGroupLabel className="text-[11px] font-bold uppercase tracking-[0.12em]">Resources and links</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {[
+                { title: "ADP Payroll", href: "https://online.adp.com/signin/v1/?APPID=RUN&productId=80e309c3-70c3-bae1-e053-3505430b5495&Action=Login&ssru=branded" },
+                { title: "TrackTik — Kairos", href: "https://kairos.staffr.net" },
+              ].map((resource) => (
+                <SidebarMenuItem key={resource.href}>
+                  <SidebarMenuButton asChild tooltip={resource.title}>
+                    <a href={resource.href} target="_blank" rel="noopener noreferrer" aria-label={`${resource.title} (opens in new tab)`}>
+                      <ExternalLink className="h-4 w-4" />
+                      {open && <span>{resource.title}</span>}
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );
