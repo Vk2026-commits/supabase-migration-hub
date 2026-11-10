@@ -57,6 +57,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
     {
       label: "Company Management",
       items: [
+        { title: "Employee Records", value: "employee-records", icon: Users },
         { title: "Client Sites", value: "sites", icon: MapPinned },
         { title: "Company Profile", value: "profile", icon: Building2 },
         { title: "Team", value: "team", icon: UsersRound },
@@ -119,6 +120,7 @@ export function CompanySidebar({ activeTab, onTabChange, profileComplete, pendin
             <SidebarGroupContent>
               <SidebarMenu>
                 {[
+                  { title: "ADP Payroll", href: "https://online.adp.com/signin/v1/?APPID=RUN&productId=80e309c3-70c3-bae1-e053-3505430b5495&Action=Login&ssru=branded" },
                   { title: "Texas TOPS", href: "https://tops.portal.texas.gov" },
                   { title: "Texas DPS Secure Site", href: "https://securesite.dps.texas.gov/" },
                 ].map((resource) => <SidebarMenuItem key={resource.href}>

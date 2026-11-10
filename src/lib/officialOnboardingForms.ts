@@ -30,6 +30,8 @@ export type OfficialOnboardingValues = {
   extraWithholding: string;
   exemptFromWithholding: boolean;
   employerName: string;
+  employerEin?: string;
+  employerAddress?: string;
   startDate: string;
   signatureName: string;
   signatureDate: string;
@@ -238,6 +240,9 @@ export async function buildW4(values: OfficialOnboardingValues, ssn: string) {
     [`${p1}.f1_09[0]`]: values.exemptFromWithholding ? "" : values.otherIncome,
     [`${p1}.f1_10[0]`]: values.exemptFromWithholding ? "" : values.deductions,
     [`${p1}.f1_11[0]`]: values.exemptFromWithholding ? "" : values.extraWithholding,
+    [`${p1}.f1_12[0]`]: [values.employerName, values.employerAddress].filter(Boolean).join("\n"),
+    [`${p1}.f1_13[0]`]: date(values.startDate),
+    [`${p1}.f1_14[0]`]: values.employerEin || "",
   });
   setChecks(form, {
     [`${p1}.c1_1[0]`]: values.filingStatus === "Single or Married filing separately",

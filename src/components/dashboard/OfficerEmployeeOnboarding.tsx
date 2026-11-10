@@ -23,6 +23,8 @@ type Props = {
 type OnboardingData = {
   isTestApplication?: boolean;
   employerName: string;
+  employerEin?: string;
+  employerAddress?: string;
   legalFirstName: string;
   middleInitial: string;
   legalLastName: string;
@@ -574,12 +576,14 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         return;
       }
 
-      const [hiringResult, packetResult, maskedResult] = await Promise.all([
+      const [hiringResult, packetResult, maskedResult, employerTaxResult] = await Promise.all([
         (supabase as any).from("guard_hiring_applications").select("id,company_name,position,applicant_name,applicant_email,application_data").eq("id", hire.hiring_application_id).eq("officer_id", resolved).eq("application_type", "employer_copy").eq("status", "submitted").maybeSingle(),
         (supabase as any).rpc("ensure_officer_onboarding_packet", { _hire_id: hire.id }),
         supabase.functions.invoke("manage-sensitive-data", { body: { action: "get_masked_data", data: {} } }),
+        (supabase as any).rpc("onboarding_employer_tax_details", { _hire_id: hire.id }),
       ]);
       if (hiringResult.error) throw hiringResult.error;
+      if (employerTaxResult.error) throw employerTaxResult.error;
       if (packetResult.error) throw packetResult.error;
       const hiring = hiringResult.data;
       if (!hiring?.id) {
@@ -612,6 +616,8 @@ export function OfficerEmployeeOnboarding({ userId, officerId, onEnsureProfile, 
         trackTikUsername: automaticTrackTikUsername,
         trackTikPasswordSet: true,
         employerName: hire.company_profiles?.company_name || hiring.company_name || snapshot.companyName || "Your hiring company",
+        employerEin: employerTaxResult.data?.ein || "",
+        employerAddress: employerTaxResult.data?.address || "",
         startDate: offer.startDate || hire.hire_date || snapshot.startDate || "",
         offeredPosition: offer.positionTitle || offer.offeredPosition || hire.position_title || hiring.position || snapshot.position || officerResult.data?.title || "Security Officer",
         hourlyRate: offer.hourlyRate || "",

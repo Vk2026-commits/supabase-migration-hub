@@ -1,4 +1,5 @@
 import { CompanyCommunications } from "./CompanyCommunications";
+import { EmployeeRecords } from "./EmployeeRecords";
 import { LegacyApplicants } from "./LegacyApplicants";
 import { HiringTestPanel } from "./HiringTestPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -66,6 +67,7 @@ const companyTabs = new Set([
   "sites",
   "applicants",
   "imported-applicants",
+  "employee-records",
   "call-log",
   "sms-log",
   "communications-analytics",
@@ -84,6 +86,7 @@ const companySectionDetails: Record<string, { title: string; description: string
   sites: { title: "Client sites", description: "Manage client locations, addresses, and shift details.", icon: MapPinned },
   applicants: { title: "Applicants", description: "Review applications and move candidates through hiring.", icon: UserCheck },
   "imported-applicants": { title: "Imported Applicants", description: "Review saved applications and send invitations when you are ready.", icon: Users },
+  "employee-records": { title: "Employee records", description: "Update records for current employees.", icon: Users },
   interested: { title: "Interested officers", description: "Review officers who expressed interest in your jobs.", icon: Heart },
   employment: { title: "Hired officers", description: "Access employee records, documents, and evaluations.", icon: Users },
   "not-hired": { title: "Not Hired", description: "Review closed pending hires and retained decision history.", icon: UserX },
@@ -1138,6 +1141,7 @@ const CompanyDashboard = ({ userId, userName, verifiedWorkspaces }: CompanyDashb
             {["call-log", "sms-log", "communications-analytics"].includes(activeTab) && companyProfile && (
               <CompanyCommunications key={companyProfile.id} companyId={companyProfile.id} view={activeTab} />
             )}
+            {activeTab === "employee-records" && companyProfile && <EmployeeRecords key={companyProfile.id} companyId={companyProfile.id} />}
             {activeTab === "imported-applicants" && companyProfile && (
               <LegacyApplicants companyId={companyProfile.id} canInvite={["owner", "admin", "hiring_manager"].includes(companyTeamRole || "")} />
             )}
